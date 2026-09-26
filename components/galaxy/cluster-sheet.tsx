@@ -9,7 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { getClusterDetail } from "@/lib/api";
-import { getCluster } from "@/lib/clusters";
+import { getCluster, type ClusterId } from "@/lib/clusters";
 import type { ClusterSong } from "@/lib/cluster-songs";
 import { cn } from "@/lib/utils";
 
@@ -86,8 +86,27 @@ function SongRow({ entry, clusterId, expanded, onToggle }: { entry: ClusterSong;
 }
 
 
+function swapHref(userId: string, songId?: string, opener?: string) {
+  const q = new URLSearchParams();
+  if (songId) q.set("song", songId);
+  if (opener) q.set("opener", opener);
+  const qs = q.toString();
+  return `/messages/${userId}/swap${qs ? `?${qs}` : ""}`;
+}
+
 /** Who has this song and what they say about it, each with a way to reach out about it. */
-export function ListenerList({ listeners, cluster, songId }: { songId?: string; listeners: { id: string; name: string; isMe: boolean; reason: string; daysAgo: number }[]; cluster: string }) {
+export function ListenerList({
+  listeners,
+  cluster,
+  songId,
+  opener,
+}: {
+  songId?: string;
+  listeners: { id: string; name: string; isMe: boolean; reason: string; daysAgo: number; why?: ClusterId }[];
+  cluster: string;
+  /** A first message for this listener, prefilled in the composer. Only given where both whys are known. */
+  opener?: (listener: { id: string; why?: ClusterId }) => string | undefined;
+}) {
   const others = listeners.filter((l) => !l.isMe);
   return (
     <>
@@ -102,7 +121,7 @@ export function ListenerList({ listeners, cluster, songId }: { songId?: string; 
               <p className="text-[11px] text-muted-foreground">{l.daysAgo === 0 ? "added just now" : `added ${ago(l.daysAgo)}`}</p>
             </div>
             {l.isMe ? null : (
-              <Link href={songId ? `/messages/${l.id}/swap?song=${songId}` : `/messages/${l.id}/swap`} className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "h-8 shrink-0 px-3 text-xs")}>
+              <Link href={swapHref(l.id, songId, opener?.(l))} className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "h-8 shrink-0 px-3 text-xs")}>
                 Say hi with a song
               </Link>
             )}

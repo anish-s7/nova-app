@@ -15,7 +15,7 @@ import { buildSongLayer } from "@/lib/song-layer";
 import type { Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function SongSwapComposer({ userId, replyToSwapId, initialSongId }: { userId: string; replyToSwapId?: string; initialSongId?: string }) {
+export function SongSwapComposer({ userId, replyToSwapId, initialSongId, initialReason }: { userId: string; replyToSwapId?: string; initialSongId?: string; initialReason?: string }) {
   const router = useRouter();
   const session = useSession();
   const { data: convo } = useSWR(["conversation", userId], ([, id]) => getConversation(id));
@@ -24,7 +24,8 @@ export function SongSwapComposer({ userId, replyToSwapId, initialSongId }: { use
   const { data: results } = useSWR(deferred ? ["songs", deferred] : null, ([, q]) => searchSongs(q), { keepPreviousData: true });
   // Arriving from a song in the galaxy: the song is already chosen, so the only thing left is why.
   const [song, setSong] = useState<Song | null>(() => SONG_CATALOG.find((s) => s.id === initialSongId) ?? null);
-  const [reason, setReason] = useState("");
+  // An opener from a bridge song arrives prefilled and editable; it is a starting line, not something sent for them.
+  const [reason, setReason] = useState(initialReason ?? "");
   const [sending, setSending] = useState(false);
 
   const name = convo?.user.name ?? "them";

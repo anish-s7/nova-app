@@ -20,6 +20,7 @@ import { mockDb, resetMockDb } from "./mock-db";
 import { expandOrder, sampleGalaxy } from "./galaxy-sample";
 import { galaxyFromWindow, galaxyMoreFromWindow, type GalaxyMoreWindow, type GalaxyWindow } from "./galaxy-adapter";
 import { buildSongLayer, type SongLayer } from "./song-layer";
+import { classifyMix, mixFromScores } from "./why-mix";
 import { buildClusterDetail, type ClusterDetail } from "./cluster-songs";
 import { listeningMoment } from "./texture";
 import { SONG_CATALOG, songById } from "./music-context";
@@ -252,11 +253,14 @@ function pickTopMatch(me: Party, edges: GalaxyEdge[]): string | undefined {
 }
 
 function nodeFor(u: Party, isMe: boolean): GalaxyNode {
+  const mix = mixFromScores(u.vector);
   const active = u.motivations.filter((m) => m.feedback !== "rejected" && (isMe || m.isPublic));
   return {
     userId: u.id,
     name: u.name,
     cluster: primaryCluster(u.motivations),
+    whys: mix,
+    blended: classifyMix(mix, u.id).blended,
     topMotivations: active.slice(0, 3).map((m) => m.label),
     isMe,
   };

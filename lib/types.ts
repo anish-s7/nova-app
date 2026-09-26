@@ -119,7 +119,19 @@ export type GalaxyNode = {
   userId: string;
   name: string;
   avatarUrl?: string;
+  /** The strongest why: color, filters, short labels. Position uses `whys`. */
   cluster: string;
+  /**
+   * Listening profile over the five whys, shares summing to ~1. Placement sits people at the weighted
+   * center of their top two. Absent means one-hot on `cluster` (e.g. the http galaxy until the
+   * profile stores the mix; see MERGE_CHECKLIST.md "Why mix").
+   * Song stars: the share of listeners per why.
+   */
+  whys?: Partial<Record<string, number>>;
+  /** Top two whys were too close to call; drawn between them. */
+  blended?: boolean;
+  /** Song stars: listeners span two or more whys. */
+  bridge?: boolean;
   topMotivations: string[];
   isMe: boolean;
   /** "song" stars are the song layer (lib/song-layer.ts); everything else is a person. */

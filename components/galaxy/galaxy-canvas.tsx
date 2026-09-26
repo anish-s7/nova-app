@@ -48,6 +48,8 @@ export function GalaxyCanvas({ nodes, edges, arrivals = [], className, songs = [
         userId: songNodeId(s.id),
         name: s.song.title,
         cluster: s.cluster,
+        whys: Object.fromEntries(s.whyCounts.map((w) => [w.id, w.count / Math.max(1, s.listeners.length)])),
+        bridge: s.isBridge,
         topMotivations: [],
         isMe: false,
         kind: "song" as const,
@@ -79,7 +81,15 @@ export function GalaxyCanvas({ nodes, edges, arrivals = [], className, songs = [
     return out;
   }, [focusIds, songPoints]);
 
-  const allEdges = useMemo(() => [...edges, ...arrivals.flatMap((a) => a.edges), ...constellation], [edges, arrivals, constellation]);
+  // A selected song is threaded to everyone who has it, and they light up while everything else steps back.
+  const selectedSong = useMemo(() => songs.find((s) => songNodeId(s.id) === rest.selectedId), [songs, rest.selectedId]);
+  const listenerThreads = useMemo(
+    () => (selectedSong ? selectedSong.listeners.map((l) => ({ source: songNodeId(selectedSong.id), target: l.id, similarity: 0.9, sharedMotivation: "", sharedSongs: 0, sharedArtists: 0 })) : []),
+    [selectedSong],
+  );
+  const spotlight = useMemo(() => (selectedSong ? new Set([songNodeId(selectedSong.id), ...selectedSong.listeners.map((l) => l.id)]) : focusIds), [selectedSong, focusIds]);
+
+  const allEdges = useMemo(() => [...edges, ...arrivals.flatMap((a) => a.edges), ...constellation, ...listenerThreads], [edges, arrivals, constellation, listenerThreads]);
   const allExtra = useMemo(() => [...extra, ...songPoints], [extra, songPoints]);
 
   const reduced = useReducedMotion();
@@ -88,7 +98,7 @@ export function GalaxyCanvas({ nodes, edges, arrivals = [], className, songs = [
 
   return (
     <div className={className ?? "absolute inset-0 starfield"}>
-      <View nodes={allNodes} edges={allEdges} layout={layout} extra={allExtra} focusIds={focusIds} {...rest} />
+      <View nodes={allNodes} edges={allEdges} layout={layout} extra={allExtra} focusIds={spotlight} {...rest} />
     </div>
   );
 }
