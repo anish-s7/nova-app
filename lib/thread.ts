@@ -4,6 +4,9 @@ import type { Message, Song } from "./types";
  * A thread is what two people have passed back and forth: every Song Swap between them, in order.
  * Derived from messages, so it needs no storage of its own.
  */
+/** From this many songs traded, the thread to someone glows in the galaxy. */
+export const BOND_AT = 3;
+
 export type ThreadEntry = { swapId: string; song: Song; reason: string; fromMe: boolean; sentAt: string };
 
 export type Thread = {

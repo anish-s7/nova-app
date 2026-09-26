@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { LocateFixed, Plus, X } from "lucide-react";
@@ -21,11 +21,12 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { useGalaxyRealtime } from "@/hooks/use-galaxy-realtime";
-import { getGalaxy, getSongLayer, getUser, ME_ID } from "@/lib/api";
+import { getConversations, getGalaxy, getSongLayer, getUser, ME_ID } from "@/lib/api";
 import { getCluster } from "@/lib/clusters";
 import { useSession } from "@/lib/session";
 import { isSongNode, songNodeId } from "@/lib/song-layer";
 import { THEME_THRESHOLD } from "@/lib/themes";
+import { BOND_AT } from "@/lib/thread";
 import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +35,8 @@ export default function GalaxyPage() {
   const version = session.version;
   const { data, error, mutate, isValidating } = useSWR(["galaxy", version], getGalaxy, { revalidateOnFocus: false });
   const arrivals = useGalaxyRealtime(!!data);
+  const { data: convos } = useSWR(["conversations", version], getConversations, { refreshInterval: 4000 });
+  const threads = useMemo(() => (convos ?? []).filter((c) => c.threadSongs).map((c) => ({ userId: c.userId, count: c.threadSongs! })), [convos]);
   const apiRef = useRef<GalaxyApi | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dismissedArrival, setDismissedArrival] = useState(false);
@@ -110,6 +113,25 @@ export default function GalaxyPage() {
     } else apiRef.current?.flyTo(songNodeId(pending.songId), { duration: 1200, distance: 14, lift: 0.1 });
   }, [layer]);
 
+  // When a thread reaches BOND_AT songs, say so once: the line to that person starts to glow.
+  useEffect(() => {
+    if (!convos || !data) return;
+    const bonded = threads.filter((t) => t.count >= BOND_AT);
+    let seen: string[] | null = null;
+    try {
+      seen = JSON.parse(sessionStorage.getItem(BOND_KEY) ?? "null");
+    } catch {}
+    const fresh = seen ? bonded.find((t) => !seen.includes(t.userId)) : undefined;
+    try {
+      sessionStorage.setItem(BOND_KEY, JSON.stringify([...new Set([...(seen ?? []), ...bonded.map((t) => t.userId)])]));
+    } catch {}
+    if (!fresh) return;
+    const name = nodes.find((n) => n.userId === fresh.userId)?.name ?? "them";
+    setCelebrate({ title: `You and ${name} are bonded`, body: `${fresh.count} songs traded. The line between you glows now.` });
+    if (mode === "people") apiRef.current?.flyTo(fresh.userId, { duration: 1400, distance: 20, lift: 0.1 });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- react to new thread counts only
+  }, [threads]);
+
   useEffect(() => {
     if (!celebrate) return;
     const t = setTimeout(() => setCelebrate(null), 9000);
@@ -149,6 +171,7 @@ export default function GalaxyPage() {
             onSelect={select}
             focusCluster={focusCluster}
             mode={mode}
+            threads={threads}
             songs={layer?.stars}
             focusSongIds={focusSongIds}
           />
@@ -329,13 +352,13 @@ export default function GalaxyPage() {
       </BottomSheet>
 
       <BottomSheet open={!!selected} onClose={() => setSelectedId(null)} label={selected ? `${selected.name}'s star` : "Star"}>
-        {selected ? <StarPreview node={selected} /> : null}
+        {selected ? <StarPreview node={selected} traded={threads.find((t) => t.userId === selected.userId)?.count ?? 0} /> : null}
       </BottomSheet>
     </main>
   );
 }
 
-function StarPreview({ node }: { node: GalaxyNode }) {
+function StarPreview({ node, traded }: { node: GalaxyNode; traded: number }) {
   const { data } = useSWR(node.isMe ? null : ["user", node.userId], ([, id]) => getUser(id));
 
   if (node.isMe) {
@@ -389,6 +412,18 @@ function StarPreview({ node }: { node: GalaxyNode }) {
         )}
       </div>
 
+      {traded > 0 ? (
+        <p className="-mt-1 text-sm text-foreground/85">
+          <span className={traded >= BOND_AT ? "font-medium text-primary" : "text-muted-foreground"}>
+            {traded >= BOND_AT ? "Bonded" : "Trading"} · {traded} {traded === 1 ? "song" : "songs"}
+          </span>
+          {traded < BOND_AT ? <span className="text-muted-foreground"> · {BOND_AT - traded} more and your line glows</span> : null}{" "}
+          <Link href={`/messages/${node.userId}`} className="underline underline-offset-4 hover:text-foreground">
+            Open thread
+          </Link>
+        </p>
+      ) : null}
+
       <div className="flex items-center gap-4">
         <Link href={`/messages/${node.userId}/swap`} className={cn(buttonVariants(), "h-11 flex-1")}>
           Send a song
@@ -413,6 +448,7 @@ function closestTo(meId: string, nodes: GalaxyNode[], edges: GalaxyEdge[], clust
 }
 
 const HINT_KEY = "song-galaxy-hint-seen";
+const BOND_KEY = "song-galaxy-bonds";
 
 /** A one-time gesture hint that clears itself on first interaction or after a few seconds. */
 function useFirstVisitHint() {

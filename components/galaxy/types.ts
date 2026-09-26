@@ -32,6 +32,8 @@ export type GalaxyViewProps = {
   focusCluster?: string | null;
   /** "people" shows the people layer; "songs" shows the song layer and ghosts everyone else. */
   mode?: "people" | "songs";
+  /** People you have traded songs with. From BOND_AT songs the thread to you glows. */
+  threads?: { userId: string; count: number }[];
   /** Song-layer focus: only these node ids stay lit. */
   focusIds?: ReadonlySet<string> | null;
 };
