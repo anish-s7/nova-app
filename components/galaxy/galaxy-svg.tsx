@@ -28,9 +28,14 @@ export function GalaxySvg({
   focusIds = null,
   threads = [],
   hidden,
+  destinations = [],
+  bridges = [],
+  onSelectDestination,
 }: GalaxyViewProps & { compact?: boolean }) {
   const [phase, setPhase] = useState<"dark" | "me" | "all">(initialPhase === "dark" ? "dark" : "all");
   const [focus, setFocus] = useState<string | null>(null);
+  /** What the frame shows: home, every community galaxy, or one of them. */
+  const [view, setView] = useState<string>("home");
 
   const points = useMemo(() => {
     const m = new Map<string, LayoutPoint>(layout.points);
@@ -47,6 +52,7 @@ export function GalaxySvg({
       },
       pullBackToOverview: async () => {
         setPhase("all");
+        if (layout.destinations?.size) setView("universe");
         await wait(600);
       },
       flyTo: async (id) => {
@@ -56,6 +62,18 @@ export function GalaxySvg({
       recenter: async () => setFocus(null),
       flyToCluster: async () => setFocus(null),
       flyToGroup: async () => setFocus(null),
+      flyToDestination: async (id) => {
+        setView(id);
+        await wait(600);
+      },
+      returnHome: async () => {
+        setPhase("all");
+        setView("home");
+        await wait(600);
+      },
+      flyIntoOrbit: async () => {
+        await wait(700);
+      },
     };
     onReady?.();
     return () => {
@@ -64,14 +82,23 @@ export function GalaxySvg({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- register once
   }, []);
 
-  const r = layout.radius * 1.15;
+  const dests = [...(layout.destinations?.values() ?? [])];
+  const destOf = new Map(destinations.map((d) => [d.id, d]));
+  const inDest = layout.destinations?.get(view);
+  const frame =
+    view === "universe" && dests.length
+      ? { x: 0, y: 0, r: Math.max(layout.radius, ...dests.map((d) => Math.hypot(d.x, d.y) + d.radius)) * 1.05 }
+      : inDest
+        ? { x: inDest.x, y: inDest.y, r: inDest.radius * 1.6 }
+        : { x: 0, y: 0, r: layout.radius * 1.15 };
+  const r = frame.r;
   const meId = nodes.find((n) => n.isMe)?.userId;
   const highlight = selectedId ?? focus;
   const clusterOf = new Map(nodes.map((n) => [n.userId, n.cluster]));
 
   return (
     <svg
-      viewBox={`${-r} ${-r * 1.4} ${r * 2} ${r * 2.8}`}
+      viewBox={`${frame.x - r} ${-frame.y - r * 1.4} ${r * 2} ${r * 2.8}`}
       preserveAspectRatio="xMidYMid meet"
       className="absolute inset-0 size-full"
       role={interactive ? "group" : "img"}
@@ -105,6 +132,28 @@ export function GalaxySvg({
             );
           })}
       </g>
+      {dests.map((d) => (
+        <g
+          key={`dest-${d.id}`}
+          transform={`translate(${d.x} ${-d.y})`}
+          className={cn(onSelectDestination && "cursor-pointer")}
+          onClick={onSelectDestination ? () => onSelectDestination(d.id) : undefined}
+        >
+          <circle r={d.radius * 1.4} fill={destOf.get(d.id)?.color} opacity={0.18} />
+          <circle r={d.radius * 0.35} fill={destOf.get(d.id)?.color} opacity={0.5} />
+          {view === "universe" ? (
+            <text y={d.radius * 1.4 + 3} textAnchor="middle" className="fill-foreground font-serif text-[3px] italic">
+              {destOf.get(d.id)?.name}
+            </text>
+          ) : null}
+        </g>
+      ))}
+      {bridges.map((b) => {
+        const a = points.get(b.personId);
+        const d = layout.destinations?.get(b.destinationId);
+        if (!a || !d) return null;
+        return <line key={`bridge-${b.personId}-${d.id}`} x1={a.x} y1={-a.y} x2={d.x} y2={-d.y} stroke={destOf.get(d.id)?.color} strokeWidth={0.12} strokeDasharray="0.6 0.8" opacity={0.6} />;
+      })}
       {mode === "people" && hidden
         ? [...new Set(nodes.map((n) => n.cluster))].flatMap((cl) => {
             const ps = nodes.filter((n) => n.cluster === cl && !n.isMe && points.get(n.userId)).map((n) => points.get(n.userId)!);
@@ -145,7 +194,7 @@ export function GalaxySvg({
             key={n.userId}
             transform={`translate(${p.x} ${-p.y})`}
             className={cn("transition-opacity duration-700", interactive && "cursor-pointer")}
-            opacity={visible ? (dimmed ? 0.15 : n.far && !on ? 0.45 : 1) : 0}
+            opacity={visible ? (dimmed ? 0.15 : (n.far || n.relationship === "nearby" || (n.destinationId && !n.relationship)) && !on ? 0.45 : 1) : 0}
             onClick={interactive ? () => onSelect?.(n.userId) : undefined}
           >
             <circle r={size * 2.6} fill={color} opacity={0.18} />

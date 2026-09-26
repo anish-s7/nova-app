@@ -35,7 +35,7 @@ export default function FeelPage() {
           title="No songs yet"
           body="Bring a few songs first, then tell us how each one feels."
           action={
-            <Link href="/onboarding/music" className={cn(buttonVariants(), "h-11 rounded-full px-6")}>
+            <Link href="/onboarding/pick" className={cn(buttonVariants(), "h-11 rounded-full px-6")}>
               Bring your music
             </Link>
           }
@@ -62,7 +62,7 @@ function ChooseSongs({ songs }: { songs: Song[] }) {
   return (
     <main className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader
-        backHref="/onboarding/music"
+        backHref="/onboarding/pick"
         title="Your top songs"
         trailing={
           <span className="text-sm tabular-nums text-muted-foreground" aria-live="polite">

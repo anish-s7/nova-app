@@ -55,7 +55,7 @@ export default function MePage() {
             title="We don't know you yet"
             body="Bring a few songs and we'll show you why you listen, and who else listens the same way."
             action={
-              <Link href="/onboarding/music" className={cn(buttonVariants(), "h-11 rounded-none px-6")}>
+              <Link href="/onboarding/pick" className={cn(buttonVariants(), "h-11 rounded-none px-6")}>
                 Bring your music
               </Link>
             }
@@ -109,7 +109,7 @@ export default function MePage() {
             Settings
           </h2>
           <ul className="mt-2 border-y border-white/[0.07]">
-            <SettingsLink href="/onboarding/music" icon={<ListMusic className="size-4" aria-hidden />}>
+            <SettingsLink href="/onboarding/pick" icon={<ListMusic className="size-4" aria-hidden />}>
               Add or change songs
             </SettingsLink>
             {session.analysis ? (
@@ -227,7 +227,7 @@ function Songs({ items, onSelect }: { items: MySong[]; onSelect: (item: MySong) 
         <h2 id="songs-heading" className={sectionLabel}>
           Your songs · {items.length}
         </h2>
-        <Link href="/onboarding/music" className="text-xs text-muted-foreground hover:text-foreground">
+        <Link href="/onboarding/pick" className="text-xs text-muted-foreground hover:text-foreground">
           Add songs
         </Link>
       </div>

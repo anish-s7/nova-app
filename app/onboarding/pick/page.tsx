@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Check, Plus, Search, X } from "lucide-react";
@@ -8,7 +8,8 @@ import { AlbumArt } from "@/components/album-art";
 import { ScreenHeader } from "@/components/screen-header";
 import { SongTile } from "@/components/song-tile";
 import { Button } from "@/components/ui/button";
-import { chooseSongs, getMySongs, sameSong, searchSongs } from "@/lib/api";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { chooseSongs, getMySongs, REAL_DATA, sameSong, searchSongs } from "@/lib/api";
 import { getSession, useHydrated } from "@/lib/session";
 import type { Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -35,8 +36,10 @@ function PickSongs() {
     return s.source === "manual" && s.saveStatus !== "saved" ? s.songs : [];
   });
   const [query, setQuery] = useState("");
-  const deferred = useDeferredValue(query);
-  const { data: results, isLoading } = useSWR(["songs", deferred], ([, q]) => searchSongs(q), { keepPreviousData: true });
+  // Real mode searches the whole catalog over the network, so wait for a pause in typing.
+  const deferred = useDebouncedValue(query, REAL_DATA ? 350 : 0).trim();
+  const { data: results, isLoading, error: searchError } = useSWR(["songs", deferred], ([, q]) => searchSongs(q), { keepPreviousData: true });
+  const searching = deferred.length >= (REAL_DATA ? 2 : 1);
   const tray = useRef<HTMLUListElement>(null);
   // Songs you've already saved: marked in the list, and picking one again updates it instead of adding a copy.
   const { data: mine } = useSWR(["my-songs"], getMySongs);
@@ -64,7 +67,7 @@ function PickSongs() {
   return (
     <main className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader
-        backHref="/onboarding/music"
+        backHref="/"
         title="Pick your songs"
         subtitle={mine?.length ? "Add songs, or pick one of yours to update it" : `Choose ${MIN} to ${MAX} you actually reach for`}
         trailing={
@@ -94,7 +97,7 @@ function PickSongs() {
         </div>
 
         <ul className={cn("flex flex-col transition-opacity", isLoading && "opacity-60")} aria-busy={isLoading} aria-label="Songs">
-          {(results ?? []).map((song) => {
+          {(searching || !REAL_DATA ? (results ?? []) : []).map((song) => {
             const on = isPicked(song.id);
             return (
               <li key={song.id}>
@@ -121,7 +124,13 @@ function PickSongs() {
               </li>
             );
           })}
-          {results && results.length === 0 ? <li className="py-8 text-center text-sm text-muted-foreground">No songs match &ldquo;{deferred}&rdquo;.</li> : null}
+          {searchError ? (
+            <li className="py-8 text-center text-sm text-muted-foreground">{searchError instanceof Error ? searchError.message : "Search isn't responding right now."}</li>
+          ) : REAL_DATA && !searching ? (
+            <li className="py-8 text-center text-sm text-muted-foreground">Search for any song or artist you actually reach for.</li>
+          ) : results && results.length === 0 && searching && !isLoading ? (
+            <li className="py-8 text-center text-sm text-muted-foreground">No songs match &ldquo;{deferred}&rdquo;.</li>
+          ) : null}
         </ul>
       </div>
 

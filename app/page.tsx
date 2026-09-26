@@ -41,7 +41,7 @@ export default function WelcomePage() {
         </p>
 
         <div data-intro-rest className="mt-auto pt-10">
-          <Link href={authEnabled ? "/signup" : "/onboarding/music"} className={cn(buttonVariants(), "btn-glow h-12 w-full rounded-full text-base")}>
+          <Link href={authEnabled ? "/signup" : "/onboarding/pick"} className={cn(buttonVariants(), "btn-glow h-12 w-full rounded-full text-base")}>
             Continue
             <ArrowRight className="size-4" aria-hidden />
           </Link>
