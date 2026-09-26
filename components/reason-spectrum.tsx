@@ -27,7 +27,7 @@ export function ReasonSpectrum({ motivations }: { motivations: InferredMotivatio
             <span
               key={m.id}
               data-seg
-              className="h-full origin-left rounded-full first:rounded-l-full"
+              className="h-full origin-left rounded-full"
               style={{ flexGrow: m.confidence, background: `linear-gradient(90deg, ${color}, color-mix(in oklch, ${color} 70%, white))`, boxShadow: `0 0 10px -2px ${color}` }}
             />
           );

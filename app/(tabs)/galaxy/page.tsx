@@ -1,23 +1,27 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { LocateFixed, Sparkles, X } from "lucide-react";
+import { Hand, LocateFixed, Sparkles, X } from "lucide-react";
+import { animate, stagger } from "animejs";
 import { BottomSheet } from "@/components/bottom-sheet";
 import { GalaxyCanvas, GalaxySkeleton } from "@/components/galaxy/galaxy-canvas";
 import type { GalaxyApi } from "@/components/galaxy/types";
-import { GalaxyLegend } from "@/components/galaxy-legend";
+import { ClusterFilter } from "@/components/galaxy/cluster-filter";
 import { Logo } from "@/components/logo";
 import { OverlapBadge } from "@/components/overlap-badge";
+import { SimilarityRing } from "@/components/similarity-ring";
 import { ThemeTag } from "@/components/theme-tag";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
+import { useAnime } from "@/hooks/use-anime";
 import { useGalaxyRealtime } from "@/hooks/use-galaxy-realtime";
-import { getGalaxy, getUser } from "@/lib/api";
+import { getGalaxy, getUser, ME_ID } from "@/lib/api";
+import { getCluster } from "@/lib/clusters";
 import { useSession } from "@/lib/session";
-import type { GalaxyNode } from "@/lib/types";
+import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export default function GalaxyPage() {
@@ -27,15 +31,31 @@ export default function GalaxyPage() {
   const apiRef = useRef<GalaxyApi | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dismissedArrival, setDismissedArrival] = useState(false);
+  const [focusCluster, setFocusCluster] = useState<string | null>(null);
+  const hint = useFirstVisitHint();
 
   const nodes: GalaxyNode[] = data ? [...data.nodes, ...arrivals.map((a) => a.node)] : [];
+  const edges: GalaxyEdge[] = data ? [...data.edges, ...arrivals.flatMap((a) => a.edges)] : [];
   const selected = nodes.find((n) => n.userId === selectedId);
   const arrival = arrivals[0]?.node;
+  const closest = closestTo(ME_ID, nodes, edges, focusCluster, 6);
 
   const select = (id: string | null) => {
     setSelectedId(id);
-    if (id) apiRef.current?.flyTo(id, { duration: 1200, distance: 9 });
+    hint.dismiss();
+    if (id) apiRef.current?.flyTo(id, { duration: 1200, distance: 18, lift: 0.1 });
   };
+
+  const focus = (id: string | null) => {
+    setFocusCluster(id);
+    setSelectedId(null);
+    hint.dismiss();
+    apiRef.current?.flyToCluster(id);
+  };
+
+  const strip = useAnime<HTMLUListElement>(() => {
+    animate("li", { opacity: [0, 1], translateY: [10, 0], duration: 500, delay: stagger(50, { start: 400 }), ease: "outQuart" });
+  }, [closest.map((c) => c.node.userId).join()]);
 
   if (error) {
     return (
@@ -52,7 +72,18 @@ export default function GalaxyPage() {
     <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <h1 className="sr-only">Your galaxy</h1>
       {data ? (
-        <GalaxyCanvas nodes={data.nodes} edges={data.edges} arrivals={arrivals} apiRef={apiRef} selectedId={selectedId} onSelect={select} />
+        <div className="absolute inset-0" onPointerDown={hint.dismiss}>
+          <GalaxyCanvas
+            nodes={data.nodes}
+            edges={data.edges}
+            arrivals={arrivals}
+            apiRef={apiRef}
+            selectedId={selectedId}
+            onSelect={select}
+            focusCluster={focusCluster}
+            onFocusCluster={focus}
+          />
+        </div>
       ) : (
         <GalaxySkeleton label="Arranging everyone by why they listen…" />
       )}
@@ -61,11 +92,22 @@ export default function GalaxyPage() {
         <div className="pointer-events-auto rounded-full bg-background/60 px-3 py-2 backdrop-blur-md">
           <Logo />
         </div>
-        <GalaxyLegend className="pointer-events-auto w-48" />
+        {data ? (
+          <p className="rounded-full bg-background/60 px-3 py-2 text-xs text-muted-foreground backdrop-blur-md">
+            <span className="font-semibold tabular-nums text-foreground">{nodes.length - 1}</span> listeners
+          </p>
+        ) : null}
       </div>
 
+      {data ? <ClusterFilter nodes={nodes} value={focusCluster} onChange={focus} className="relative z-10 -mt-1" /> : null}
+      {focusCluster ? (
+        <p key={focusCluster} className="relative z-10 mx-4 mt-2 text-pretty font-serif text-sm italic leading-snug motion-safe:animate-rise-in" style={{ color: getCluster(focusCluster).color }}>
+          {getCluster(focusCluster).description}
+        </p>
+      ) : null}
+
       {arrival && !dismissedArrival ? (
-        <div role="status" className="relative z-10 mx-4 flex items-center gap-2 rounded-full border border-white/10 bg-background/80 py-1 pl-1 pr-1 backdrop-blur-md motion-safe:animate-rise-in">
+        <div role="status" className="relative z-10 mx-4 mt-2 flex items-center gap-2 rounded-full border border-white/10 bg-background/80 py-1 pl-1 pr-1 backdrop-blur-md motion-safe:animate-rise-in">
           <UserAvatar name={arrival.name} cluster={arrival.cluster} size={32} />
           <button type="button" onClick={() => select(arrival.userId)} className="min-h-10 min-w-0 flex-1 truncate text-left text-sm">
             <span className="font-medium">{arrival.name}</span> <span className="text-muted-foreground">just joined, close to you</span>
@@ -76,15 +118,55 @@ export default function GalaxyPage() {
         </div>
       ) : null}
 
-      <div className="pointer-events-none relative z-10 mt-auto flex justify-end p-4">
+      {hint.visible && data ? (
+        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex justify-center motion-safe:animate-rise-in">
+          <p className="flex items-center gap-2 rounded-full border border-white/10 bg-background/75 px-4 py-2 text-xs text-muted-foreground backdrop-blur-md">
+            <Hand className="size-3.5 text-primary" aria-hidden />
+            Drag to explore · pinch to zoom · tap a star
+          </p>
+        </div>
+      ) : null}
+
+      <div className="pointer-events-none relative z-10 mt-auto flex items-end gap-2 p-4">
+        {data ? (
+          <section aria-labelledby="closest-heading" className="pointer-events-auto min-w-0 flex-1 rounded-3xl border border-white/10 bg-background/70 px-3 pb-2 pt-2.5 backdrop-blur-md">
+            <h2 id="closest-heading" className="px-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              {focusCluster ? `Closest in ${getCluster(focusCluster).short.toLowerCase()}` : "Closest to you"}
+            </h2>
+            {closest.length === 0 ? (
+              <p className="px-1 pb-1.5 pt-1 text-xs text-muted-foreground">Nobody here is close to you yet. Tap a star to meet them anyway.</p>
+            ) : null}
+            <ul ref={strip} className="no-scrollbar -mx-1 mt-1 flex gap-1 overflow-x-auto px-1">
+              {closest.map(({ node, similarity }) => (
+                <li key={node.userId} className="shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => select(node.userId)}
+                    aria-pressed={selectedId === node.userId}
+                    aria-label={`${node.name}, ${Math.round(similarity * 100)}% same why`}
+                    className={cn("flex w-14 flex-col items-center gap-0.5 rounded-2xl py-1 transition-colors hover:bg-white/5", selectedId === node.userId && "bg-white/[0.07]")}
+                  >
+                    <SimilarityRing value={similarity} cluster={node.cluster} size={34}>
+                      <UserAvatar name={node.name} cluster={node.cluster} size={34} />
+                    </SimilarityRing>
+                    <span className="w-full truncate text-center text-[11px] text-foreground/85">{node.name}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ) : (
+          <span className="flex-1" />
+        )}
         <button
           type="button"
           onClick={() => {
             setSelectedId(null);
+            setFocusCluster(null);
             apiRef.current?.recenter();
           }}
           aria-label="Recenter on the whole galaxy"
-          className="pointer-events-auto inline-flex size-12 items-center justify-center rounded-full border border-white/10 bg-background/70 backdrop-blur-md hover:bg-background"
+          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-background/70 backdrop-blur-md hover:bg-background"
         >
           <LocateFixed className="size-5" aria-hidden />
         </button>
@@ -151,4 +233,42 @@ function StarPreview({ node }: { node: GalaxyNode }) {
       </div>
     </div>
   );
+}
+
+/** Your nearest stars by similarity, optionally within one cluster. */
+function closestTo(meId: string, nodes: GalaxyNode[], edges: GalaxyEdge[], cluster: string | null, limit: number) {
+  const byId = new Map(nodes.map((n) => [n.userId, n]));
+  return edges
+    .filter((e) => e.source === meId || e.target === meId)
+    .map((e) => ({ node: byId.get(e.source === meId ? e.target : e.source), similarity: e.similarity }))
+    .filter((c): c is { node: GalaxyNode; similarity: number } => !!c.node && !c.node.isMe && (!cluster || c.node.cluster === cluster))
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, limit);
+}
+
+const HINT_KEY = "song-galaxy-hint-seen";
+
+/** A one-time gesture hint that clears itself on first interaction or after a few seconds. */
+function useFirstVisitHint() {
+  const [visible, setVisible] = useState(false);
+  const dismiss = () => {
+    setVisible(false);
+    try {
+      localStorage.setItem(HINT_KEY, "1");
+    } catch {}
+  };
+  useEffect(() => {
+    let seen = true;
+    try {
+      seen = localStorage.getItem(HINT_KEY) === "1";
+    } catch {}
+    if (seen) return;
+    const show = setTimeout(() => setVisible(true), 1200);
+    const hide = setTimeout(() => dismiss(), 7000);
+    return () => {
+      clearTimeout(show);
+      clearTimeout(hide);
+    };
+  }, []);
+  return { visible, dismiss };
 }

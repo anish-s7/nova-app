@@ -21,6 +21,7 @@ export function GalaxySvg({
   interactive = true,
   onReady,
   compact = false,
+  focusCluster = null,
 }: GalaxyViewProps & { compact?: boolean }) {
   const [phase, setPhase] = useState<"dark" | "me" | "all">(initialPhase === "dark" ? "dark" : "all");
   const [focus, setFocus] = useState<string | null>(null);
@@ -47,6 +48,7 @@ export function GalaxySvg({
         await wait(300);
       },
       recenter: async () => setFocus(null),
+      flyToCluster: async () => setFocus(null),
     };
     onReady?.();
     return () => {
@@ -101,6 +103,7 @@ export function GalaxySvg({
         if (!p) return null;
         const color = getCluster(n.cluster).color;
         const visible = n.isMe ? phase !== "dark" : phase === "all";
+        const dimmed = !!focusCluster && n.cluster !== focusCluster && !n.isMe;
         const on = n.userId === highlight;
         const size = n.isMe ? 1.3 : on ? 1.1 : 0.75;
         return (
@@ -108,7 +111,7 @@ export function GalaxySvg({
             key={n.userId}
             transform={`translate(${p.x} ${-p.y})`}
             className={cn("transition-opacity duration-700", interactive && "cursor-pointer")}
-            opacity={visible ? 1 : 0}
+            opacity={visible ? (dimmed ? 0.15 : 1) : 0}
             onClick={interactive ? () => onSelect?.(n.userId) : undefined}
           >
             <circle r={size * 2.6} fill={color} opacity={0.18} />
