@@ -22,7 +22,7 @@ export default function YourWhyPage() {
           title="Nothing to read yet"
           body="Bring a few songs and we'll show you why you listen."
           action={
-            <Link href="/onboarding/music" className={cn(buttonVariants(), "h-11 px-6")}>
+            <Link href="/onboarding/pick" className={cn(buttonVariants(), "h-11 px-6")}>
               Bring your music
             </Link>
           }

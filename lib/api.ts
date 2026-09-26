@@ -29,7 +29,7 @@ import { classifyMix, mixFromScores } from "./why-mix";
 import { buildClusterDetail, type ClusterDetail } from "./cluster-songs";
 import { listeningMoment } from "./texture";
 import { threadFrom } from "./thread";
-import { SONG_CATALOG, songById } from "./music-context";
+import { SONG_CATALOG } from "./music-context";
 import {
   DEMO_BIAS,
   DEMO_MATCH_IDS,
@@ -49,7 +49,6 @@ import {
   resetWorld as resetMockWorld,
   scheduleReply,
   scheduleSwapBack,
-  synthesizeSignals,
   wanderCandidates,
   worldUser,
   type Party,
@@ -75,7 +74,6 @@ import type {
   MessageRow,
   Song,
   SongRow,
-  SpotifyImport,
   User,
   WanderEntry,
 } from "./types";
@@ -174,23 +172,9 @@ function byTime(messages: Message[]) {
 
 // ---------------------------------------------------------------------------
 // Onboarding. NOT IN CONTRACT: Spotify import, catalog search and analysis aren't DB reads.
-// In real mode, search hits the real catalog (GET /api/songs/search) and the Spotify import reads
-// the connected account's top tracks; the mock keeps the 24-song demo catalog.
-
-export async function importSpotify(): Promise<SpotifyImport> {
-  if (REAL_DATA) return real.importSpotify();
-  await delay(1600);
-  maybeFail("spotify");
-  const ids = [
-    "motion-sickness", "liability", "holocene", "fourth-of-july", "night-we-met", "skinny-love",
-    "nights", "space-song", "fix-you", "ribs", "white-ferrari", "seventeen",
-    "casimir-pulaski-day", "landslide", "ivy", "heartbeats", "supercut", "dreams",
-    "kilby-girl", "stick-season", "intro-xx", "gymnopedie", "hurt", "midnight-city",
-  ];
-  const songs: Song[] = ids.map((id) => ({ ...songById(id), source: "spotify" }));
-  const signals = synthesizeSignals("me-spotify", songs, "quiet_company");
-  return { songs, signals };
-}
+// In real mode, search hits the real catalog (GET /api/songs/search); the mock keeps the 24-song
+// demo catalog. There's no Spotify import in the UI: Spotify's development mode only admits a
+// handful of allowlisted accounts, so everyone picks their own songs.
 
 export async function searchSongs(q: string): Promise<Song[]> {
   if (REAL_DATA) return real.searchSongs(q);

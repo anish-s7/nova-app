@@ -75,7 +75,7 @@ export function AuthForm({ mode, next, initialError, initialNotice }: { mode: Mo
   const copy = COPY[mode];
   const configured = isSupabaseConfigured();
   // New accounts go through onboarding; returning users go where they were headed.
-  const destination = mode === "signup" ? "/onboarding/music" : safeNextPath(next);
+  const destination = mode === "signup" ? "/onboarding/pick" : safeNextPath(next);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -188,7 +188,7 @@ export function AuthForm({ mode, next, initialError, initialNotice }: { mode: Mo
           <div role="status" className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm">
             <p className="font-medium">Sign-in isn&apos;t set up in this environment</p>
             <p className="mt-1 text-muted-foreground">Add the Supabase keys to .env.local (see AUTH_SETUP.md). Until then the app runs on demo data.</p>
-            <Link href="/onboarding/music" className="mt-3 inline-block font-medium text-primary hover:underline">
+            <Link href="/onboarding/pick" className="mt-3 inline-block font-medium text-primary hover:underline">
               Continue with demo data
             </Link>
           </div>

@@ -63,7 +63,7 @@ export default function PickSongsPage() {
   return (
     <main className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader
-        backHref="/onboarding/music"
+        backHref="/"
         title="Pick your songs"
         trailing={
           <span className="text-sm tabular-nums text-muted-foreground" aria-live="polite">
