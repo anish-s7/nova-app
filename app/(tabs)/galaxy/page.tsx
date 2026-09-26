@@ -101,6 +101,7 @@ export default function GalaxyPage() {
   const focusSongIds = mode === "songs" && themeState ? themeState.songIds : null;
   const selectedSong = selectedId && isSongNode(selectedId) ? layer?.stars.find((st) => songNodeId(st.id) === selectedId) : undefined;
   const [connecting, setConnecting] = useState(false);
+  const [minimized, setMinimized] = useState(false);
   const connectionLinks = useMemo(() => (connecting && selectedSong && layer ? songConnections(selectedSong, layer) : null), [connecting, selectedSong, layer]);
   const connectionKey = connectionLinks ? [selectedSong!.id, ...connectionLinks.map((c) => c.star.id)].join("|") : "";
   // In connections mode the camera frames the song and everything linked to it, so the threads clear the sheet.
@@ -423,9 +424,12 @@ export default function GalaxyPage() {
       <BottomSheet
         open={!!selectedSong}
         peek={connecting}
+        minimized={connecting && minimized}
+        onToggleMinimized={connecting ? () => setMinimized((m) => !m) : undefined}
         onClose={() => {
           setSelectedId(null);
           setConnecting(false);
+          setMinimized(false);
         }}
         label={selectedSong ? `${selectedSong.song.title}` : "Song"}
       >
@@ -434,7 +438,10 @@ export default function GalaxyPage() {
             star={selectedSong}
             layer={layer}
             connecting={connecting}
-            onConnecting={setConnecting}
+            onConnecting={(on) => {
+              setConnecting(on);
+              if (!on) setMinimized(false);
+            }}
             onOpenSong={(songId) => select(songNodeId(songId))}
             onAddYours={(songId) => {
               setSelectedId(null);
