@@ -37,6 +37,13 @@ export async function exchangeCodeForToken(code: string) {
   return res.json() as Promise<{ access_token: string; refresh_token?: string; expires_in?: number }>;
 }
 
+/** A non-2xx from the Spotify Web API, with its status so routes can explain it. */
+export class SpotifyApiError extends Error {
+  constructor(public status: number, message: string) {
+    super(message);
+  }
+}
+
 /**
  * Display-only track data (CLAUDE.md "Spotify data can never touch the LLM"): only `name` and
  * `artist`, as plain strings, may ever reach Gemini; the art is for showing the cover.
@@ -62,7 +69,8 @@ export async function getTopTracks(accessToken: string, limit = 20): Promise<Spo
   });
 
   if (!res.ok) {
-    throw new Error(`Spotify top tracks fetch failed: ${res.status}`);
+    const detail = (await res.text().catch(() => "")).slice(0, 300);
+    throw new SpotifyApiError(res.status, `Spotify top tracks fetch failed: ${res.status} ${detail}`);
   }
 
   const data = (await res.json()) as { items?: SpotifyTrackItem[] };
