@@ -4,11 +4,14 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react"
 import { Loader2, Search } from "lucide-react";
 import { mutate } from "swr";
 import { AlbumArt } from "@/components/album-art";
+import { MoodCircle, type Mood } from "@/components/mood-circle";
+import { TagPicker } from "@/components/tag-picker";
 import { addSong, REAL_DATA, getSongLayer } from "@/lib/api";
 import { getCluster } from "@/lib/clusters";
 import { SONG_CATALOG } from "@/lib/music-context";
 import { addPick, effectiveSongs, getSession, useSession } from "@/lib/session";
 import { describePick, type SongLayer, type SongPick } from "@/lib/song-layer";
+import type { Tag } from "@/lib/tags";
 import { THEME_THRESHOLD, THEMES, type ThemeId } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 
@@ -26,17 +29,22 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [reason, setReason] = useState("");
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [mood, setMood] = useState<Mood>({ valence: 0, energy: 0 });
+  const [placed, setPlaced] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => titleRef.current?.focus({ preventScroll: true }), []);
 
+  const ready = title.trim() && artist.trim() && tags.length > 0;
+
   const submit = async () => {
-    if (!title.trim() || !artist.trim() || busy) return;
+    if (!ready || busy) return;
     setBusy(true);
     setError(null);
     try {
-      await addSong({ title: title.trim(), artist: artist.trim(), reason: reason.trim() });
+      await addSong({ title: title.trim(), artist: artist.trim(), tags, valence: mood.valence, energy: mood.energy, reason: reason.trim() });
       const fresh = await getSongLayer();
       await mutate((k) => Array.isArray(k) && k[0] === "song-layer", fresh, { revalidate: false });
       // The catalog may spell it differently than you typed (MusicBrainz canonicalizes), so match loosely.
@@ -56,6 +64,19 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
       <h2 className="font-serif text-xl italic">Add a song to the galaxy</h2>
       <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Song title" aria-label="Song title" disabled={busy} className={field} />
       <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" aria-label="Artist" disabled={busy} className={field} />
+
+      <TagPicker value={tags} onChange={setTags} label={`Tags for ${title.trim() || "this song"}`} />
+      <MoodCircle
+        value={mood}
+        placed={placed}
+        onChange={(m) => {
+          setMood(m);
+          setPlaced(true);
+        }}
+        label={`How ${title.trim() || "this song"} makes you feel`}
+        size={180}
+      />
+
       <label className="flex flex-col gap-1.5">
         <span className="text-xs text-muted-foreground">Why does it matter to you? Optional.</span>
         <textarea
@@ -68,7 +89,7 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
         />
       </label>
       {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
-      <button type="button" onClick={submit} disabled={busy || !title.trim() || !artist.trim()} className="flex min-h-11 items-center justify-center gap-2 bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+      <button type="button" onClick={submit} disabled={busy || !ready} className="flex min-h-11 items-center justify-center gap-2 bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
         {busy ? (
           <>
             <Loader2 className="size-4 animate-spin" aria-hidden />

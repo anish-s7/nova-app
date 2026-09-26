@@ -15,6 +15,7 @@
  */
 
 import { CLUSTER_IDS, getCluster } from "./clusters";
+import type { Tag } from "./tags";
 import { ApiError } from "./api-error";
 import { REAL_DATA } from "./data-source";
 import { httpDb } from "./http-db";
@@ -258,12 +259,20 @@ export async function saveSongs() {
 }
 
 /**
- * Adds one song from the galaxy's "+" sheet (real mode only). Same placeholder tags/valence/energy
- * as saveSongs until the feel step exists (CLAUDE.md Phase C). Slow: MusicBrainz, cover art and,
- * for a new song, Gemini all run inside the request.
+ * Adds one song from the galaxy's "+" sheet (real mode only). Same tag picker + mood circle as the
+ * onboarding feel step, so a song added here carries the same real signal into matching/clusters —
+ * no more placeholder tags/valence/energy. Slow: MusicBrainz, cover art and, for a new song, Gemini
+ * all run inside the request.
  */
-export async function addSong(input: { title: string; artist: string; reason?: string }) {
-  await db.insertPick({ title: input.title, artist: input.artist, tags: ["comfort"], valence: 0, energy: 0, reasonText: input.reason || undefined });
+export async function addSong(input: { title: string; artist: string; tags: Tag[]; valence: number; energy: number; reason?: string }) {
+  await db.insertPick({
+    title: input.title,
+    artist: input.artist,
+    tags: input.tags,
+    valence: input.valence,
+    energy: input.energy,
+    reasonText: input.reason || undefined,
+  });
 }
 
 /** NOT IN CONTRACT: motivations rows have no feedback/isPublic/note (lib/types.ts #4). */
