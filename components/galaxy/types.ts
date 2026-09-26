@@ -36,4 +36,6 @@ export type GalaxyViewProps = {
   threads?: { userId: string; count: number }[];
   /** Song-layer focus: only these node ids stay lit. */
   focusIds?: ReadonlySet<string> | null;
+  /** Stars mid-departure, by id: 0 fully lit .. 1 gone. Used by the live simulation. */
+  fading?: ReadonlyMap<string, number>;
 };

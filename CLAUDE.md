@@ -43,6 +43,8 @@ lib/musicbrainz/     Song identity resolution (title/artist -> canonical mbid)
 lib/gemini/         Song mood fallback, embeddings, evidence-check + card generation
 lib/matching/       pgvector query over per-pick embeddings
 lib/spotify/        Optional OAuth + track fetch, display only — never used for identity/search
+lib/sim/            Client-side live simulation behind /sim (engine, learner, real song embeddings)
+scripts/            One-off scripts (build-sim-embeddings.ts)
 lib/tags.ts         Fixed mood/context tag taxonomy
 lib/emotion.ts       Valence/energy constants + clamping
 db/contract.md      Source of truth for the DB schema — read this before touching any table
@@ -131,6 +133,23 @@ building user profiles. Practical rule for this codebase:
   `app/api/cards/[matchId]/route.ts` (direct-pair path) now call it and
   only ever return/cache a `"match"` result, dropping
   `"insufficient_evidence"` candidates.
+
+## Demo simulation (`/sim`)
+A client-side, randomized live simulation exists so the product can be demoed without real users:
+people join and leave, songs go viral, clusters form in the Galaxy, and a matcher visibly "learns".
+It is a demo, not the production system, and it is labelled "Simulated" on screen.
+- **Isolated.** `app/sim/` + `lib/sim/` run entirely in the browser: no Supabase, no auth, no runtime
+  Gemini calls. Each run is grown from a fresh random seed (`/sim?s=<scenario>&seed=<n>` replays one).
+- **Real embeddings, synthetic people.** Songs are the mock catalog (`lib/music-context.ts`); their
+  vectors are real `gemini-embedding-001` output, baked into `lib/sim/song-vectors.json` by
+  `npx tsx --env-file=.env.local scripts/build-sim-embeddings.ts` (plain `"title" by artist`
+  strings only, so the Spotify rule holds). Re-run it if the catalog changes.
+- **Matching is per pick**, as in production: best pick pair, judged on song content, mood
+  (valence/energy), shared tags and taste group. Nothing is averaged into a profile.
+- **In-run learning is simulated.** The learner tunes weights against a hidden, randomly drawn
+  "what makes a match click" rule. It shows the idea of outcome-based tuning and says nothing about
+  how the production matcher would perform. It is not the "Continuous learning" item under Future
+  work, which remains unbuilt: nothing in the real system logs outcomes or tunes from them.
 
 ## Future work (not implemented)
 - **Continuous learning / outcome-based tuning.** Right now nothing in this

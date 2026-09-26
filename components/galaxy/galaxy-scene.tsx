@@ -179,6 +179,7 @@ function Scene({
   mode = "people",
   focusIds = null,
   threads = [],
+  fading,
 }: GalaxyViewProps) {
   const { camera, gl, size, invalidate } = useThree();
   const perspective = camera as THREE.PerspectiveCamera;
@@ -217,8 +218,11 @@ function Scene({
 
   const overviewDist = useMemo(() => {
     const aspect = size.width / Math.max(1, size.height);
-    const half = Math.atan(Math.tan(((FOV / 2) * Math.PI) / 180) * aspect);
-    return (hub.radius * 1.05) / Math.tan(half);
+    const halfV = ((FOV / 2) * Math.PI) / 180;
+    // Fit whichever axis is tighter; a wide, short canvas is limited by height, a portrait one by width.
+    const halfH = Math.atan(Math.tan(halfV) * aspect);
+    // Stars nearer the camera loom larger than the sphere they sit in, so height needs extra room.
+    return (hub.radius * (halfV < halfH ? 1.6 : 1.05)) / Math.tan(Math.min(halfV, halfH));
   }, [hub.radius, size.width, size.height]);
   const minDist = 7;
   const maxDist = overviewDist * 1.1;
@@ -271,6 +275,8 @@ function Scene({
 
   // How lit each star should be: 1 lit, 0 ghosted, -1 gone. The song layer and the people layer take turns.
   const dimFor = (n: (typeof nodes)[number]) => {
+    const leaving = fading?.get(n.userId);
+    if (leaving !== undefined) return 1 - 2 * leaving;
     if (n.kind === "song") {
       if (mode !== "songs") return -1;
       return !focusIds || focusIds.has(n.userId) || n.userId === selectedId ? 1 : 0;

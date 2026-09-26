@@ -23,6 +23,8 @@ declare module "d3-force-3d" {
   export interface Simulation<N extends SimNode> {
     force(name: string, force: Force<N> | null): this;
     tick(iterations?: number): this;
+    alpha(): number;
+    alpha(a: number): this;
     stop(): this;
     nodes(): N[];
   }
