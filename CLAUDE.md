@@ -11,8 +11,9 @@ someone specifically asks for a CLAUDE.md update.
 
 Last full update: 2026-09-26, after the AI portraits + whole-profile connection assessment
 (`ai-portraits`, `89fee8a`), the matching-balance fix (`b5f84e3`), the galaxy "+" fix (`d9614b5`),
-and merging `pitch-demo` into `main` (`148db04`): the 3D reading-constellation, `/pitch`, and its
-warp-streak travel effect.
+merging `pitch-demo` into `main` (`148db04`): the 3D reading-constellation, `/pitch`, and its
+warp-streak travel effect, and `spotify-integration` (`5ea2002`): real song search for picks, and
+the Spotify import taken out of onboarding.
 
 ## Team split
 - **Anish** — backend (routes, Supabase glue, Gemini/MusicBrainz pipeline, matching) and, since
@@ -38,7 +39,8 @@ warp-streak travel effect.
 | Album art | Cover Art Archive → iTunes → Deezer (`lib/cover-art.ts`), looked up when a song enters the catalog |
 | LLM | Google Gemini API: `gemini-flash-latest` → `gemini-flash-lite-latest` fallback for portraits and connection assessment (`GEMINI_JUDGMENT_MODELS`), `gemini-flash-lite-latest` for song context and contrast cards, `gemini-embedding-001` at 768 dims for vectors |
 | Song identity | MusicBrainz API (primary), Gemini (fallback only) — see below |
-| Music data (optional) | Spotify Web API — OAuth top-tracks import only, display purposes only |
+| Song search | Deezer search API (popularity-ranked), iTunes Search fallback — `GET /api/songs/search`, no keys |
+| Music data (not in the UI) | Spotify Web API — OAuth top-tracks routes exist, but nothing links to them (see status) |
 | Package manager | **npm only** (`package-lock.json`). Never commit `pnpm-lock.yaml` / `pnpm-workspace.yaml` |
 | Hosting | Vercel (not deployed yet) |
 
@@ -55,11 +57,13 @@ app/api/                     Route handlers — the only thing the frontend call
   galaxy/, galaxy/more/      GET bounded galaxy window / page one cluster; ?center=<id> hops (403 if not in your window)
   galaxy/songs/              GET the song layer for your window (no Gemini)
   wander/                    POST "same song, different feeling" contrast cards
-  spotify/                   Optional OAuth top-tracks import
+  songs/search/              GET ?q= real catalog search for picks and swaps (Deezer → iTunes), ≥2 chars, cached 10 min
+  spotify/                   connect (one-time state cookie) / callback / top-tracks. Unreachable from the UI
+                             (Spotify development mode, see status); kept for a possible playlist import
 app/auth/callback/           Supabase OAuth / email-confirmation landing (exchanges code for session)
 app/auth/confirmed/          Email-confirmation tab handoff back to the tab that signed up (lib/auth-handoff.ts)
 app/login/, app/signup/      Auth screens (components/auth/auth-form.tsx)
-app/onboarding/              music (Spotify or manual) → pick → feel → reading → why → reveal
+app/onboarding/              pick → feel → reading → why → reveal. /onboarding/music is only a redirect to pick
 app/onboarding/feel/         Per song: 1–3 tags + the valence/energy mood circle (one song at a time)
 app/(tabs)/                  galaxy, connections, messages, people/[id] (+ /card, /contrast), me
 app/proto/                   Prototype screens (pick-constellation, reading-constellation); not linked from the app.
@@ -92,6 +96,8 @@ lib/why-mix.ts               Five-why listening mix; places people between their
 lib/song-connections.ts, lib/connection-groups.ts, lib/read-state.ts  Song-star connections, grouped
                              connections list, unread state for Messages
 lib/cover-art.ts             Album art lookup chain (Cover Art Archive → iTunes → Deezer)
+lib/spotify/                 client.ts (OAuth + top tracks, SpotifyApiError), cookies.ts (httpOnly state/token cookies)
+hooks/use-debounced-value.ts Debounce for typeahead (song search waits 350ms after typing stops)
 lib/supabase/                server.ts (service role), serverAuth.ts (session), browser.ts (client),
                              proxy.ts (session refresh), config.ts (keys present?), vector.ts (parseVector)
 lib/musicbrainz/             Song identity resolution (title/artist → canonical mbid)
@@ -315,9 +321,21 @@ onboarding's reading/why screens showing the real portrait, and the Me page load
   world. Profile, picks, matches (with cached cards), cards, wander, galaxy (+ hop and the
   song layer), and messages (send + polled reads) all hit the real routes. With no keys, or
   `NEXT_PUBLIC_DATA_SOURCE=mock`, it's the demo data. `mockDb` still implements the v2 `Db`.
-- **Onboarding feel step is live** (`2fb87c0`): music (Spotify or manual) → pick → **feel**
-  → reading → why → reveal. Per song, 1–3 tags and a mood-circle position; a Spotify import
-  is capped to 5 songs to describe. `chooseSongs` stores the songs (session only);
+- **Onboarding is pick-your-own only** (`spotify-integration`): everyone goes straight to the
+  pick screen and searches the real catalog (`GET /api/songs/search`: Deezer, iTunes fallback;
+  top 20 results, duplicates across albums shown once) for 5–10 songs. In mock mode it's still
+  the 24-song demo catalog. Search results are display candidates only: MusicBrainz resolves
+  each song once, when it's saved. The song-swap composer uses the same search.
+- **Spotify import is out of the UI.** An's `An/dev` (session-derived connect route) was merged
+  and hardened (random one-time OAuth state, token in a 1h httpOnly cookie scoped to
+  `/api/spotify`, the old `/api/spotify/auth` that trusted a `?profileId=` deleted), and the full
+  round trip worked. But a Spotify app in development mode only admits accounts added by hand
+  under User Management (5 new per 24h), apps can't have collaborators, and extended quota
+  needs an established business. So the choice screen was removed. Possible follow-up: import
+  a public playlist link via client credentials (no user login); test one call first, as
+  Spotify-owned playlists may be blocked for new apps.
+- **Onboarding feel step is live** (`2fb87c0`): pick → **feel** → reading → why → reveal. Per
+  song, 1–3 tags and a mood-circle position. `chooseSongs` stores the songs (session only);
   `saveSongs` then saves each described song sequentially while the reading screen plays,
   and the reading screen waits for it, with a retry that skips songs already saved (no
   duplicate picks). In real mode these are real `POST /api/picks` writes with the user's
@@ -348,7 +366,7 @@ onboarding's reading/why screens showing the real portrait, and the Me page load
 
 ### Next up (in order)
 1. **Clear Maya's pre-assessment match cards** (SQL above) so the demo shows scored cards with threads.
-2. **Click through the portrait in a browser**: new signup → feel → reading highlights → why
+2. **Click through the portrait in a browser**: new signup → pick (real search) → feel → reading highlights → why
    motivations from the real portrait → reveal → Connections scores; then the Me page on a
    fresh browser (stored portrait).
 3. **Density**: more seed personas (backburner #5) so the assessment has more to choose from;
@@ -356,6 +374,17 @@ onboarding's reading/why screens showing the real portrait, and the Me page load
 4. **Deployment** (backburner #2), including locking down the public seed password.
 
 ## Known gotchas (read before touching the relevant code)
+- **Spotify only redirects to `127.0.0.1`, never `localhost`**, and the Next dev server blocks
+  its scripts for any host but `localhost` (blank pages) unless it's in `allowedDevOrigins`
+  (`next.config.ts` lists `127.0.0.1`). Cookies don't carry between the two hosts, so anything
+  Spotify must start and end on `127.0.0.1:3000` (Supabase Redirect URLs include
+  `http://127.0.0.1:3000/**`). Next dev also reports `localhost` in `req.url` whatever the
+  browser used: build Spotify redirects from `SPOTIFY_REDIRECT_URI`'s origin.
+- **Signing up with an email that already has a confirmed account shows success but sends no
+  email** (Supabase hides which emails exist). Log in instead, or test with a Gmail `+alias`.
+  The default Supabase email sender is also limited to a few emails per hour.
+- **iTunes search ranks covers above originals** for one-word titles ("holocene" → covers
+  first); Deezer ranks by popularity, which is why it's the primary search source.
 - **Gemini model names go stale fast.** `gemini-2.5-flash` was retired for new
   callers mid-hackathon (live 404). Use a `-latest` alias, never a pinned
   version, in `lib/gemini/client.ts`. Free tier is 15 requests/minute: space
@@ -465,7 +494,7 @@ It is a demo, not the production system, and is labelled "Simulated" on screen.
 ## Getting started
 ```bash
 npm install
-cp .env.local.example .env.local   # Supabase + Gemini + MUSICBRAINZ_CONTACT_EMAIL (Spotify optional)
+cp .env.local.example .env.local   # Supabase + Gemini + MUSICBRAINZ_CONTACT_EMAIL (Spotify keys unused by the UI)
 npm run dev
 ```
 With the Supabase keys set, the app requires sign-in and uses the **real** backend
