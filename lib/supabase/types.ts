@@ -36,46 +36,64 @@ export interface Database {
       songs: {
         Row: {
           id: string;
-          profile_id: string;
           title: string;
           artist: string;
+          mbid: string | null;
+          fallback_key: string | null;
+          resolution_source: "musicbrainz" | "gemini_fallback";
           spotify_track_id: string | null;
-          reason_text: string;
-          is_public: boolean;
+          album_art_url: string | null;
+          context_summary: string | null;
+          embedding: number[] | null;
           created_at: string;
         };
         Insert: {
-          profile_id: string;
           title: string;
           artist: string;
+          mbid?: string | null;
+          fallback_key?: string | null;
+          resolution_source: "musicbrainz" | "gemini_fallback";
           spotify_track_id?: string | null;
-          reason_text: string;
-          is_public?: boolean;
+          album_art_url?: string | null;
+          context_summary?: string | null;
+          embedding?: number[] | null;
         };
         Update: Partial<{
-          title: string;
-          artist: string;
-          reason_text: string;
-          is_public: boolean;
+          context_summary: string | null;
+          embedding: number[] | null;
         }>;
         Relationships: [];
       };
-      motivations: {
+      song_picks: {
         Row: {
           id: string;
+          profile_id: string;
           song_id: string;
-          label: string;
+          tags: string[];
+          valence: number;
+          energy: number;
           embedding: number[];
+          reason_text: string | null;
+          is_public: boolean;
           created_at: string;
         };
         Insert: {
+          profile_id: string;
           song_id: string;
-          label: string;
+          tags: string[];
+          valence: number;
+          energy: number;
           embedding: number[];
+          reason_text?: string | null;
+          is_public?: boolean;
         };
         Update: Partial<{
-          label: string;
+          tags: string[];
+          valence: number;
+          energy: number;
           embedding: number[];
+          reason_text: string | null;
+          is_public: boolean;
         }>;
         Relationships: [];
       };
@@ -120,9 +138,15 @@ export interface Database {
     };
     Views: Record<string, never>;
     Functions: {
-      match_profiles: {
+      match_picks: {
         Args: { target_profile_id: string; match_count?: number };
-        Returns: { profile_id: string; display_name: string; similarity: number }[];
+        Returns: {
+          profile_id: string;
+          display_name: string;
+          song_pick_id: string;
+          target_pick_id: string;
+          similarity: number;
+        }[];
       };
     };
     Enums: Record<string, never>;
