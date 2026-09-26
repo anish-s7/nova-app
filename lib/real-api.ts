@@ -12,10 +12,12 @@
 import { ApiError } from "./api-error";
 import { CLUSTER_IDS, getCluster, type ClusterId } from "./clusters";
 import type { ClusterDetail, ClusterSong } from "./cluster-songs";
-import { fetchProfile, forgetMe, getMyId, httpDb } from "./http-db";
+import { fetchProfile, forgetMe, generatePortrait, getMyId, getPortrait, httpDb } from "./http-db";
 import { ME_ID } from "./mock-world";
+import type { Portrait } from "./portrait";
 import type { SongLayer, SongListener, SongStar } from "./song-layer";
 import type {
+  AnalysisResult,
   Connection,
   ConnectionCard,
   ConnectionCardJson,
@@ -92,6 +94,45 @@ export function rememberSimilarities(edges: GalaxyEdge[]) {
   }
 }
 
+// --- listening portrait ----------------------------------------------------------
+
+const looseTitle = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** The stored portrait in the why/me screens' shape. Song titles become my real pick ids. */
+function analysisFrom(portrait: Portrait, mine: Song[]): AnalysisResult {
+  const idOf = new Map(mine.map((s) => [looseTitle(s.title), s.id]));
+  return {
+    headline: portrait.headline,
+    highlights: portrait.highlights,
+    motivations: portrait.motivations.map((m, i) => ({
+      id: `portrait-${i}-${m.cluster}`,
+      label: m.label,
+      description: m.description,
+      cluster: m.cluster,
+      confidence: m.confidence,
+      evidence: m.evidence.map((e) => ({
+        kind: "song_context" as const,
+        text: e.text,
+        songIds: e.songTitles.flatMap((t) => idOf.get(looseTitle(t)) ?? []),
+      })),
+      feedback: "unreviewed" as const,
+      isPublic: true,
+    })),
+  };
+}
+
+/** Regenerates my portrait from my saved picks (one Gemini call, skipped server-side if nothing changed). */
+export async function generateAnalysis(): Promise<AnalysisResult> {
+  const [{ portrait }, mine] = await Promise.all([generatePortrait(), picksOf("me")]);
+  return analysisFrom(portrait, mine);
+}
+
+/** My stored portrait, or null if there isn't one yet. No Gemini call. */
+export async function getStoredAnalysis(): Promise<AnalysisResult | null> {
+  const [stored, mine] = await Promise.all([getPortrait(), picksOf("me")]);
+  return stored ? analysisFrom(stored, mine) : null;
+}
+
 // --- people ---------------------------------------------------------------
 
 export async function getMe(): Promise<User & { cluster: string }> {
@@ -123,11 +164,13 @@ export async function getConnections(): Promise<Connection[]> {
   return matches.map((m) => {
     const theirs = (m.songs ?? []).map((s) => toSong({ ...s, spotify_track_id: null }));
     const o = overlap(mine, theirs);
-    if (m.similarity !== undefined) similarityOf.set(m.profileId, m.similarity);
+    // The AI's whole-profile score is the number people see; cosine similarity is only the pre-filter.
+    const similarity = typeof m.score === "number" ? m.score / 100 : (m.similarity ?? 0);
+    similarityOf.set(m.profileId, similarity);
     return {
       user: { id: m.profileId, name: m.displayName },
       cluster: m.cluster ?? DEFAULT_CLUSTER,
-      similarity: m.similarity ?? 0,
+      similarity,
       sharedMotivation: m.card.shared_why,
       ...o,
       evidenceSongs: evidenceSongs(mine, theirs),
@@ -154,17 +197,28 @@ export async function getConnectionCard(otherId: string): Promise<ConnectionCard
   const theirText = iAmA ? json.evidence.user_b : json.evidence.user_a;
   const shared = mine.filter((s) => theirs.some((t) => key(t) === key(s)));
   const fallback = (list: Song[]) => shared[0] ?? list[0] ?? placeholderSong("", "");
+  const byTitle = (list: Song[], ref: { title: string; artist: string }) =>
+    list.find((s) => key(s) === key(ref)) ?? list.find((s) => looseTitle(s.title) === looseTitle(ref.title)) ?? placeholderSong(ref.title, ref.artist);
+  // Whole-profile cards carry 1–2 threads, each anchored by a real song on each side. Older cards
+  // have one shared_why, so fall back to guessing the song from the evidence text.
+  const sharedMotivations = json.threads?.length
+    ? json.threads.map((t) => ({
+        motivation: t.why,
+        evidenceA: { song: byTitle(mine, iAmA ? t.song_a : t.song_b), text: iAmA ? t.evidence_a : t.evidence_b },
+        evidenceB: { song: byTitle(theirs, iAmA ? t.song_b : t.song_a), text: iAmA ? t.evidence_b : t.evidence_a },
+      }))
+    : [
+        {
+          motivation: json.shared_why,
+          evidenceA: { song: songMentioned(myText, mine) ?? fallback(mine), text: myText },
+          evidenceB: { song: songMentioned(theirText, theirs) ?? fallback(theirs), text: theirText },
+        },
+      ];
   return {
     userA: ME_ID,
     userB: otherId,
     overlap: overlap(mine, theirs),
-    sharedMotivations: [
-      {
-        motivation: json.shared_why,
-        evidenceA: { song: songMentioned(myText, mine) ?? fallback(mine), text: myText },
-        evidenceB: { song: songMentioned(theirText, theirs) ?? fallback(theirs), text: theirText },
-      },
-    ],
+    sharedMotivations,
     meaningfulDifference: { summary: json.difference, evidenceA: "", evidenceB: "" }, // per-side detail NOT IN CONTRACT
     suggestedOpeners: json.openers,
   };

@@ -26,6 +26,11 @@ export const GEMINI_TEXT_MODEL = "gemini-flash-lite-latest";
 
 export const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
 
+// Portraits and connection assessments are the judgment calls users actually read, so they ask
+// full Flash first and fall back to Flash-Lite when Flash is overloaded or rate-limited
+// (lib/gemini/json.ts). Both are "-latest" aliases for the same reason as above.
+export const GEMINI_JUDGMENT_MODELS = ["gemini-flash-latest", GEMINI_TEXT_MODEL] as const;
+
 // gemini-embedding-001 defaults to 3072 dims; confirmed via a live call on
 // 2026-09-26 (docs/schema everywhere assumed 768 without ever verifying).
 // Request 768 explicitly via outputDimensionality (Matryoshka truncation,

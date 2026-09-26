@@ -12,9 +12,11 @@
 import { createServerClient } from "../lib/supabase/server";
 import { resolveSong } from "../lib/musicbrainz/client";
 import { generateSongContext } from "../lib/gemini/generateSongContext";
-import { EMOTION_WEIGHT, clampEmotionValue } from "../lib/emotion";
+import { clampEmotionValue } from "../lib/emotion";
+import { buildPickEmbedding } from "../lib/matching/pickEmbedding";
 import { parseVector } from "../lib/supabase/vector";
 import { refreshPrimaryCluster } from "../lib/matching/refreshPrimaryCluster";
+import { upsertPortrait } from "../lib/matching/portraits";
 
 type Cluster = "quiet_company" | "armor_up" | "carrying_loss" | "somewhere_else" | "old_selves";
 
@@ -283,7 +285,7 @@ async function main() {
       const profile = CLUSTER_PROFILE[song.cluster];
       const valence = clampEmotionValue(profile.valence);
       const energy = clampEmotionValue(profile.energy);
-      const pickEmbedding = [...songEmbedding, valence * EMOTION_WEIGHT, energy * EMOTION_WEIGHT];
+      const pickEmbedding = buildPickEmbedding(songEmbedding, valence, energy);
 
       const { error } = await supabase.from("song_picks").insert({
         profile_id: profileId,
@@ -303,6 +305,12 @@ async function main() {
 
     const cluster = await refreshPrimaryCluster(supabase, profileId);
     console.log(`  primary_cluster: ${cluster ?? "(none)"}`);
+
+    // Listening portrait (skipped when the stored one already covers these picks).
+    await sleep(Math.max(0, MIN_GEMINI_INTERVAL_MS - (Date.now() - lastGeminiCallAt)));
+    lastGeminiCallAt = Date.now();
+    const portrait = await upsertPortrait(supabase, profileId);
+    console.log(`  portrait: ${portrait?.headline ?? "(no public picks)"}`);
   }
 
   console.log("\nDone.");

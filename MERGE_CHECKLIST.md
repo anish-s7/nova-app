@@ -10,8 +10,16 @@
 > the song layer and cluster detail (`GET /api/galaxy/songs`). Still mock or empty in real
 > mode: motivations / "why I listen" (mismatch #4, #7 backburner), song swaps (sent as a
 > plain text message until a swap table exists), themes, per-side "where you differ",
-> simulated arrivals (off), and onboarding's tags/valence/energy (Phase C; `saveSongs` still
-> sends placeholders). Nothing below was re-numbered; read it as the original plan.
+> simulated arrivals (off). Nothing below was re-numbered; read it as the original plan.
+>
+> **Update 2026-09-26 (AI portraits, `ai-portraits` merged).** Resolved since: onboarding's
+> tags/valence/energy (feel step, `2fb87c0`) and the galaxy "+" (`d9614b5`) send real values.
+> "Why I listen" is now real in real mode: `analyzeMusic` waits for the picks to save, then
+> `POST /api/portrait` returns a Gemini listening portrait mapped to `AnalysisResult`; the Me
+> page loads the stored one (`GET /api/portrait`). Connections are ordered and shown by the AI's
+> whole-profile `score` (0..100), not cosine similarity, and cards map `card_json.threads` into
+> 1–2 `sharedMotivations` with real songs on each side. Still open: `updateMotivation`
+> feedback isn't persisted (#4), other people's motivations stay empty on their profile.
 
 **Rewritten 2026-09-26 against `main` @ `26a33b3`.** The previous version of this file
 was written against `ba262ec`, before the backend's tag/slider/MusicBrainz redesign —

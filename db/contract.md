@@ -62,13 +62,13 @@ present is the uniqueness/dedup key backend checks before inserting.
 | tags | text[] | 1-3 values from the fixed taxonomy in `lib/tags.ts` (not a DB table) |
 | valence | float, range -1..1 | this user's circular-slider placement for this song: sad/negative <-> happy/positive |
 | energy | float, range -1..1 | same slider, perpendicular axis: calm <-> intense |
-| embedding | vector(770), not null | **computed once at insert time**, never recomputed later: the song's 768-dim `songs.embedding` with this pick's `valence`/`energy` (scaled by `EMOTION_WEIGHT`, see `lib/emotion.ts`) appended as 2 more dims |
+| embedding | vector(770), not null | computed at insert time by `buildPickEmbedding` (`lib/matching/pickEmbedding.ts`): the song's 768-dim `songs.embedding` **scaled to unit length**, then this pick's `valence`/`energy` × `EMOTION_WEIGHT` (0.7, `lib/emotion.ts`). If the formula or weight changes, recompute every row with `scripts/recompute-pick-embeddings.ts` |
 | reason_text | text, nullable | optional bonus free text, never required by the UI |
 | is_public | boolean | default true — privacy control, hide from matching/cards shown to others |
 | created_at | timestamptz | default now() |
 
 Unlike v1, there is no aggregation step anywhere — `song_picks.embedding`
-is final the moment the row is inserted.
+is set when the row is inserted and only rewritten by `scripts/recompute-pick-embeddings.ts` when the formula changes.
 
 ### `connection_cards`
 | column | type | notes |
@@ -76,12 +76,27 @@ is final the moment the row is inserted.
 | id | uuid, PK | |
 | user_a | uuid, FK -> profiles.id | store the smaller of the two ids here (unordered pair convention) |
 | user_b | uuid, FK -> profiles.id | store the larger of the two ids here |
-| card_json | jsonb | shape: `{ shared_why, evidence: { user_a, user_b }, difference, openers[], suggested_swap_prompt, kind?, shared_song? }`. `kind` is `"match"` when absent. `"contrast"` cards come from Wander (see below): `shared_why` is the one song both picked, `evidence` is how each person feels it, `difference` is the gap, and `shared_song` is `{ title, artist }` from our own `songs` row. |
+| card_json | jsonb | shape: `{ shared_why, evidence: { user_a, user_b }, difference, openers[], suggested_swap_prompt, kind?, shared_song? }`. `kind` is `"match"` when absent. Match cards from the whole-profile assessment (`lib/gemini/assessConnection.ts`) also carry `score` (0–100, orders matches), `rationale` (internal, not shown) and `threads[]` (1–2 of `{ why, song_a: {title, artist}, song_b: {title, artist}, evidence_a, evidence_b }`, `_a` = the row's `user_a`); older cards lack them. `"contrast"` cards come from Wander (see below): `shared_why` is the one song both picked, `evidence` is how each person feels it, `difference` is the gap, and `shared_song` is `{ title, artist }` from our own `songs` row. |
 | created_at | timestamptz | |
 
-Unique constraint on `(user_a, user_b)`. Only rows where the evidence-check
+Unique constraint on `(user_a, user_b)`. Only rows where the AI assessment
 (see CLAUDE.md) actually confirmed a match get inserted — an
 "insufficient evidence" result is never cached here.
+
+### `profile_portraits` — one AI listening portrait per profile (migration `20260927030000`)
+| column | type | notes |
+|---|---|---|
+| profile_id | uuid, PK, FK -> profiles.id (on delete cascade) | |
+| portrait | jsonb | `lib/portrait.ts` `Portrait`: `{ headline, highlights[3], motivations[{ label, description, cluster, confidence, evidence[{ text, songTitles[] }] }], seeks, tensions? }` |
+| pick_count | int | public picks it was generated from; a different count means it's stale |
+| model | text | Gemini model that wrote it |
+| updated_at | timestamptz | |
+
+Written only by the service role (`upsertPortrait` in `lib/matching/portraits.ts`, via
+`POST /api/portrait`, `scripts/generate-portraits.ts` and the seed). Owner-only `select` for
+`authenticated` (RLS), so `GET /api/portrait` reads it with the session client. Other people's
+portraits are read only server-side, as input to the connection assessment; they're never returned
+to another user, and cards must not quote them.
 
 ### `messages`
 | column | type | notes |
@@ -108,10 +123,12 @@ grouped so only the single best-matching pick pair per candidate profile
 is returned (same grouping pattern as the old `match_profiles`, just
 retargeted at `song_picks` instead of `motivations`). Excludes
 `target_profile_id`'s own profile and non-public candidate picks. The
-`song_pick_id`/`target_pick_id` pair is what gets passed into the
-evidence-check step (`lib/gemini/evaluateAndGenerateCard.ts`) — the
-backend never shows a raw similarity score to the user, only the result of
-that check.
+`song_pick_id`/`target_pick_id` pair is only a pre-filter and a hint: each
+uncached candidate (at most 5 per request) is then assessed as a whole
+profile against the requester — both portraits and every public pick —
+by `lib/gemini/assessConnection.ts`, which confirms or drops it and scores
+it 0–100. `GET /api/match` orders by that score (cards without one fall
+back to `similarity × 100`) and returns both `score` and `similarity`.
 
 ### `wander_picks(target_profile_id uuid, match_count int default 6, min_emotion_gap float default 0.9)`
 Returns `table (profile_id uuid, display_name text, song_pick_id uuid,
@@ -191,7 +208,7 @@ participants. Backend route handlers use a session-based Supabase client
 (`lib/supabase/serverAuth.ts`) for anything acting "as the current user,"
 and the service-role client (`lib/supabase/server.ts`) only for operations
 that legitimately span users (catalog lookup/insert, running
-`match_picks`).
+`match_picks`, reading/writing `profile_portraits`).
 
 ## Open questions for whoever builds the migration
 - Exact grouping SQL for `match_picks` (window function vs. `distinct on`

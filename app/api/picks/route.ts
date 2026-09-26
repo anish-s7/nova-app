@@ -4,7 +4,8 @@ import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
 import { generateSongContext } from "@/lib/gemini/generateSongContext";
 import { findCover } from "@/lib/cover-art";
 import { resolveSong } from "@/lib/musicbrainz/client";
-import { EMOTION_WEIGHT, clampEmotionValue } from "@/lib/emotion";
+import { clampEmotionValue } from "@/lib/emotion";
+import { buildPickEmbedding } from "@/lib/matching/pickEmbedding";
 import { isValidTag } from "@/lib/tags";
 import { refreshPrimaryCluster } from "@/lib/matching/refreshPrimaryCluster";
 import { parseVector } from "@/lib/supabase/vector";
@@ -120,11 +121,7 @@ export async function POST(req: NextRequest) {
 
   const clampedValence = clampEmotionValue(valence ?? 0);
   const clampedEnergy = clampEmotionValue(energy ?? 0);
-  const pickEmbedding = [
-    ...parseVector(song.embedding),
-    clampedValence * EMOTION_WEIGHT,
-    clampedEnergy * EMOTION_WEIGHT,
-  ];
+  const pickEmbedding = buildPickEmbedding(parseVector(song.embedding), clampedValence, clampedEnergy);
 
   const { data: pick, error: pickError } = await supabase
     .from("song_picks")

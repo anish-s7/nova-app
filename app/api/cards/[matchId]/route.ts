@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
-import { evaluateAndGenerateCard, type PickForEvaluation } from "@/lib/gemini/evaluateAndGenerateCard";
+import { assessConnection } from "@/lib/gemini/assessConnection";
+import { getPortraits, loadPublicPicks } from "@/lib/matching/portraits";
 import { cosineSimilarity } from "@/lib/matching/cosineSimilarity";
 import { alignCardEvidence } from "@/lib/matching/alignCardEvidence";
 import { parseVector } from "@/lib/supabase/vector";
@@ -39,24 +40,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ mat
 
 type PickRow = {
   id: string;
-  tags: string[];
-  valence: number;
-  energy: number;
   embedding: number[];
-  reason_text: string | null;
-  is_public: boolean;
-  songs: { title: string; artist: string } | null;
+  songs: { title: string } | null;
 };
 
 /**
  * Direct card generation for a specific pair, used when the frontend
  * already knows it wants a card for this pair (e.g. from a cached
  * /api/match result gone stale, or a manual lookup) without going through
- * findMatches' pgvector retrieval. Picks the best-matching public pick pair
- * between the two profiles in JS (fine at hackathon scale — a handful of
- * picks per profile), then runs the same AI evidence-check everything else
- * uses. Can return "insufficient_evidence" — that's a real, non-error
- * result, not a failure.
+ * findMatches' pgvector retrieval. Finds the closest public pick pair in JS
+ * as a hint (fine at hackathon scale — a handful of picks per profile), then
+ * runs the same whole-profile AI assessment findMatches uses. Can return
+ * "insufficient_evidence" — that's a real, non-error result, not a failure.
  */
 export async function POST(_req: NextRequest, { params }: { params: Promise<{ matchId: string }> }) {
   const { matchId: otherProfileId } = await params;
@@ -67,24 +62,27 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ ma
   }
 
   const supabase = createServerClient();
-  const picksSelect = "id, tags, valence, energy, embedding, reason_text, is_public, songs(title, artist)";
+  const ids = [currentProfileId, otherProfileId];
 
-  const [{ data: profileA }, { data: profileB }, { data: picksA }, { data: picksB }] =
-    await Promise.all([
-      supabase.from("profiles").select("*").eq("id", currentProfileId).single(),
-      supabase.from("profiles").select("*").eq("id", otherProfileId).single(),
-      supabase.from("song_picks").select(picksSelect).eq("profile_id", currentProfileId).eq("is_public", true),
-      supabase.from("song_picks").select(picksSelect).eq("profile_id", otherProfileId).eq("is_public", true),
-    ]);
+  const [{ data: profiles }, { data: vectorRows }, picksOf, portraitOf] = await Promise.all([
+    supabase.from("profiles").select("id, display_name").in("id", ids),
+    supabase.from("song_picks").select("id, profile_id, embedding, songs(title)").in("profile_id", ids).eq("is_public", true),
+    loadPublicPicks(supabase, ids),
+    getPortraits(supabase, ids),
+  ]);
 
-  if (!profileA || !profileB) {
+  const nameOf = new Map((profiles ?? []).map((p) => [p.id, p.display_name]));
+  if (!nameOf.has(currentProfileId) || !nameOf.has(otherProfileId)) {
     return NextResponse.json({ error: "One or both profiles not found" }, { status: 404 });
   }
 
-  const rowsA = (picksA as PickRow[] | null ?? []).filter((p) => p.songs);
-  const rowsB = (picksB as PickRow[] | null ?? []).filter((p) => p.songs);
+  const rows = (vectorRows ?? []) as unknown as (PickRow & { profile_id: string })[];
+  const rowsA = rows.filter((p) => p.profile_id === currentProfileId && p.songs);
+  const rowsB = rows.filter((p) => p.profile_id === otherProfileId && p.songs);
+  const picksA = picksOf.get(currentProfileId) ?? [];
+  const picksB = picksOf.get(otherProfileId) ?? [];
 
-  if (rowsA.length === 0 || rowsB.length === 0) {
+  if (picksA.length === 0 || picksB.length === 0) {
     return NextResponse.json({ status: "insufficient_evidence", card: null });
   }
 
@@ -98,31 +96,25 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ ma
     }
   }
 
-  if (!bestPair) {
-    return NextResponse.json({ status: "insufficient_evidence", card: null });
+  const person = (id: string) => ({ displayName: nameOf.get(id)!, portrait: portraitOf.get(id)?.portrait ?? null, picks: picksOf.get(id) ?? [] });
+  let evaluation;
+  try {
+    evaluation = await assessConnection(
+      person(currentProfileId),
+      person(otherProfileId),
+      bestPair ? { songA: bestPair.a.songs!.title, songB: bestPair.b.songs!.title } : undefined
+    );
+  } catch (err) {
+    console.error("POST /api/cards assessment failed:", err);
+    return NextResponse.json({ error: err instanceof Error ? err.message : "Assessment failed" }, { status: 500 });
   }
-
-  const toPickInput = (displayName: string, row: PickRow): PickForEvaluation => ({
-    displayName,
-    title: row.songs!.title,
-    artist: row.songs!.artist,
-    tags: row.tags,
-    valence: row.valence,
-    energy: row.energy,
-    reasonText: row.reason_text,
-  });
-
-  const evaluation = await evaluateAndGenerateCard(
-    toPickInput(profileA.display_name, bestPair.a),
-    toPickInput(profileB.display_name, bestPair.b)
-  );
 
   if (evaluation.status !== "match") {
     return NextResponse.json({ status: "insufficient_evidence", card: null });
   }
 
-  // Align evidence.user_a/user_b to the row's ordering (smaller id first),
-  // not whichever pick was passed first — see lib/matching/alignCardEvidence.ts.
+  // Align evidence/threads to the row's ordering (smaller id first), not whichever
+  // person was passed first — see lib/matching/alignCardEvidence.ts.
   const alignedCard = alignCardEvidence(evaluation.card, currentProfileId, otherProfileId);
   const [userA, userB] = orderedPair(currentProfileId, otherProfileId);
   const { error: insertError } = await supabase

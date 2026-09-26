@@ -1,3 +1,5 @@
+import type { CardThread } from "./portrait";
+
 /*
  * Frontend view types vs db/contract.md (checked against main @ 26a33b3, which also
  * has the migration, lib/supabase/types.ts, and the running route handlers; all agree
@@ -396,6 +398,11 @@ export type ConnectionCardJson = {
   /** Absent means a regular match card. "contrast" cards come from Wander (same song, different feeling). */
   kind?: "match" | "contrast";
   shared_song?: { title: string; artist: string };
+  /** Whole-profile AI assessment, 0..100 (sets the match order). Absent on older cards. */
+  score?: number;
+  rationale?: string;
+  /** 1–2 specific shared threads, each anchored by a song on each side. Absent on older cards. */
+  threads?: CardThread[];
 };
 
 export type ConnectionCardRow = {
@@ -433,6 +440,8 @@ export type ConfirmedMatchRow = {
   card: ConnectionCardJson;
   /** Real cosine similarity of the best pick pair (GET /api/match). Absent in the mock. */
   similarity?: number;
+  /** The AI's whole-profile score (0..100) that orders matches. Absent in the mock and on older cards. */
+  score?: number | null;
   /** Their primary cluster, if computed. */
   cluster?: string | null;
   /** Their public songs, so the list can show covers without a request per person. */
