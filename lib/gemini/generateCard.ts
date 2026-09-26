@@ -30,6 +30,31 @@ export async function generateConnectionCard(
   userA: ProfileForCard,
   userB: ProfileForCard
 ): Promise<ConnectionCardJson> {
+  if (process.env.USE_MOCK_AI === "true") {
+    const songA = userA.songs[0];
+    const songB = userB.songs[0];
+
+    return {
+      shared_why: `${userA.displayName} and ${userB.displayName} both use music to make meaningful moments feel more connected.`,
+      evidence: {
+        user_a: songA
+          ? `${userA.displayName} chose "${songA.title}" by ${songA.artist}: ${songA.reasonText}`
+          : `${userA.displayName} is still choosing a song to share.`,
+        user_b: songB
+          ? `${userB.displayName} chose "${songB.title}" by ${songB.artist}: ${songB.reasonText}`
+          : `${userB.displayName} is still choosing a song to share.`,
+      },
+      difference: songA && songB
+        ? `${userA.displayName} connects through "${songA.title}", while ${userB.displayName} connects through "${songB.title}".`
+        : "Their listening stories are still taking shape in different ways.",
+      openers: [
+        `What does your song help you feel, ${userB.displayName}?`,
+        "When do you usually reach for this song?",
+      ],
+      suggested_swap_prompt: "Swap one song that feels like good company and share why you chose it.",
+    };
+  }
+
   const ai = getGeminiClient();
 
   const prompt = `${formatProfile("User A", userA)}\n\n${formatProfile("User B", userB)}`;

@@ -5,6 +5,8 @@ import { embedMotivation } from "@/lib/gemini/embed";
 
 export async function POST(req: NextRequest) {
   const body = await req.json();
+  console.info("[POST /api/songs] request parsed");
+
   const { profileId, title, artist, reasonText, spotifyTrackId, isPublic } = body as {
     profileId?: string;
     title?: string;
@@ -21,7 +23,12 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  console.info("[POST /api/songs] request validated");
+
   const supabase = createServerClient();
+  console.info("[POST /api/songs] Supabase client created");
+
+  console.info("[POST /api/songs] song insert started");
 
   const { data: song, error: songError } = await supabase
     .from("songs")
@@ -37,11 +44,20 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (songError) {
+    console.error("[POST /api/songs] song insert failed", {
+      code: songError.code,
+      message: songError.message,
+      details: songError.details,
+      hint: songError.hint,
+    });
     return NextResponse.json({ error: songError.message }, { status: 500 });
   }
 
+  console.info("[POST /api/songs] song insert succeeded");
+
   // Synchronous LLM step: extract motivations + embed, then store.
   // Runs inline per project constraints (no queue infra for the hackathon).
+  console.info("[POST /api/songs] motivation extraction started");
   const labels = await extractMotivations(reasonText);
 
   const motivationRows = await Promise.all(
