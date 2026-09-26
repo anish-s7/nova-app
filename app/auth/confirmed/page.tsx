@@ -17,7 +17,7 @@ import { cn } from "@/lib/utils";
  */
 function Confirmed() {
   const raw = useSearchParams().get("next");
-  const next = raw ? safeNextPath(raw) : "/onboarding/music";
+  const next = raw ? safeNextPath(raw) : "/onboarding/pick";
   const [state, setState] = useState<"checking" | "handedOff" | "standalone">("checking");
 
   useEffect(() => {

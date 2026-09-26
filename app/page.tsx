@@ -100,12 +100,16 @@ export default function WelcomePage() {
         </p>
 
         <div data-intro-rest className="mt-auto pt-10">
+<<<<<<< HEAD
           <button
             type="button"
             onClick={start}
             disabled={welcoming}
             className={cn(buttonVariants(), "btn-glow h-12 w-full rounded-full text-base")}
           >
+=======
+          <Link href={authEnabled ? "/signup" : "/onboarding/pick"} className={cn(buttonVariants(), "btn-glow h-12 w-full rounded-full text-base")}>
+>>>>>>> main
             Continue
             <ArrowRight className="size-4" aria-hidden />
           </button>

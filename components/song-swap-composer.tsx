@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Search } from "lucide-react";
@@ -9,7 +9,8 @@ import { ScreenHeader } from "@/components/screen-header";
 import { SongSwapCard } from "@/components/song-swap-card";
 import { SongTile } from "@/components/song-tile";
 import { Button } from "@/components/ui/button";
-import { getConversation, ME_ID, searchSongs, sendSongSwap } from "@/lib/api";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { getConversation, ME_ID, REAL_DATA, searchSongs, sendSongSwap } from "@/lib/api";
 import { SONG_CATALOG } from "@/lib/music-context";
 import { effectiveSongs, getSession, useSession } from "@/lib/session";
 import { buildSongLayer } from "@/lib/song-layer";
@@ -24,7 +25,7 @@ export function SongSwapComposer({ userId, replyToSwapId, initialSongId, initial
   const session = useSession();
   const { data: convo } = useSWR(["conversation", userId], ([, id]) => getConversation(id));
   const [query, setQuery] = useState("");
-  const deferred = useDeferredValue(query);
+  const deferred = useDebouncedValue(query, REAL_DATA ? 350 : 0).trim();
   const { data: results } = useSWR(deferred ? ["songs", deferred] : null, ([, q]) => searchSongs(q), { keepPreviousData: true });
   // Arriving from a song in the galaxy: the song is already chosen, so the only thing left is why.
   const [song, setSong] = useState<Song | null>(() => SONG_CATALOG.find((s) => s.id === initialSongId) ?? null);
