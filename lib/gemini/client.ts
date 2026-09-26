@@ -26,5 +26,10 @@ export const GEMINI_TEXT_MODEL = "gemini-flash-lite-latest";
 
 export const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
 
-// gemini-embedding-001 defaults to 3072 dims...
+// gemini-embedding-001 defaults to 3072 dims; confirmed via a live call on
+// 2026-09-26 (docs/schema everywhere assumed 768 without ever verifying).
+// Request 768 explicitly via outputDimensionality (Matryoshka truncation,
+// supported on this model) so it matches songs.embedding/song_picks.embedding
+// in db/contract.md and the migration — don't change this without also
+// changing the DB column widths.
 export const EMBEDDING_DIMENSIONS = 768;

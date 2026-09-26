@@ -103,9 +103,6 @@ function maybeFail(key: FailureKey) {
   }
 }
 
-function pair(a: string, b: string): [string, string] {
-  return a < b ? [a, b] : [b, a];
-}
 
 // ---------------------------------------------------------------------------
 // Row -> view mappers
@@ -117,7 +114,7 @@ function songFromRow(row: SongRow): Song {
     id: row.id,
     title: row.title,
     artist: row.artist,
-    albumArtUrl: catalogArt.get(row.id), // NOT IN CONTRACT: mock catalog art
+    albumArtUrl: catalogArt.get(row.id) ?? row.album_art_url ?? undefined, // mock catalog art first, then the real column
     spotifyId: row.spotify_track_id ?? undefined,
     source: row.spotify_track_id ? "spotify" : "manual",
   };
@@ -208,20 +205,23 @@ export async function analyzeMusic(input: { songs: Song[]; signals: ListeningSig
 
 /**
  * Saves the user's songs. The session copy drives onboarding (reading/why screens); the
- * db insert is what reaches the backend. reason_text isn't collected yet (lib/types.ts #3).
+ * db inserts are what reach the backend. Tags/valence/energy aren't collected yet — the
+ * onboarding "feel" step (lib/types.ts #3) replaces these placeholders.
  */
 export async function saveSongs(input: { source: "spotify" | "manual"; songs: Song[]; signals: ListeningSignal[] }) {
   setSession({ source: input.source, songs: input.songs, signals: input.signals, analysis: undefined, motivations: [] }, true);
-  await db.insertSongs(
-    input.songs.map((s) => ({
-      profile_id: ME_ID,
+  // Sequential on purpose: POST /api/picks calls MusicBrainz, which is rate-limited to 1 req/s.
+  for (const s of input.songs) {
+    await db.insertPick({
       title: s.title,
       artist: s.artist,
-      spotify_track_id: s.source === "spotify" ? (s.spotifyId ?? null) : null,
-      reason_text: "",
-      is_public: true,
-    })),
-  );
+      spotifyTrackId: s.source === "spotify" ? (s.spotifyId ?? null) : null,
+      albumArtUrl: s.albumArtUrl ?? null,
+      tags: ["comfort"],
+      valence: 0,
+      energy: 0,
+    });
+  }
 }
 
 /** NOT IN CONTRACT: motivations rows have no feedback/isPublic/note (lib/types.ts #4). */
@@ -391,21 +391,21 @@ export function getArrival(): { node: GalaxyNode; edges: GalaxyEdge[] } {
 
 export async function getMe(): Promise<User & { cluster: string }> {
   await delay(150);
-  const [profile, songs] = await Promise.all([db.getProfile(ME_ID), db.listSongs(ME_ID)]);
+  const [profile, picks] = await Promise.all([db.getProfile(ME_ID), db.listPicks(ME_ID)]);
   if (!profile) throw new ApiError("We couldn't load your profile.");
   const motivations = myMotivations(); // NOT IN CONTRACT
-  return { id: profile.id, name: profile.display_name, songs: songs.map(songFromRow), motivations, cluster: primaryCluster(motivations) };
+  return { id: profile.id, name: profile.display_name, songs: picks.map((p) => songFromRow(p.song)), motivations, cluster: primaryCluster(motivations) };
 }
 
 export async function getUser(id: string): Promise<User & { cluster: string; edge: GalaxyEdge }> {
   await delay(350);
-  const [profile, songs] = await Promise.all([db.getProfile(id), db.listSongs(id)]);
+  const [profile, picks] = await Promise.all([db.getProfile(id), db.listPicks(id)]);
   const u = lookupUser(id); // NOT IN CONTRACT: motivations, cluster, edge
   if (!profile || !u) throw new ApiError("That person isn't in the galaxy anymore.");
   return {
     id: profile.id,
     name: profile.display_name,
-    songs: songs.map(songFromRow),
+    songs: picks.map((p) => songFromRow(p.song)),
     motivations: u.motivations.filter((m) => m.isPublic),
     cluster: u.primary,
     listening: listeningMoment(u.id, u.songs, u.primary),
@@ -415,17 +415,18 @@ export async function getUser(id: string): Promise<User & { cluster: string; edg
 
 export async function getConnections(): Promise<Connection[]> {
   await delay(450);
-  const rows = await db.matchProfiles(ME_ID, 14);
+  // Every match here already passed the AI evidence-check and carries its card (ConfirmedMatchRow).
+  const rows = await db.getMatches(14);
   const me = meParty();
   return rows.flatMap((r) => {
-    const u = lookupUser(r.profile_id); // NOT IN CONTRACT: cluster, sharedMotivation, overlap counts
+    const u = lookupUser(r.profileId); // NOT IN CONTRACT: cluster, similarity, sharedMotivation, overlap counts
     if (!u) return [];
     const e = edgeBetween(me, partyFromWorld(u));
     return [
       {
-        user: { id: r.profile_id, name: r.display_name },
+        user: { id: r.profileId, name: r.displayName },
         cluster: u.primary,
-        similarity: r.similarity,
+        similarity: e.similarity,
         sharedMotivation: e.sharedMotivation,
         sharedSongs: e.sharedSongs,
         sharedArtists: e.sharedArtists,
@@ -437,7 +438,7 @@ export async function getConnections(): Promise<Connection[]> {
 export async function getConnectionCard(otherId: string): Promise<ConnectionCard> {
   await delay(900);
   maybeFail("card");
-  const row = await db.getConnectionCard(ME_ID, otherId);
+  const row = await db.getConnectionCard(otherId);
   const u = lookupUser(otherId);
   if (!row || !u) throw new ApiError("That person isn't in the galaxy anymore.");
   return cardFromRow(row, ME_ID, buildConnectionCard(meParty(), partyFromWorld(u)));
@@ -450,7 +451,7 @@ export async function getConnectionCard(otherId: string): Promise<ConnectionCard
 export async function getWander(): Promise<WanderEntry[]> {
   await delay(1800); // stands in for the Gemini contrast check
   maybeFail("card");
-  const rows = await db.wander(ME_ID);
+  const rows = await db.wander();
   return rows.map((r) => ({
     user: { id: r.profile_id, name: r.display_name, cluster: lookupUser(r.profile_id)?.primary ?? "quiet_company" }, // cluster: NOT IN CONTRACT
     card: contrastFromRow(r.card, ME_ID),
@@ -459,7 +460,7 @@ export async function getWander(): Promise<WanderEntry[]> {
 
 export async function getContrastCard(otherId: string): Promise<ContrastCard> {
   await delay(300);
-  const row = await db.getConnectionCard(ME_ID, otherId);
+  const row = await db.getConnectionCard(otherId);
   if (!row) throw new ApiError("That person isn't in the galaxy anymore.");
   return contrastFromRow(row, ME_ID);
 }
@@ -494,7 +495,7 @@ export async function getConversations(): Promise<ConversationSummary[]> {
 
 export async function getConversation(userId: string): Promise<Conversation> {
   await delay(200);
-  const [profile, card, rows] = await Promise.all([db.getProfile(userId), db.getConnectionCard(ME_ID, userId), db.listMessages(ME_ID, userId)]);
+  const [profile, card, rows] = await Promise.all([db.getProfile(userId), db.getConnectionCard(userId), db.listMessages(ME_ID, userId)]);
   const u = lookupUser(userId); // NOT IN CONTRACT: cluster
   if (!profile || !u) throw new ApiError("That person isn't in the galaxy anymore.");
   return {
@@ -508,8 +509,7 @@ export async function getConversation(userId: string): Promise<Conversation> {
 
 export async function sendMessage(userId: string, text: string): Promise<Message> {
   await delay(150);
-  const [user_a, user_b] = pair(ME_ID, userId);
-  return messageFromRow(await db.insertMessage({ user_a, user_b, sender_id: ME_ID, body: text }));
+  return messageFromRow(await db.insertMessage({ otherProfileId: userId, text }));
 }
 
 /** NOT IN CONTRACT: no song-swap table. */

@@ -57,7 +57,7 @@ async function loadCandidates(profileId: string): Promise<{ candidates: Loaded[]
   const supabase = createServerClient();
 
   // Profiles that predate primary_cluster get theirs here, so the viewer is never 'unassigned' in their own galaxy.
-  await refreshPrimaryCluster(supabase, profileId).catch(() => null);
+  await refreshPrimaryCluster(supabase, profileId).catch((err) => console.error("refreshPrimaryCluster failed on galaxy load:", err));
 
   const [pool, counts, far] = await Promise.all([
     supabase.rpc("galaxy_pool", { target_profile_id: profileId }),

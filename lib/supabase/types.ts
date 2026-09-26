@@ -26,7 +26,7 @@ export interface Database {
         Row: {
           id: string;
           display_name: string;
-          /** One of lib/clusters.ts CLUSTER_IDS. Not populated yet: needed by galaxy_pool (db/galaxy_window.sql). */
+          /** One of lib/clusters.ts CLUSTER_IDS. Not populated yet: needed by galaxy_pool (supabase/migrations/20260927010000_galaxy_window.sql). */
           primary_cluster: string | null;
           created_at: string;
         };

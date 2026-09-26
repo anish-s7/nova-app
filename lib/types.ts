@@ -1,6 +1,10 @@
 /*
- * Frontend view types vs db/contract.md (checked against main @ ba262ec, which also
- * has the migration and lib/supabase/types.ts; the three agree with each other).
+ * Frontend view types vs db/contract.md (checked against main @ 26a33b3, which also
+ * has the migration, lib/supabase/types.ts, and the running route handlers; all agree
+ * with each other). Replaces the previous version of this comment, checked against
+ * ba262ec — a pre-redesign commit. See MERGE_CHECKLIST.md for the full list of what
+ * changed since then (song identity via MusicBrainz, no more motivations table,
+ * per-pick embeddings, real session auth, matches arriving pre-evaluated with a card).
  *
  * The "DB contract rows" section at the bottom mirrors the contract field-for-field.
  * lib/api.ts maps those rows into the view types above; components only see views.
@@ -10,39 +14,79 @@
  *   Song.spotifyId?           <- songs.spotify_track_id (string | null)
  *   Song.source               <- derived: spotify_track_id ? "spotify" : "manual"
  *   Message.fromUserId/sentAt/text <- messages.sender_id / created_at / body
- *   Connection.user/similarity     <- match_profiles.profile_id + display_name / similarity
+ *   Connection.user/similarity     <- ConfirmedMatchRow.profileId + displayName (no similarity score anymore — see #6)
  *   ConnectionCard.userA/userB are viewer-relative (A = me). connection_cards.user_a/user_b
  *     are id-ordered (user_a < user_b); api.ts flips card_json.evidence when I'm user_b.
+ *     (main now aligns evidence to this ordering itself before caching — see #8.)
  *   ConnectionCard.suggestedOpeners <- card_json.openers
  *   ConnectionCard.meaningfulDifference.summary <- card_json.difference
  *   ConnectionCard.sharedMotivations[0].motivation <- card_json.shared_why
  *
- * UNRESOLVED: flagged, not fixed. Each one needs a DB or product decision:
+ * UNRESOLVED: flagged, not fixed. Each one needs a DB or product decision. Numbering
+ * kept stable from the previous version where the item still applies; new items appended.
  *   1. Song identity: frontend song ids are catalog slugs shared across users, used for
- *      overlap counts and Evidence.songIds. songs.id is a per-row uuid, so "same song"
- *      across users only exists via spotify_track_id (nullable) or title+artist.
- *   2. Song.albumArtUrl has no column. Needs a Spotify lookup by spotify_track_id or a new column.
- *   3. songs.reason_text is NOT NULL (and POST /api/songs rejects empty), and songs.is_public
- *      exists. The frontend collects neither a per-song "why" nor per-song privacy.
- *   4. InferredMotivation vs motivations: contract motivations are per-song {label, embedding}.
- *      There is no description, cluster, confidence, evidence[], feedback, isPublic, or note,
- *      so updateMotivation() has nothing to write to. Privacy is per-song in the DB but
- *      per-motivation in the UI.
+ *      overlap counts and Evidence.songIds. main's songs.id is a per-row uuid, deduped by
+ *      mbid (MusicBrainz) or a title+artist fallback key — closer to what this app wants
+ *      than before, but still not the same id space as the mock catalog slugs.
+ *   2. Song.albumArtUrl: main now has songs.album_art_url, but nothing populates it yet
+ *      (POST /api/picks accepts an optional albumArtUrl from the caller; nothing derives
+ *      one from spotify_track_id server-side).
+ *   3. STILL OPEN, CHANGED SHAPE: main no longer has a required reason_text or motivations
+ *      table. It replaced them with song_picks.tags (1-3 values, fixed taxonomy in
+ *      lib/tags.ts on main) and valence/energy (-1..1 floats, from a circular slider),
+ *      BOTH REQUIRED by POST /api/picks. This app's onboarding collects none of tags,
+ *      valence, or energy — it collects songs, then infers open-ended motivations with
+ *      confidence scores (analyzeMusic -> AnalysisResult, reviewed via MotivationCard's
+ *      confirm/reject). These are two different, incompatible "why" models:
+ *        - main: user explicitly picks a few fixed tags + drags one point on a 2D slider,
+ *          per song, before saving.
+ *        - this app: AI infers open-ended motivations after the fact, user confirms/rejects.
+ *      Reconciling this needs a product decision, not just a mapping. Options include:
+ *        (a) add a tag-tap + slider step to onboarding (a real UI addition) and drop or
+ *            demote the confirm/reject motivation review,
+ *        (b) keep the AI-inference UX and have it choose valence/energy/tags on the
+ *            user's behalf (loses the "your own subjective placement" point of the
+ *            slider, which main's matching design leans on), or
+ *        (c) synthesize placeholder tags/valence/energy just to satisfy the route while
+ *            keeping the current onboarding UX unchanged (fastest, but the matching
+ *            quality point of the slider is lost, and it isn't a "real" placement).
+ *      Nothing in this file decides between these — see MERGE_CHECKLIST.md.
+ *   4. InferredMotivation vs song_picks: still no cluster/confidence/evidence[]/feedback/
+ *      isPublic/note columns anywhere in main's schema. Same gap as before, just against
+ *      a different table (song_picks instead of motivations). updateMotivation() still
+ *      has nothing to write to.
  *   5. Clusters (GalaxyNode.cluster, Connection.cluster, User.cluster) aren't stored anywhere.
- *   6. Galaxy: match_profiles is target -> top-N only. GalaxyResponse needs every node plus
- *      pairwise edges between *other* users, each with sharedMotivation/sharedSongs/sharedArtists.
+ *   6. CHANGED: GET /api/match on main no longer returns a raw similarity score to browse —
+ *      every entry has already passed an AI evidence-check and comes with a full
+ *      Connection Card attached (ConfirmedMatchRow). There's no "top-N by similarity, then
+ *      fetch a card" step anymore; the galaxy's per-edge similarity/sharedMotivation/
+ *      sharedSongs/sharedArtists still have no DB source (unchanged from before), but the
+ *      *set* of who you match with now already includes why, which may simplify
+ *      GalaxyResponse's design once addressed.
  *   7. ConnectionCard: card_json has ONE shared_why and plain-string evidence. The UI renders
  *      1-2 shared motivations, each with a Song object, plus overlap counts and per-side
  *      difference evidence. card_json.suggested_swap_prompt isn't rendered anywhere.
- *   8. card_json perspective bug on main: generateConnectionCard(current, other) writes
- *      evidence.user_a = the *requesting* user, but the row stores user_a = the smaller id.
- *      So evidence.user_a only matches row.user_a when the requester has the smaller id.
+ *   8. FIXED on main: the card_json perspective bug (generateConnectionCard writing
+ *      evidence.user_a for the requester, not for whichever id is smaller) is resolved —
+ *      main now aligns evidence to the row's user_a/user_b ordering before caching or
+ *      returning a card (lib/matching/alignCardEvidence.ts). api.ts's existing "flip if
+ *      I'm user_b" logic is still correct and needs no change.
  *   9. Song swaps (Message kind "swap", SongSwap) have no table; messages rows are text-only.
  *  10. No conversations table. ConversationSummary/Conversation come from messages grouped
- *      by (user_a, user_b); their cluster has no source (see 5). The contract lists a
- *      `connections` table as an open question.
+ *      by (user_a, user_b); their cluster has no source (see 5). The contract no longer
+ *      lists a `connections` table as an open question — it was dropped, not resolved.
  *  11. User.avatarUrl, ListeningSignal/ContextTag, and AnalysisResult have no DB home.
- *  12. ME_ID = "me" is a mock id. profiles.id is auth.users.id (uuid), and neither side has auth yet.
+ *  12. ME_ID = "me" is a mock id. profiles.id is auth.users.id (uuid). main now has real
+ *      session-based auth (lib/supabase/serverAuth.ts) — "me"-scoped routes derive the
+ *      user from the session and no longer accept a client-supplied profileId at all, so
+ *      this app needs a real Supabase Auth session before Step 1 in MERGE_CHECKLIST.md
+ *      can work, not just before ME_ID gets a real value.
+ *  13. NEW: POST /api/picks calls MusicBrainz (rate-limited to 1 req/sec) before Gemini.
+ *      Saving many songs at once (e.g. a Spotify import of 24 tracks) will take at least
+ *      ~24 seconds sequentially if each is a new catalog entry, worse than the old
+ *      "24 slow Gemini calls" concern this file already flagged. Batching/parallelizing
+ *      insertPick calls doesn't help against a single shared rate limit; consider a
+ *      pending/progress UI state for onboarding instead of an await-then-navigate flow.
  */
 
 export type Song = {
@@ -243,8 +287,12 @@ export type Conversation = {
 export type SpotifyImport = { songs: Song[]; signals: ListeningSignal[] };
 
 // ---------------------------------------------------------------------------
-// DB contract rows: field-for-field with db/contract.md on main. Once the backend
-// merges, these can become aliases of lib/supabase/types.ts (Database["public"]...).
+// DB contract rows: field-for-field with db/contract.md on main @ 26a33b3.
+// Replaces the previous section (checked against ba262ec, a pre-redesign
+// commit whose songs/motivations schema no longer exists on main). See
+// MERGE_CHECKLIST.md for what changed and why, and for the open product
+// decision this section can't resolve on its own (tags/valence/energy vs.
+// this app's AI-inferred-motivations onboarding UX).
 
 export type ProfileRow = {
   id: string;
@@ -252,25 +300,61 @@ export type ProfileRow = {
   created_at: string;
 };
 
+/** Shared catalog: one row per unique resolved song, not per user. */
 export type SongRow = {
   id: string;
-  profile_id: string;
   title: string;
   artist: string;
+  mbid: string | null;
+  fallback_key: string | null;
+  resolution_source: "musicbrainz" | "gemini_fallback";
   spotify_track_id: string | null;
-  reason_text: string;
+  album_art_url: string | null;
+  context_summary: string | null;
+  embedding: number[] | null;
+  created_at: string;
+};
+
+/**
+ * One row per user per song. Replaces the old per-user `songs` row +
+ * `motivations` table entirely — there is no motivations table on main
+ * anymore. `tags`/`valence`/`energy` are the "why" signal now; `reason_text`
+ * is optional bonus color, never required (POST /api/picks no longer
+ * rejects an empty one — see mismatch #3 in MERGE_CHECKLIST.md, since this
+ * app's onboarding doesn't collect any of tags/valence/energy/reason yet).
+ */
+export type SongPickRow = {
+  id: string;
+  profile_id: string;
+  song_id: string;
+  /** 1-3 values from the fixed taxonomy in lib/tags.ts on main. Different taxonomy than this app's ContextTag. */
+  tags: string[];
+  /** -1..1, sad/negative <-> happy/positive. */
+  valence: number;
+  /** -1..1, calm <-> intense. */
+  energy: number;
+  reason_text: string | null;
   is_public: boolean;
   created_at: string;
 };
 
-export type SongInsert = Pick<SongRow, "profile_id" | "title" | "artist" | "spotify_track_id" | "reason_text" | "is_public">;
-
-export type MotivationRow = {
-  id: string;
-  song_id: string;
-  label: string;
-  embedding: number[];
-  created_at: string;
+/**
+ * Body for POST /api/picks on main. The route resolves song identity
+ * (MusicBrainz, Gemini fallback) and computes the pick's embedding itself
+ * server-side — callers never send a song_id or an embedding, only this.
+ * `tags`, `valence`, and `energy` are required by the route (tags: 1-3
+ * items, valence/energy: -1..1).
+ */
+export type PickInsert = {
+  title: string;
+  artist: string;
+  spotifyTrackId?: string | null;
+  albumArtUrl?: string | null;
+  tags: string[];
+  valence: number;
+  energy: number;
+  reasonText?: string;
+  isPublic?: boolean;
 };
 
 export type ConnectionCardJson = {
@@ -303,13 +387,20 @@ export type MessageRow = {
   created_at: string;
 };
 
-export type MessageInsert = Pick<MessageRow, "user_a" | "user_b" | "sender_id" | "body">;
+/** Body for POST /api/messages on main. sender_id is derived from the session, not sent by the client. */
+export type MessageInsert = { otherProfileId: string; text: string };
 
-/** Row returned by the match_profiles(target_profile_id, match_count) RPC. */
-export type MatchProfileRow = {
-  profile_id: string;
-  display_name: string;
-  similarity: number;
+/**
+ * A single item from GET /api/match on main. Unlike the old match_profiles
+ * RPC (a raw similarity score), every entry here has already passed the AI
+ * evidence-check and comes with its Connection Card attached — a match IS
+ * a card, not something you separately fetch a card for afterward. There
+ * is no raw similarity score exposed to callers.
+ */
+export type ConfirmedMatchRow = {
+  profileId: string;
+  displayName: string;
+  card: ConnectionCardJson;
 };
 
 /** One confirmed Wander result: the candidate plus the contrast card already cached for the pair. */
@@ -322,17 +413,29 @@ export type WanderRow = {
 /**
  * Row-level data access, in contract shapes. lib/api.ts is the only consumer and picks
  * the implementation (lib/mock-db.ts today).
+ *
+ * All "me"-scoped methods take no profile id argument on purpose: main
+ * derives the acting user from the real Supabase session (see CLAUDE.md's
+ * "Auth" section), not a client-supplied id. Calling any of these before
+ * this app has real auth wired up needs a decision — see
+ * MERGE_CHECKLIST.md mismatch #12.
  */
 export type Db = {
   getProfile(id: string): Promise<ProfileRow | null>;
-  listSongs(profileId: string): Promise<SongRow[]>;
-  insertSongs(rows: SongInsert[]): Promise<SongRow[]>;
-  matchProfiles(targetProfileId: string, matchCount?: number): Promise<MatchProfileRow[]>;
-  /** Get-or-generate the cached card for the unordered pair. */
-  getConnectionCard(profileId: string, otherProfileId: string): Promise<ConnectionCardRow | null>;
+  /** Picks for `id`, joined with their song. If `id` isn't the session's own user, private picks are already filtered out server-side. */
+  listPicks(id: string): Promise<(SongPickRow & { song: SongRow })[]>;
+  insertPick(pick: PickInsert): Promise<{ song: SongRow; pick: SongPickRow }>;
+  /** Already evidence-checked and card-bearing — see ConfirmedMatchRow. */
+  getMatches(limit?: number): Promise<ConfirmedMatchRow[]>;
+  /** Cached card for (me, otherProfileId), or null if none exists yet. */
+  getConnectionCard(otherProfileId: string): Promise<ConnectionCardRow | null>;
+  /** Generates (and caches) a card for (me, otherProfileId) on demand. Can come back as insufficient evidence instead of a card. */
+  generateConnectionCard(
+    otherProfileId: string,
+  ): Promise<{ status: "match"; card: ConnectionCardJson } | { status: "insufficient_evidence" }>;
   /** Wander: same song, different feeling. Explicit user action only; each row's card is `kind: "contrast"`. */
-  wander(profileId: string, limit?: number): Promise<WanderRow[]>;
-  /** Every message the profile is part of, or only the ones with `otherProfileId`. */
+  wander(limit?: number): Promise<WanderRow[]>;
+  /** No read route exists on main; reads go through Supabase Realtime directly once this app has auth. */
   listMessages(profileId: string, otherProfileId?: string): Promise<MessageRow[]>;
-  insertMessage(row: MessageInsert): Promise<MessageRow>;
+  insertMessage(input: MessageInsert): Promise<MessageRow>;
 };

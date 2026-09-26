@@ -1,6 +1,6 @@
 import { effectiveSongs, getSession } from "./session";
 import { ME_ID, WORLD, buildConnectionCard, buildContrastJson, wanderCandidates, conversations, edgeBetween, lookupUser, partyFor, partyFromWorld, scheduleReply } from "./mock-world";
-import type { ConnectionCardRow, Db, Message, MessageRow, Song, SongRow, WanderRow } from "./types";
+import type { ConnectionCardRow, ConfirmedMatchRow, Db, Message, MessageRow, Song, SongPickRow, SongRow, WanderRow } from "./types";
 
 /** Contrast cards Wander has already written, by other profile id. Like the real table, a cached card is never regenerated. */
 const contrastCache = new Map<string, ConnectionCardRow>();
@@ -16,17 +16,60 @@ function pair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
 
-function songRow(profileId: string, s: Song): SongRow {
+function songRow(s: Song): SongRow {
   return {
     // Catalog slug stands in for the uuid; see lib/types.ts mismatch #1.
     id: s.id,
-    profile_id: profileId,
     title: s.title,
     artist: s.artist,
+    mbid: null,
+    fallback_key: `${s.title.toLowerCase()}::${s.artist.toLowerCase()}`,
+    resolution_source: "gemini_fallback",
     spotify_track_id: s.source === "spotify" ? (s.spotifyId ?? null) : null,
-    // The frontend doesn't collect a per-song reason yet (mismatch #3).
-    reason_text: "",
+    album_art_url: s.albumArtUrl ?? null,
+    context_summary: null,
+    embedding: null,
+    created_at: CREATED_AT,
+  };
+}
+
+function pickRow(profileId: string, s: Song): SongPickRow & { song: SongRow } {
+  return {
+    id: `${profileId}:${s.id}`,
+    profile_id: profileId,
+    song_id: s.id,
+    // The mock world has no per-pick tags or slider position.
+    tags: [],
+    valence: 0,
+    energy: 0,
+    reason_text: null,
     is_public: true,
+    created_at: CREATED_AT,
+    song: songRow(s),
+  };
+}
+
+/** Mock match card for (me, other), evidence stored under the ordered ids like the real table. */
+function mockMatchCard(otherProfileId: string): ConnectionCardRow | null {
+  const a = partyFor(ME_ID);
+  const b = partyFor(otherProfileId);
+  if (!a || !b) return null;
+  const view = buildConnectionCard(a, b);
+  const [first] = view.sharedMotivations;
+  const [user_a, user_b] = pair(ME_ID, otherProfileId);
+  const mine = first.evidenceA.text;
+  const theirs = first.evidenceB.text;
+  return {
+    id: `card-${user_a}-${user_b}`,
+    user_a,
+    user_b,
+    card_json: {
+      shared_why: first.motivation,
+      evidence: user_a === ME_ID ? { user_a: mine, user_b: theirs } : { user_a: theirs, user_b: mine },
+      difference: view.meaningfulDifference.summary,
+      openers: view.suggestedOpeners,
+      suggested_swap_prompt: `Swap a song that feels like "${first.motivation.toLowerCase()}" to you.`,
+    },
     created_at: CREATED_AT,
   };
 }
@@ -47,60 +90,64 @@ export const mockDb: Db = {
     return u ? { id: u.id, display_name: u.name, created_at: CREATED_AT } : null;
   },
 
-  async listSongs(profileId) {
-    const songs = profileId === ME_ID ? effectiveSongs(getSession()) : (lookupUser(profileId)?.songs ?? []);
-    return songs.map((s) => songRow(profileId, s));
+  async listPicks(id) {
+    const songs = id === ME_ID ? effectiveSongs(getSession()) : (lookupUser(id)?.songs ?? []);
+    return songs.map((s) => pickRow(id, s));
   },
 
-  async insertSongs(rows) {
-    // The mock "me" reads songs from the session (written by api.saveSongs), so just echo rows.
-    return rows.map((r, i) => ({ ...r, id: `song-${Date.now()}-${i}`, created_at: new Date().toISOString() }));
-  },
-
-  async matchProfiles(targetProfileId, matchCount = 10) {
-    const target = partyFor(targetProfileId);
-    if (!target) return [];
-    return WORLD.filter((u) => u.id !== targetProfileId)
-      .map((u) => ({ u, similarity: edgeBetween(target, partyFromWorld(u)).similarity }))
-      .sort((a, b) => b.similarity - a.similarity)
-      .slice(0, matchCount)
-      .map(({ u, similarity }) => ({ profile_id: u.id, display_name: u.name, similarity }));
-  },
-
-  async getConnectionCard(profileId, otherProfileId): Promise<ConnectionCardRow | null> {
-    const cached = profileId === ME_ID ? contrastCache.get(otherProfileId) : undefined;
-    if (cached) return cached;
-    const a = partyFor(profileId);
-    const b = partyFor(otherProfileId);
-    if (!a || !b) return null;
-    // The mock generator writes from profileId's side; store evidence under the ordered ids.
-    const view = buildConnectionCard(a, b);
-    const [first] = view.sharedMotivations;
-    const [user_a, user_b] = pair(profileId, otherProfileId);
-    const mine = first.evidenceA.text;
-    const theirs = first.evidenceB.text;
+  async insertPick(pick) {
+    // The mock "me" reads songs from the session (written by api.saveSongs), so just echo the pick.
+    const now = new Date().toISOString();
+    const song: SongRow = {
+      ...songRow({ id: `song-${Date.now()}`, title: pick.title, artist: pick.artist, albumArtUrl: pick.albumArtUrl ?? undefined, spotifyId: pick.spotifyTrackId ?? undefined, source: pick.spotifyTrackId ? "spotify" : "manual" }),
+      created_at: now,
+    };
     return {
-      id: `card-${user_a}-${user_b}`,
-      user_a,
-      user_b,
-      card_json: {
-        shared_why: first.motivation,
-        evidence: user_a === profileId ? { user_a: mine, user_b: theirs } : { user_a: theirs, user_b: mine },
-        difference: view.meaningfulDifference.summary,
-        openers: view.suggestedOpeners,
-        suggested_swap_prompt: `Swap a song that feels like "${first.motivation.toLowerCase()}" to you.`,
+      song,
+      pick: {
+        id: `pick-${Date.now()}`,
+        profile_id: ME_ID,
+        song_id: song.id,
+        tags: pick.tags,
+        valence: pick.valence,
+        energy: pick.energy,
+        reason_text: pick.reasonText ?? null,
+        is_public: pick.isPublic ?? true,
+        created_at: now,
       },
-      created_at: CREATED_AT,
     };
   },
 
-  async wander(profileId, limit = 3): Promise<WanderRow[]> {
-    const me = partyFor(profileId);
+  async getMatches(limit = 10): Promise<ConfirmedMatchRow[]> {
+    const target = partyFor(ME_ID);
+    if (!target) return [];
+    return WORLD.filter((u) => u.id !== ME_ID)
+      .map((u) => ({ u, similarity: edgeBetween(target, partyFromWorld(u)).similarity }))
+      .sort((a, b) => b.similarity - a.similarity)
+      .slice(0, limit)
+      .flatMap(({ u }) => {
+        const row = mockMatchCard(u.id);
+        return row ? [{ profileId: u.id, displayName: u.name, card: row.card_json }] : [];
+      });
+  },
+
+  async getConnectionCard(otherProfileId): Promise<ConnectionCardRow | null> {
+    // The mock "cache" always hits, so the demo never waits on generation.
+    return contrastCache.get(otherProfileId) ?? mockMatchCard(otherProfileId);
+  },
+
+  async generateConnectionCard(otherProfileId) {
+    const row = mockMatchCard(otherProfileId);
+    return row ? { status: "match", card: row.card_json } : { status: "insufficient_evidence" };
+  },
+
+  async wander(limit = 3): Promise<WanderRow[]> {
+    const me = partyFor(ME_ID);
     if (!me) return [];
     return wanderCandidates(limit).map(({ user, song }) => {
-      const [user_a, user_b] = pair(profileId, user.id);
+      const [user_a, user_b] = pair(ME_ID, user.id);
       const json = buildContrastJson(me, partyFromWorld(user), song);
-      const card_json = user_a === profileId ? json : { ...json, evidence: { user_a: json.evidence.user_b, user_b: json.evidence.user_a } };
+      const card_json = user_a === ME_ID ? json : { ...json, evidence: { user_a: json.evidence.user_b, user_b: json.evidence.user_a } };
       const row = contrastCache.get(user.id) ?? { id: `card-${user_a}-${user_b}`, user_a, user_b, card_json, created_at: CREATED_AT };
       contrastCache.set(user.id, row);
       return { profile_id: user.id, display_name: user.name, card: row };
@@ -121,11 +168,11 @@ export const mockDb: Db = {
       );
   },
 
-  async insertMessage({ user_a, user_b, sender_id, body }) {
-    const other = sender_id === user_a ? user_b : user_a;
-    const row: MessageRow = { id: `m-${Date.now()}`, user_a, user_b, sender_id, body, created_at: new Date().toISOString() };
-    conversations.set(other, [...(conversations.get(other) ?? []), { id: row.id, fromUserId: sender_id, sentAt: row.created_at, kind: "text", text: body }]);
-    scheduleReply(other);
+  async insertMessage({ otherProfileId, text }) {
+    const [user_a, user_b] = pair(ME_ID, otherProfileId);
+    const row: MessageRow = { id: `m-${Date.now()}`, user_a, user_b, sender_id: ME_ID, body: text, created_at: new Date().toISOString() };
+    conversations.set(otherProfileId, [...(conversations.get(otherProfileId) ?? []), { id: row.id, fromUserId: ME_ID, sentAt: row.created_at, kind: "text", text }]);
+    scheduleReply(otherProfileId);
     return row;
   },
 };
