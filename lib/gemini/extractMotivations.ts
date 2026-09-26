@@ -16,6 +16,10 @@ Reason: `;
  * aren't expected to write essays for 5 songs.
  */
 export async function extractMotivations(reasonText: string): Promise<string[]> {
+  if (process.env.USE_MOCK_AI === "true") {
+    return ["company during loneliness", "emotional reflection"];
+  }
+
   const truncated = reasonText.slice(0, MAX_REASON_CHARS);
   const ai = getGeminiClient();
 
