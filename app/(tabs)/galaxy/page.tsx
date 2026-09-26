@@ -61,7 +61,7 @@ export default function GalaxyPage() {
   const [adding, setAdding] = useState<{ songId: string | null } | null>(null);
   const [celebrate, setCelebrate] = useState<{ title: string; body: string } | null>(null);
   const pendingFly = useRef<{ songId: string; themeId: string | null } | null>(null);
-  const { data: layer } = useSWR(["song-layer", session.picks?.length ?? 0], () => getSongLayer(), { revalidateOnFocus: false, keepPreviousData: true });
+  const { data: layer } = useSWR(["song-layer", version, session.picks?.length ?? 0], () => getSongLayer(), { revalidateOnFocus: false });
   const hint = useFirstVisitHint();
 
   const nodes: GalaxyNode[] = data ? [...data.nodes, ...arrivals.map((a) => a.node)] : [];

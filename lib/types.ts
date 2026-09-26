@@ -95,6 +95,8 @@ export type Song = {
   artist: string;
   albumArtUrl?: string;
   spotifyId?: string;
+  previewUrl?: string | null;
+  spotifyUrl?: string | null;
   source: "spotify" | "manual";
 };
 
@@ -193,6 +195,8 @@ export type GalaxyEdge = {
   sharedMotivation: string;
   sharedSongs: number;
   sharedArtists: number;
+  /** False when the source only supplies similarity and has not supplied overlap counts. */
+  overlapKnown?: boolean;
 };
 
 /**

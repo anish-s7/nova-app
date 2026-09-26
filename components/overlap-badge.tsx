@@ -23,9 +23,11 @@ export function OverlapBadge({
         className,
       )}
     >
-      {variant === "artists"
-        ? `${plural(sharedArtists, "shared artist")}`
-        : `${plural(sharedSongs, "song")} · ${plural(sharedArtists, "artist")} in common`}
+      {zero
+        ? "No direct song overlap yet"
+        : variant === "artists"
+          ? `${plural(sharedArtists, "shared artist")}`
+          : `${plural(sharedSongs, "song")} · ${plural(sharedArtists, "artist")} in common`}
     </span>
   );
 }

@@ -31,6 +31,7 @@ function toEdge(e: WindowEdge): GalaxyEdge {
     sharedMotivation: "", // NOT IN CONTRACT
     sharedSongs: 0, // NOT IN CONTRACT
     sharedArtists: 0, // NOT IN CONTRACT
+    overlapKnown: false,
   };
 }
 

@@ -191,10 +191,57 @@ export async function importSpotify(): Promise<SpotifyImport> {
 }
 
 export async function searchSongs(q: string): Promise<Song[]> {
-  await delay(180);
   const needle = q.trim().toLowerCase();
-  if (!needle) return SONG_CATALOG.slice(0, 12);
-  return SONG_CATALOG.filter((s) => `${s.title} ${s.artist}`.toLowerCase().includes(needle)).slice(0, 20);
+  const fallback = () =>
+    (needle
+      ? SONG_CATALOG.filter((s) =>
+          `${s.title} ${s.artist}`.toLowerCase().includes(needle),
+        ).slice(0, 20)
+      : SONG_CATALOG.slice(0, 12)
+    ).map((song) => ({
+      id: song.id,
+      title: song.title,
+      artist: song.artist,
+      albumArtUrl: song.albumArtUrl,
+      source: "manual" as const,
+    }));
+
+  if (!needle) return fallback();
+
+  try {
+    const response = await fetch(`/api/spotify/search?q=${encodeURIComponent(q.trim())}`);
+    if (!response.ok) return fallback();
+    const data: unknown = await response.json();
+    if (!data || typeof data !== "object" || !("songs" in data) || !Array.isArray(data.songs)) {
+      return fallback();
+    }
+    return data.songs.filter(isSpotifySearchSong);
+  } catch {
+    return fallback();
+  }
+}
+
+function isSpotifySearchSong(value: unknown): value is Song {
+  if (!value || typeof value !== "object") return false;
+  return (
+    "id" in value &&
+    typeof value.id === "string" &&
+    "title" in value &&
+    typeof value.title === "string" &&
+    "artist" in value &&
+    typeof value.artist === "string" &&
+    "spotifyId" in value &&
+    typeof value.spotifyId === "string" &&
+    "source" in value &&
+    value.source === "spotify" &&
+    (!("albumArtUrl" in value) || typeof value.albumArtUrl === "string") &&
+    (!("spotifyUrl" in value) ||
+      typeof value.spotifyUrl === "string" ||
+      value.spotifyUrl === null) &&
+    (!("previewUrl" in value) ||
+      typeof value.previewUrl === "string" ||
+      value.previewUrl === null)
+  );
 }
 
 export async function analyzeMusic(input: { songs: Song[]; signals: ListeningSignal[] }): Promise<AnalysisResult> {

@@ -30,6 +30,7 @@ export function RevealSequence() {
 
   const match = data?.topMatchId ? data.nodes.find((n) => n.userId === data.topMatchId) : undefined;
   const edge = data?.edges.find((e) => (e.source === ME_ID && e.target === match?.userId) || (e.target === ME_ID && e.source === match?.userId));
+  const overlapKnown = edge?.overlapKnown !== false;
 
   const finish = (to: string) => {
     setSession({ revealSeen: true });
@@ -110,12 +111,30 @@ export function RevealSequence() {
                 <h2 className="truncate text-2xl font-semibold">{match.name}</h2>
               </div>
             </div>
-            <p className="mt-4 text-3xl font-semibold tabular-nums tracking-tight">
-              {edge.sharedSongs} {edge.sharedSongs === 1 ? "song" : "songs"} in common
-            </p>
+            {overlapKnown ? (
+              edge.sharedSongs === 0 && edge.sharedArtists === 0 ? (
+                <p className="mt-4 font-serif text-xl italic text-muted-foreground">No direct song overlap yet</p>
+              ) : edge.sharedSongs > 0 ? (
+                <p className="mt-4 text-3xl font-semibold tabular-nums tracking-tight">
+                  {edge.sharedSongs} {edge.sharedSongs === 1 ? "song" : "songs"} in common
+                </p>
+              ) : (
+                <p className="mt-4 text-3xl font-semibold tabular-nums tracking-tight">
+                  {edge.sharedArtists} {edge.sharedArtists === 1 ? "artist" : "artists"} in common
+                </p>
+              )
+            ) : (
+              <p className="mt-4 font-serif text-xl italic text-muted-foreground">Closest by listening reasons</p>
+            )}
             <div className={cn("transition-all duration-700", step >= 4 ? "mt-3 opacity-100" : "mt-0 h-0 overflow-hidden opacity-0")}>
-              <p className="font-serif text-xl italic text-muted-foreground">Same reason:</p>
-              <ThemeTag label={edge.sharedMotivation} className="mt-2" />
+              {edge.sharedMotivation ? (
+                <>
+                  <p className="font-serif text-xl italic text-muted-foreground">Same reason:</p>
+                  <ThemeTag label={edge.sharedMotivation} className="mt-2" />
+                </>
+              ) : (
+                <p className="text-sm text-muted-foreground">Open the connection card to see what brought you close.</p>
+              )}
             </div>
             {step >= 4 ? (
               <div className="mt-5 flex flex-col gap-2 motion-safe:animate-rise-in">
