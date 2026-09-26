@@ -206,23 +206,57 @@ export async function analyzeMusic(input: { songs: Song[]; signals: ListeningSig
 }
 
 /**
- * Saves the user's songs. The session copy drives onboarding (reading/why screens); the
- * db inserts are what reach the backend. Tags/valence/energy aren't collected yet — the
- * onboarding "feel" step (lib/types.ts #3) replaces these placeholders.
+ * Onboarding step 1: the songs someone brought. Session only — nothing reaches the backend until
+ * they've described how each one feels (`/onboarding/feel`, then `saveSongs`). Manual picks are
+ * all described; a Spotify import's `describe` list is chosen on the feel screen.
  */
-export async function saveSongs(input: { source: "spotify" | "manual"; songs: Song[]; signals: ListeningSignal[] }) {
-  setSession({ source: input.source, songs: input.songs, signals: input.signals, analysis: undefined, motivations: [] }, true);
-  // Sequential on purpose: POST /api/picks calls MusicBrainz, which is rate-limited to 1 req/s.
-  for (const s of input.songs) {
-    await db.insertPick({
-      title: s.title,
-      artist: s.artist,
-      spotifyTrackId: s.source === "spotify" ? (s.spotifyId ?? null) : null,
-      albumArtUrl: s.albumArtUrl ?? null,
-      tags: ["comfort"],
-      valence: 0,
-      energy: 0,
-    });
+export function chooseSongs(input: { source: "spotify" | "manual"; songs: Song[]; signals: ListeningSignal[] }) {
+  setSession(
+    {
+      source: input.source,
+      songs: input.songs,
+      signals: input.signals,
+      analysis: undefined,
+      motivations: [],
+      describe: input.source === "manual" ? input.songs.map((s) => s.id) : undefined,
+      feelings: {},
+      saveStatus: "idle",
+      saveError: undefined,
+      savedSongIds: [],
+    },
+    true,
+  );
+}
+
+/**
+ * Onboarding step 2: saves each described song with its tags + mood circle position. Runs in
+ * the background while the reading screen plays; progress lives in `session.saveStatus`.
+ * Sequential on purpose: POST /api/picks calls MusicBrainz, which is rate-limited to 1 req/s.
+ * Safe to call again after an error — songs already saved are skipped, so no pick is duplicated.
+ */
+export async function saveSongs() {
+  const s = getSession();
+  const songs = s.songs.filter((song) => (s.describe ?? []).includes(song.id));
+  setSession({ saveStatus: "saving", saveError: undefined });
+  try {
+    for (const song of songs) {
+      if (getSession().savedSongIds?.includes(song.id)) continue;
+      const feeling = s.feelings?.[song.id];
+      if (!feeling || feeling.tags.length === 0) throw new ApiError(`"${song.title}" still needs at least one tag.`);
+      await db.insertPick({
+        title: song.title,
+        artist: song.artist,
+        spotifyTrackId: song.source === "spotify" ? (song.spotifyId ?? null) : null,
+        albumArtUrl: song.albumArtUrl ?? null,
+        tags: feeling.tags,
+        valence: feeling.valence,
+        energy: feeling.energy,
+      });
+      setSession((cur) => ({ savedSongIds: [...(cur.savedSongIds ?? []), song.id] }));
+    }
+    setSession({ saveStatus: "saved" });
+  } catch (e) {
+    setSession({ saveStatus: "error", saveError: e instanceof Error ? e.message : "We couldn't save your songs." });
   }
 }
 

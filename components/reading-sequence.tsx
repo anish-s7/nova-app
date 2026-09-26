@@ -10,7 +10,7 @@ import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { useAnime } from "@/hooks/use-anime";
 import { usePacer } from "@/hooks/use-pacer";
-import { analyzeMusic } from "@/lib/api";
+import { analyzeMusic, saveSongs } from "@/lib/api";
 import { effectiveSongs, setSession, useSession } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +31,7 @@ export function ReadingSequence() {
 
   // -1 covers only, 0..n-1 highlight index, n converge
   const [step, setStep] = useState(-1);
+  const [animationDone, setAnimationDone] = useState(false);
   const highlights = data?.highlights.slice(0, 3) ?? [];
   const converging = data ? step >= highlights.length : false;
 
@@ -63,13 +64,34 @@ export function ReadingSequence() {
       setStep(99);
       await new Promise((r) => setTimeout(r, 1800));
       if (cancelled) return;
-      setSession({ analysis: data, motivations: data.motivations });
-      router.replace("/onboarding/why");
+      setAnimationDone(true);
     })();
     return () => {
       cancelled = true;
     };
-  }, [data, wait, router]);
+  }, [data, wait]);
+
+  // The feel screen starts saving the described songs as it hands off here. Only move on once
+  // that's done, so nobody reaches the galaxy with half their picks missing.
+  const saving = session.saveStatus === "saving";
+  const saveFailed = session.saveStatus === "error";
+  useEffect(() => {
+    if (!animationDone || !data || saving || saveFailed) return;
+    setSession({ analysis: data, motivations: data.motivations });
+    router.replace("/onboarding/why");
+  }, [animationDone, data, saving, saveFailed, router]);
+
+  if (animationDone && saveFailed) {
+    return (
+      <main className="starfield flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
+        <p className="font-serif text-2xl italic">We couldn&apos;t save all your songs.</p>
+        <p className="text-sm text-muted-foreground">{session.saveError ?? "Something went wrong on our end."} The ones already saved are kept.</p>
+        <Button className="mt-2 h-11 rounded-full px-6" onClick={() => void saveSongs()}>
+          Try again
+        </Button>
+      </main>
+    );
+  }
 
   if (error) {
     return (
@@ -141,7 +163,10 @@ export function ReadingSequence() {
             {currentHighlight}
           </p>
         ) : converging ? (
-          <p key="converge" data-caption className="font-serif text-xl italic text-muted-foreground">Here&apos;s a first pass.</p>
+          <>
+            <p key="converge" data-caption className="font-serif text-xl italic text-muted-foreground">Here&apos;s a first pass.</p>
+            {animationDone && saving ? <p className="mt-3 text-sm text-muted-foreground">Saving your songs…</p> : null}
+          </>
         ) : (
           <p className="text-sm text-muted-foreground">Going through your songs…</p>
         )}

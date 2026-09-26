@@ -8,7 +8,7 @@ import { AlbumArt } from "@/components/album-art";
 import { ScreenHeader } from "@/components/screen-header";
 import { SpotifyIcon } from "@/components/spotify-icon";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { importSpotify, saveSongs } from "@/lib/api";
+import { chooseSongs, importSpotify } from "@/lib/api";
 import type { SpotifyImport } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -30,9 +30,9 @@ export default function BringYourMusicPage() {
     }
   };
 
-  const continueWithImport = async (data: SpotifyImport) => {
-    await saveSongs({ source: "spotify", songs: data.songs, signals: data.signals });
-    router.push("/onboarding/reading");
+  const continueWithImport = (data: SpotifyImport) => {
+    chooseSongs({ source: "spotify", songs: data.songs, signals: data.signals });
+    router.push("/onboarding/feel");
   };
 
   if (status.kind === "imported") {
@@ -59,7 +59,7 @@ export default function BringYourMusicPage() {
 
           <div className="mt-auto pt-10">
             <Button className="h-12 w-full rounded-full text-base" onClick={() => continueWithImport(status.data)}>
-              Read my music
+              Choose your top songs
             </Button>
           </div>
         </div>
