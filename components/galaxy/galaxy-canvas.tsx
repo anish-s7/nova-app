@@ -36,9 +36,11 @@ type Props = Omit<GalaxyViewProps, "layout" | "extra"> & {
   songs?: SongStar[];
   /** Song ids of the focused theme: lit, and joined into a constellation. */
   focusSongIds?: string[] | null;
+  /** "See connections": the selected song, threaded to these songs (strongest first). */
+  connections?: { songId: string; score: number }[] | null;
 };
 
-export function GalaxyCanvas({ nodes, edges, arrivals = [], className, songs = [], focusSongIds = null, ...rest }: Props) {
+export function GalaxyCanvas({ nodes, edges, arrivals = [], className, songs = [], focusSongIds = null, connections = null, ...rest }: Props) {
   const layout = useMemo(() => computeLayout(nodes, edges), [nodes, edges]);
   const extra = useMemo(() => arrivals.map((a) => placeArrival(layout, a.node, a.edges)), [arrivals, layout]);
   const songPoints = useMemo(() => placeSongs(layout, songs.map((s) => ({ id: s.id, cluster: s.cluster, listenerIds: s.listeners.map((l) => l.id) })), extra), [layout, songs, extra]);
@@ -87,9 +89,26 @@ export function GalaxyCanvas({ nodes, edges, arrivals = [], className, songs = [
     () => (selectedSong ? selectedSong.listeners.map((l) => ({ source: songNodeId(selectedSong.id), target: l.id, similarity: 0.9, sharedMotivation: "", sharedSongs: 0, sharedArtists: 0 })) : []),
     [selectedSong],
   );
-  const spotlight = useMemo(() => (selectedSong ? new Set([songNodeId(selectedSong.id), ...selectedSong.listeners.map((l) => l.id)]) : focusIds), [selectedSong, focusIds]);
+  // Connections mode: threads go song-to-song instead of song-to-listener, and only the linked songs stay lit.
+  const linkThreads = useMemo(() => {
+    if (!selectedSong || !connections) return [];
+    const top = connections[0]?.score || 1;
+    return connections.map((c) => ({ source: songNodeId(selectedSong.id), target: songNodeId(c.songId), similarity: 0.5 + 0.5 * (c.score / top), sharedMotivation: "", sharedSongs: 0, sharedArtists: 0 }));
+  }, [selectedSong, connections]);
+  const spotlight = useMemo(
+    () =>
+      selectedSong && connections
+        ? new Set([songNodeId(selectedSong.id), ...connections.map((c) => songNodeId(c.songId))])
+        : selectedSong
+          ? new Set([songNodeId(selectedSong.id), ...selectedSong.listeners.map((l) => l.id)])
+          : focusIds,
+    [selectedSong, focusIds, connections],
+  );
 
-  const allEdges = useMemo(() => [...edges, ...arrivals.flatMap((a) => a.edges), ...constellation, ...listenerThreads], [edges, arrivals, constellation, listenerThreads]);
+  const allEdges = useMemo(
+    () => [...edges, ...arrivals.flatMap((a) => a.edges), ...constellation, ...(connections ? linkThreads : listenerThreads)],
+    [edges, arrivals, constellation, listenerThreads, linkThreads, connections],
+  );
   const allExtra = useMemo(() => [...extra, ...songPoints], [extra, songPoints]);
 
   const reduced = useReducedMotion();

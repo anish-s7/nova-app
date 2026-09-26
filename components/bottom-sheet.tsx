@@ -9,12 +9,15 @@ export function BottomSheet({
   label,
   children,
   className,
+  peek = false,
 }: {
   open: boolean;
   onClose: () => void;
   label: string;
   children: ReactNode;
   className?: string;
+  /** Let touches through to the scene behind, so the sheet can sit low while you look at it. */
+  peek?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -31,9 +34,9 @@ export function BottomSheet({
   }, [open, onClose]);
 
   return (
-    <div className={cn("absolute inset-0 z-30", open ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!open}>
+    <div className={cn("absolute inset-0 z-30", open && !peek ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!open}>
       <div
-        className={cn("absolute inset-0 bg-night/50 transition-opacity duration-300", open ? "opacity-100" : "opacity-0")}
+        className={cn("absolute inset-0 bg-night/50 transition-opacity duration-300", open && !peek ? "opacity-100" : "opacity-0")}
         onClick={onClose}
       />
       <div
@@ -44,7 +47,7 @@ export function BottomSheet({
         tabIndex={-1}
         className={cn(
           "absolute inset-x-0 bottom-0 border-t border-white/10 bg-popover px-5 pb-6 pt-3 outline-none transition-transform duration-300 ease-out",
-          open ? "translate-y-0" : "translate-y-full",
+          open ? "pointer-events-auto translate-y-0" : "translate-y-full",
           className,
         )}
       >

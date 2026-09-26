@@ -25,6 +25,7 @@ import { useGalaxyRealtime, type Arrival } from "@/hooks/use-galaxy-realtime";
 import { getConversations, getGalaxy, getGalaxyMore, getSongLayer, getUser, ME_ID } from "@/lib/api";
 import { getCluster } from "@/lib/clusters";
 import { useSession } from "@/lib/session";
+import { songConnections } from "@/lib/song-connections";
 import { isSongNode, songNodeId } from "@/lib/song-layer";
 import { THEME_THRESHOLD } from "@/lib/themes";
 import { BOND_AT } from "@/lib/thread";
@@ -99,19 +100,30 @@ export default function GalaxyPage() {
   const themeState = layer?.themes.find((t) => t.theme.id === themeFocus);
   const focusSongIds = mode === "songs" && themeState ? themeState.songIds : null;
   const selectedSong = selectedId && isSongNode(selectedId) ? layer?.stars.find((st) => songNodeId(st.id) === selectedId) : undefined;
+  const [connecting, setConnecting] = useState(false);
+  const connectionLinks = useMemo(() => (connecting && selectedSong && layer ? songConnections(selectedSong, layer) : null), [connecting, selectedSong, layer]);
+  const connectionKey = connectionLinks ? [selectedSong!.id, ...connectionLinks.map((c) => c.star.id)].join("|") : "";
+  // In connections mode the camera frames the song and everything linked to it, so the threads clear the sheet.
+  useEffect(() => {
+    if (!connectionKey) return;
+    apiRef.current?.flyToGroup(connectionKey.split("|").map(songNodeId));
+  }, [connectionKey]);
   const songList = layer ? (themeState ? layer.stars.filter((st) => themeState.songIds.includes(st.id)) : layer.stars).slice(0, 12) : [];
   const closest = closestTo(ME_ID, nodes, edges, focusCluster, 6);
 
   const select = (id: string | null) => {
+    const keepConnecting = connecting && !!id && isSongNode(id);
     setSelectedId(id);
+    setConnecting(keepConnecting);
     setClusterOpen(false);
     hint.dismiss();
-    if (id) apiRef.current?.flyTo(id, { duration: 1200, distance: 18, lift: 0.1 });
+    if (id && !keepConnecting) apiRef.current?.flyTo(id, { duration: 1200, distance: 18, lift: 0.1 });
   };
 
   const changeMode = (m: "people" | "songs") => {
     setMode(m);
     setSelectedId(null);
+    setConnecting(false);
     setFocusCluster(null);
     setThemeFocus(null);
     setClusterOpen(false);
@@ -122,6 +134,7 @@ export default function GalaxyPage() {
   const focusTheme = (id: string | null) => {
     setThemeFocus(id);
     setSelectedId(null);
+    setConnecting(false);
     hint.dismiss();
     const ids = id ? (layer?.themes.find((t) => t.theme.id === id)?.songIds ?? []).map(songNodeId) : [];
     apiRef.current?.flyToGroup(ids);
@@ -219,6 +232,7 @@ export default function GalaxyPage() {
             threads={threads}
             songs={layer?.stars}
             focusSongIds={focusSongIds}
+            connections={connectionLinks?.map((c) => ({ songId: c.star.id, score: c.score })) ?? null}
             hidden={hiddenNow}
           />
         </div>
@@ -406,11 +420,22 @@ export default function GalaxyPage() {
         {adding && layer ? <AddSongSheetContent layer={layer} initialSongId={adding.songId} onAdded={onAdded} /> : null}
       </BottomSheet>
 
-      <BottomSheet open={!!selectedSong} onClose={() => setSelectedId(null)} label={selectedSong ? `${selectedSong.song.title}` : "Song"}>
+      <BottomSheet
+        open={!!selectedSong}
+        peek={connecting}
+        onClose={() => {
+          setSelectedId(null);
+          setConnecting(false);
+        }}
+        label={selectedSong ? `${selectedSong.song.title}` : "Song"}
+      >
         {selectedSong && layer ? (
           <SongSheetContent
             star={selectedSong}
             layer={layer}
+            connecting={connecting}
+            onConnecting={setConnecting}
+            onOpenSong={(songId) => select(songNodeId(songId))}
             onAddYours={(songId) => {
               setSelectedId(null);
               setAdding({ songId });
