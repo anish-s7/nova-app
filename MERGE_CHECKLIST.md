@@ -86,7 +86,7 @@ Mock-backed today; the real pieces already exist server-side.
 ## Bounded galaxy (`getGalaxy({ limit })`, `getGalaxyMore`)
 
 Mock-backed today (`lib/galaxy-sample.ts` over the mock world). Real pieces: `GET /api/galaxy`, `GET /api/galaxy/more`
-(`lib/matching/galaxyWindow.ts`), and `db/galaxy_window.sql`.
+(`lib/matching/galaxyWindow.ts`), and `supabase/migrations/20260927010000_galaxy_window.sql`.
 
 - `profiles.primary_cluster` is now written (`lib/cluster-assign.ts`, on each pick and on galaxy load), so mismatch #5 is resolved for the galaxy path. The migration still has to add the column. `Connection.cluster`/`User.cluster` can read it too.
 - Map `GalaxyWindow` to `GalaxyResponse`: `topMotivations: []` (NOT IN CONTRACT), `isMe` from `meId`, add `far`, and put `me` first in `nodes`. `hidden` and `sampled` pass through as-is.
@@ -95,7 +95,7 @@ Mock-backed today (`lib/galaxy-sample.ts` over the mock world). Real pieces: `GE
 - **Scaffolded:** `lib/galaxy-adapter.ts` does the mapping above (pure functions), and `getGalaxy`/`getGalaxyMore` in
   `lib/api.ts` switch to it when `NEXT_PUBLIC_GALAXY_SOURCE=http` (default: mock). Remaining: a real auth session,
   applying `supabase/migrations/20260927010000_galaxy_window.sql` (adds `profiles.primary_cluster`, `wander_picks`,
-  `galaxy_pool`, `galaxy_cluster_counts`; `db/galaxy_window.sql` is now just the reference copy), then `getUser`/edge
+  `galaxy_pool`, `galaxy_cluster_counts`), then `getUser`/edge
   enrichment (`sharedSongs`, `topMotivations` stay empty until #4).
 
 ## Things that can't be done inside `lib/api.ts` (need a decision)

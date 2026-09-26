@@ -6,7 +6,6 @@ import { resolveSong } from "@/lib/musicbrainz/client";
 import { EMOTION_WEIGHT, clampEmotionValue } from "@/lib/emotion";
 import { isValidTag } from "@/lib/tags";
 import { refreshPrimaryCluster } from "@/lib/matching/refreshPrimaryCluster";
-import { createSessionClient } from "@/lib/supabase/serverAuth";
 import { parseVector } from "@/lib/supabase/vector";
 
 function fallbackKey(title: string, artist: string) {
@@ -143,9 +142,13 @@ export async function POST(req: NextRequest) {
 
   // Keep the galaxy label current. A failure here must not fail the pick, which is already saved:
   // the next pick, or the next galaxy load, recomputes it.
+  // Service-role client: primary_cluster is a derived label the backend writes, and the
+  // `authenticated` role can only update profiles.display_name.
   try {
-    await refreshPrimaryCluster(await createSessionClient(), profileId);
-  } catch {}
+    await refreshPrimaryCluster(supabase, profileId);
+  } catch (err) {
+    console.error("refreshPrimaryCluster failed after pick insert:", err);
+  }
 
   return NextResponse.json({ song, pick });
 }

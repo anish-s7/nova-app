@@ -1,9 +1,13 @@
 -- Galaxy: profiles.primary_cluster, wander_picks, galaxy_pool, galaxy_cluster_counts.
--- Mirrors db/contract.md. Source of the galaxy_pool/cluster_counts bodies: db/galaxy_window.sql.
--- UNTESTED against a live database, like the rest of the schema.
+-- Mirrors db/contract.md.
 begin;
 
 alter table public.profiles add column if not exists primary_cluster text;
+
+-- Must match CLUSTER_IDS in lib/clusters.ts.
+alter table public.profiles
+  add constraint profiles_primary_cluster_valid
+  check (primary_cluster is null or primary_cluster in ('quiet_company', 'armor_up', 'carrying_loss', 'somewhere_else', 'old_selves'));
 
 -- Same song, far apart in feeling. One row per candidate profile (widest gap), no existing card.
 create or replace function public.wander_picks(
@@ -13,6 +17,8 @@ create or replace function public.wander_picks(
 )
 returns table (profile_id uuid, display_name text, song_pick_id uuid, target_pick_id uuid, emotion_gap float)
 language sql stable
+security invoker
+set search_path = public, extensions
 as $$
   select * from (
     select distinct on (c.profile_id)
@@ -38,7 +44,7 @@ $$;
 -- Same grouping as match_picks, but each of the target's picks does its own HNSW-ordered
 -- nearest-neighbor lookup (LATERAL ... ORDER BY <=> LIMIT), so cost is bounded by
 -- near_size x (target's pick count), not by the size of song_picks.
-create or replace function galaxy_pool(
+create or replace function public.galaxy_pool(
   target_profile_id uuid,
   near_size int default 600,
   fresh_size int default 100,
@@ -56,6 +62,8 @@ returns table (
   source text            -- 'near' | 'fresh'
 )
 language sql stable
+security invoker
+set search_path = public, extensions
 as $$
   with near_hits as (
     select h.profile_id, h.tags, h.valence, h.energy, 1 - h.dist as similarity
@@ -114,9 +122,11 @@ as $$
 $$;
 
 -- Everyone, per cluster, excluding the target. The route subtracts what it drew to get `hidden`.
-create or replace function galaxy_cluster_counts(target_profile_id uuid)
+create or replace function public.galaxy_cluster_counts(target_profile_id uuid)
 returns table (cluster text, people bigint)
 language sql stable
+security invoker
+set search_path = public, extensions
 as $$
   select coalesce(primary_cluster, 'unassigned') as cluster, count(*) as people
   from profiles

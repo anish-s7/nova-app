@@ -9,6 +9,7 @@ import { AppleIcon, GoogleIcon } from "@/components/auth/brand-icons";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { resetWorld } from "@/lib/api";
+import { safeNextPath } from "@/lib/safe-next";
 import { resetSession } from "@/lib/session";
 import { createClient } from "@/lib/supabase/browser";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
@@ -65,7 +66,7 @@ export function AuthForm({ mode, next, initialError }: { mode: Mode; next?: stri
   const copy = COPY[mode];
   const configured = isSupabaseConfigured();
   // New accounts go through onboarding; returning users go where they were headed.
-  const destination = mode === "signup" ? "/onboarding/music" : (next ?? "/galaxy");
+  const destination = mode === "signup" ? "/onboarding/music" : safeNextPath(next);
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");

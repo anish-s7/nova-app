@@ -127,7 +127,7 @@ Wander (`POST /api/wander`). Each candidate then goes through
 cards are upserted into `connection_cards` like any other card, so a pair
 that already has a card of either kind is never asked about again.
 
-### Galaxy window: `galaxy_pool`, `galaxy_cluster_counts` (SQL in `db/galaxy_window.sql`)
+### Galaxy window: `galaxy_pool`, `galaxy_cluster_counts` (SQL in `supabase/migrations/20260927010000_galaxy_window.sql`)
 The front page draws a **bounded window**, never everyone. `GET /api/galaxy?limit=`
 (`lib/matching/galaxyWindow.ts`) returns at most `limit` people (default 200) plus
 `hidden: { total, byCluster }`, which the UI draws as dust around each cluster.
@@ -158,7 +158,7 @@ the slider breaks ties) and the profile takes the cluster with the highest total
 picks. No LLM, no embeddings. It is recomputed after every pick and lazily for the viewer on
 galaxy load; profiles with no picks stay null. Someone whose picks straddle two "whys" can
 move between clusters as they add songs, and the layout follows.
-`db/galaxy_window.sql` is untested against a live database, like the rest of the schema.
+`supabase/migrations/20260927010000_galaxy_window.sql` is applied to the live project and verified (2026-09-26): `wander_picks`, `galaxy_pool` and `galaxy_cluster_counts` return correct rows for the seeded personas.
 
 ## Auth model
 Real Supabase Auth — RLS should mirror the standard pattern: profiles are
