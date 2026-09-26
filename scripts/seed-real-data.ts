@@ -14,6 +14,7 @@ import { resolveSong } from "../lib/musicbrainz/client";
 import { generateSongContext } from "../lib/gemini/generateSongContext";
 import { EMOTION_WEIGHT, clampEmotionValue } from "../lib/emotion";
 import { parseVector } from "../lib/supabase/vector";
+import { refreshPrimaryCluster } from "../lib/matching/refreshPrimaryCluster";
 
 type Cluster = "quiet_company" | "armor_up" | "carrying_loss" | "somewhere_else" | "old_selves";
 
@@ -84,6 +85,8 @@ const PERSONAS: Persona[] = [
       { title: "Stronger", artist: "Kanye West", cluster: "armor_up" },
       { title: "Eye of the Tiger", artist: "Survivor", cluster: "armor_up" },
       { title: "Run the World (Girls)", artist: "Beyoncé", cluster: "armor_up" },
+      // Same song as Sam, opposite feeling: gives wander_picks a real contrast pair.
+      { title: "Landslide", artist: "Fleetwood Mac", cluster: "armor_up" },
     ],
   },
   {
@@ -135,6 +138,28 @@ async function generateSongContextWithBackoff(title: string, artist: string) {
     }
     throw err;
   }
+}
+
+/**
+ * Loose title identity for re-run checks. MusicBrainz canonicalizes titles differently from how
+ * they're typed here ("Gymnopedie" vs "Gymnopédie", "HUMBLE" vs "HUMBLE.", "Tadow (edit)" vs
+ * "Tadow") and can return a different recording id on a later run, so neither the mbid nor an
+ * exact name match reliably finds a pick this script already made.
+ */
+function looseTitle(title: string) {
+  return title
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/\(.*?\)/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+async function existingPickTitles(supabase: ReturnType<typeof createServerClient>, profileId: string) {
+  const { data, error } = await supabase.from("song_picks").select("songs(title)").eq("profile_id", profileId);
+  if (error) throw new Error(`Failed to load existing picks: ${error.message}`);
+  const rows = (data ?? []) as unknown as { songs: { title: string } | null }[];
+  return new Set(rows.flatMap((r) => (r.songs ? [looseTitle(r.songs.title)] : [])));
 }
 
 function fallbackKey(title: string, artist: string) {
@@ -243,8 +268,18 @@ async function main() {
     console.log(`\n${persona.displayName} (${persona.email})`);
     const profileId = await ensureProfile(supabase, persona.email, persona.displayName);
 
+    // song_picks has no (profile_id, song_id) unique constraint, so re-runs must check first —
+    // and before resolving the song, so a re-run never calls MusicBrainz/Gemini or adds catalog rows.
+    const alreadyPicked = await existingPickTitles(supabase, profileId);
+
     for (const song of persona.songs) {
+      if (alreadyPicked.has(looseTitle(song.title))) {
+        console.log(`  pick exists: "${song.title}"`);
+        continue;
+      }
+
       const { id: songId, embedding: songEmbedding } = await ensureSong(supabase, song.title, song.artist, songCache);
+
       const profile = CLUSTER_PROFILE[song.cluster];
       const valence = clampEmotionValue(profile.valence);
       const energy = clampEmotionValue(profile.energy);
@@ -261,12 +296,13 @@ async function main() {
       });
 
       if (error) {
-        // Duplicate picks (re-running the script) aren't a hard failure.
-        console.warn(`  pick insert warning for "${song.title}": ${error.message}`);
-      } else {
-        console.log(`  pick: "${song.title}" by ${song.artist} [${profile.tags.join(", ")}]`);
+        throw new Error(`Failed to insert pick "${song.title}" for ${persona.displayName}: ${error.message}`);
       }
+      console.log(`  pick: "${song.title}" by ${song.artist} [${profile.tags.join(", ")}]`);
     }
+
+    const cluster = await refreshPrimaryCluster(supabase, profileId);
+    console.log(`  primary_cluster: ${cluster ?? "(none)"}`);
   }
 
   console.log("\nDone.");
