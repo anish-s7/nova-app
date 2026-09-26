@@ -1,5 +1,6 @@
 import { createServerClient } from "../supabase/server";
 import { evaluateAndGenerateCard, type PickForEvaluation } from "../gemini/evaluateAndGenerateCard";
+import { alignCardEvidence } from "./alignCardEvidence";
 import type { ConnectionCardJson } from "../supabase/types";
 
 export interface ConfirmedMatch {
@@ -102,17 +103,24 @@ export async function findMatches(profileId: string, limit = 10): Promise<Confir
     const evaluation = await evaluateAndGenerateCard(targetPick, candidatePick);
     if (evaluation.status !== "match") continue;
 
+    // evaluateAndGenerateCard always writes evidence.user_a for whichever
+    // pick was passed first (the target/requester here), not whichever id
+    // is smaller. Align it to the row's user_a/user_b ordering before it's
+    // stored or returned, so evidence.user_a always means "the row's
+    // user_a" consistently — see lib/matching/alignCardEvidence.ts.
     const [userA, userB] = orderedPair(profileId, candidate.profile_id);
+    const alignedCard = alignCardEvidence(evaluation.card, profileId, candidate.profile_id);
+
     await supabase.from("connection_cards").upsert({
       user_a: userA,
       user_b: userB,
-      card_json: evaluation.card,
+      card_json: alignedCard,
     });
 
     results.push({
       profileId: candidate.profile_id,
       displayName: candidate.display_name,
-      card: evaluation.card,
+      card: alignedCard,
     });
   }
 

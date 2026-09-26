@@ -3,6 +3,7 @@ import { createServerClient } from "@/lib/supabase/server";
 import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
 import { evaluateAndGenerateCard, type PickForEvaluation } from "@/lib/gemini/evaluateAndGenerateCard";
 import { cosineSimilarity } from "@/lib/matching/cosineSimilarity";
+import { alignCardEvidence } from "@/lib/matching/alignCardEvidence";
 
 // matchId is the other user's profile id; the current user comes from the
 // real session.
@@ -119,14 +120,17 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ ma
     return NextResponse.json({ status: "insufficient_evidence", card: null });
   }
 
+  // Align evidence.user_a/user_b to the row's ordering (smaller id first),
+  // not whichever pick was passed first — see lib/matching/alignCardEvidence.ts.
+  const alignedCard = alignCardEvidence(evaluation.card, currentProfileId, otherProfileId);
   const [userA, userB] = orderedPair(currentProfileId, otherProfileId);
   const { error: insertError } = await supabase
     .from("connection_cards")
-    .upsert({ user_a: userA, user_b: userB, card_json: evaluation.card });
+    .upsert({ user_a: userA, user_b: userB, card_json: alignedCard });
 
   if (insertError) {
-    return NextResponse.json({ status: "match", card: evaluation.card, warning: insertError.message }, { status: 207 });
+    return NextResponse.json({ status: "match", card: alignedCard, warning: insertError.message }, { status: 207 });
   }
 
-  return NextResponse.json({ status: "match", card: evaluation.card, cached: false });
+  return NextResponse.json({ status: "match", card: alignedCard, cached: false });
 }

@@ -21,7 +21,8 @@ someone specifically asks for a CLAUDE.md update.
 |---|---|
 | Framework | Next.js (App Router), one repo for frontend + backend |
 | Styling | Tailwind CSS |
-| Galaxy visualization | react-force-graph |
+| Galaxy visualization | react-three-fiber (three.js) + d3-force-3d layout, SVG fallback |
+| UI components / motion | shadcn/ui (Base UI), lucide-react, anime.js |
 | Backend | Next.js Route Handlers (`app/api/`) |
 | Database | Supabase (Postgres) + pgvector |
 | Auth | Supabase Auth (real sessions — see "Auth" below), incl. optional Spotify OAuth |
@@ -34,6 +35,9 @@ someone specifically asks for a CLAUDE.md update.
 ## Directory map
 ```
 app/api/           Route handlers — the only thing frontend calls
+app/(tabs)/, app/onboarding/  Frontend screens (galaxy, connections, messages, profile, onboarding flow)
+components/        UI components; components/galaxy/ holds the 3D scene + SVG fallback
+lib/api.ts         The frontend's single data-access seam (still mock-backed — see MERGE_CHECKLIST.md)
 lib/supabase/       Server-side Supabase clients (service-role + session-based) + typed row shapes
 lib/musicbrainz/     Song identity resolution (title/artist -> canonical mbid)
 lib/gemini/         Song mood fallback, embeddings, evidence-check + card generation
