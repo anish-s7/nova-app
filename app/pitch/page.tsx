@@ -10,7 +10,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { getCluster } from "@/lib/clusters";
 import type { GalaxyNode, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { CONNECTED, DESTINATION, DESTINATIONS, GATEWAY, GATEWAY_EVIDENCE, HANDSHAKE, ME, MEMBERS, NEARBY } from "./script";
+import { CONNECTED, DESTINATION, DESTINATIONS, GATEWAY, GATEWAY_EVIDENCE, HANDSHAKE, HOME_EDGES, ME, MEMBERS, NEARBY } from "./script";
 
 /**
  * The pitch in one visual sentence: a faint stranger introduces you to an unfamiliar musical
@@ -168,7 +168,7 @@ function Pitch({ onReplay }: { onReplay: () => void }) {
     <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
       <GalaxyCanvas
         nodes={nodes}
-        edges={[]}
+        edges={HOME_EDGES}
         arrangement="home"
         destinations={DESTINATIONS}
         bridges={bridges}

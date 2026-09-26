@@ -45,7 +45,7 @@ type Props = Omit<GalaxyViewProps, "layout" | "extra"> & {
 export function GalaxyCanvas({ nodes, edges, arrivals = [], className, songs = [], focusSongIds = null, connections = null, arrangement = "whys", ...rest }: Props) {
   const { destinations } = rest;
   const layout = useMemo(
-    () => (arrangement === "home" ? computeHomeLayout(nodes, destinations) : computeLayout(nodes, edges)),
+    () => (arrangement === "home" ? computeHomeLayout(nodes, edges, destinations) : computeLayout(nodes, edges)),
     [arrangement, nodes, edges, destinations],
   );
   const extra = useMemo(() => arrivals.map((a) => placeArrival(layout, a.node, a.edges)), [arrivals, layout]);

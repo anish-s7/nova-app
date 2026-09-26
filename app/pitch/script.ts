@@ -1,6 +1,6 @@
 import type { GalaxyDestination } from "@/components/galaxy/types";
 import type { ClusterId } from "@/lib/clusters";
-import type { GalaxyNode, Song } from "@/lib/types";
+import type { GalaxyEdge, GalaxyNode, Song } from "@/lib/types";
 
 /**
  * Everything /pitch shows, scripted. Fictional people, real song titles as plain metadata.
@@ -36,6 +36,23 @@ export const NEARBY: (GalaxyNode & { nearness: string })[] = [
   { ...person("ines", "Ines", "carrying_loss", { relationship: "nearby" }), nearness: "Further from your orbit" },
   { ...person("dev", "Dev", "old_selves", { relationship: "nearby" }), nearness: "Some familiar ground" },
 ];
+
+/**
+ * Who's connected to whom, not just to you — the same shared-taste edges the real galaxy draws,
+ * so your home galaxy reads as a small constellation instead of spokes on a wheel.
+ */
+export const HOME_EDGES: GalaxyEdge[] = (
+  [
+    ["maya", "theo", 0.72],
+    ["maya", "kofi-n", 0.68],
+    ["theo", "ines", 0.74],
+    ["amara", "dev", 0.7],
+    ["amara", "n-rui", 0.65],
+    ["n-rui", "kofi-n", 0.66],
+    ["lena", "ines", 0.71],
+    ["lena", "dev", 0.63],
+  ] as const
+).map(([source, target, similarity]) => ({ source, target, similarity, sharedMotivation: "", sharedSongs: 0, sharedArtists: 0 }));
 
 export type PitchDestination = GalaxyDestination & {
   familiarity: string;

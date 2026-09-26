@@ -119,9 +119,9 @@ export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[]): Layout 
   return layout;
 }
 
-const INNER_ORBIT = 5;
-const OUTER_ORBIT = 11;
-const NEARBY_RING = 15;
+const INNER_ORBIT = 4.5;
+const OUTER_ORBIT = 9;
+const NEARBY_RING = 13;
 const DESTINATION_RADIUS = 6;
 
 /** A star's fixed bearing around you. Per id, so moving to a closer orbit never swings anyone around. */
@@ -141,18 +141,22 @@ const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /**
  * The home galaxy: you at the center, connected people on orbits around you, suggestions faint
- * outside them, and community galaxies far off. Deterministic and cheap; no simulation.
+ * outside them, and community galaxies far off. Orbit radius is fixed by relationship (so "closer
+ * to you" always means what it says), but a light force pass lets people who are connected to each
+ * other drift together within their ring — the same constellation look computeLayout gives the
+ * real galaxy, instead of everyone spaced evenly like spokes on a wheel.
  */
-export function computeHomeLayout(nodes: GalaxyNode[], destinations: { id: string; distance: number }[] = []): Layout {
+export function computeHomeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[] = [], destinations: { id: string; distance: number }[] = []): Layout {
   const dests = new Map<string, DestinationPoint>();
   destinations.forEach((d, i) => {
     // Evenly round you, starting overhead; the canvas is a phone, so the ring is taller than wide.
     const a = Math.PI / 2 + (i / Math.max(1, destinations.length)) * Math.PI * 2 + 0.35;
-    const r = 42 + clamp01(d.distance) * 18;
+    const r = 70 + clamp01(d.distance) * 30;
     dests.set(d.id, { id: d.id, x: Math.cos(a) * r * 0.7, y: Math.sin(a) * r, z: Math.sin(a * 3) * 6, radius: DESTINATION_RADIUS });
   });
 
   const points = new Map<string, LayoutPoint>();
+  const homeNodes: (GalaxyNode & { anchor: { x: number; y: number; z: number } })[] = [];
   for (const n of nodes) {
     if (n.isMe) {
       points.set(n.userId, { id: n.userId, cluster: n.cluster, x: 0, y: 0, z: 0 });
@@ -164,15 +168,48 @@ export function computeHomeLayout(nodes: GalaxyNode[], destinations: { id: strin
       const r = 1.2 + Math.sqrt(rand()) * (c.radius - 1.5);
       points.set(n.userId, { id: n.userId, cluster: n.cluster, x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r, z: c.z + (rand() - 0.5) * 3 });
     } else if (n.relationship === "nearby") {
-      const a = bearing(n.userId);
-      const r = NEARBY_RING + (hash(`${n.userId}~r`) % 100) / 25;
-      points.set(n.userId, { id: n.userId, cluster: n.cluster, x: Math.cos(a) * r, y: Math.sin(a) * r, z: Math.sin(a * 3) * 3 });
+      homeNodes.push({ ...n, anchor: { x: Math.cos(bearing(n.userId)) * NEARBY_RING, y: Math.sin(bearing(n.userId)) * NEARBY_RING, z: 0 } });
     } else {
       // Connected, and arriving stars with nowhere else to be, sit in orbit.
-      points.set(n.userId, homeOrbitPoint(n));
+      const p = homeOrbitPoint(n);
+      homeNodes.push({ ...n, anchor: p });
     }
   }
-  return { points, radius: NEARBY_RING + 4, destinations: dests };
+
+  if (homeNodes.length) {
+    const key = homeNodes.map((n) => n.userId).join("|");
+    const rand = seeded(hash(key));
+    const simNodes: N[] = homeNodes.map((n) => ({
+      id: n.userId,
+      cluster: n.cluster,
+      ax: n.anchor.x,
+      ay: n.anchor.y,
+      az: n.anchor.z,
+      x: n.anchor.x + (rand() - 0.5) * 2,
+      y: n.anchor.y + (rand() - 0.5) * 2,
+      z: n.anchor.z,
+    }));
+    const ids = new Set(simNodes.map((n) => n.id));
+    const links: L[] = edges.filter((e) => ids.has(e.source) && ids.has(e.target) && e.similarity > 0.3);
+    forceSimulation<N>(simNodes, 3)
+      .force(
+        "link",
+        forceLink<N, L>(links)
+          .id((d) => d.id)
+          .distance((l) => 1.5 + (1 - l.similarity) * 6)
+          .strength((l) => 0.15 + l.similarity * l.similarity * 0.5),
+      )
+      .force("charge", forceManyBody<N>().strength(-6).distanceMax(9))
+      // Strong pull to the anchor keeps "closer to you" meaningful even once friends cluster together.
+      .force("x", forceX<N>((d) => d.ax).strength(0.22))
+      .force("y", forceY<N>((d) => d.ay).strength(0.22))
+      .force("z", forceZ<N>((d) => d.az).strength(0.35))
+      .stop()
+      .tick(200);
+    for (const n of simNodes) points.set(n.id, { id: n.id, cluster: n.cluster, x: n.x!, y: n.y!, z: n.z! });
+  }
+
+  return { points, radius: NEARBY_RING + 3, destinations: dests };
 }
 
 /** New arrivals are placed next to their most similar neighbor without re-running the layout. */

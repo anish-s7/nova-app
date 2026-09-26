@@ -130,7 +130,7 @@ const bridgeTo = new THREE.Color();
 
 /** Home galaxy: closer orbits burn brighter; suggestions are small. */
 function starSize(n: GalaxyNode) {
-  if (n.relationship === "nearby") return 1.5;
+  if (n.relationship === "nearby") return 1.9;
   if (n.relationship === "arriving") return 2.6;
   if (n.relationship === "connected") return 2.1 + 0.6 * (n.orbit ?? 0);
   return 2.1;
@@ -349,7 +349,7 @@ function Scene({
     }
     if (n.isMe) return 1;
     // Suggestions stay faint until you look at one; community members sit a step back from whoever you're meeting.
-    if (n.relationship === "nearby") return selectedId === n.userId ? 1 : 0.4;
+    if (n.relationship === "nearby") return selectedId === n.userId ? 1 : 0.65;
     if (n.destinationId && !n.relationship) return selectedId && selectedId !== n.userId ? 0.45 : 0.7;
     // A selected song lights the people who have it; everyone else steps back.
     if (mode === "songs") return focusIds?.has(n.userId) ? 1 : 0;
@@ -674,6 +674,49 @@ function Scene({
       }),
     [destLabels],
   );
+  // Base opacities the destination visuals fade up from as you pull back — near-invisible at home,
+  // like a photo of a galaxy where the neighbors are a smudge until you actually look for them.
+  const DEST_GLOW_OPACITY = 0.3;
+  const DEST_CORE_OPACITY = 0.35;
+  const DEST_DUST_OPACITY = 0.9;
+
+  // A photo of a universe has other galaxies scattered everywhere, small and soft, never fewer than
+  // the sky needs to look inhabited — texture, not something you'd ever tap. Fixed once; doesn't fade.
+  const deepField = useMemo(() => {
+    let seed = 0x5eed;
+    const rand = () => {
+      seed = (seed + 0x6d2b79f5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+    const n = 160;
+    const pos = new Float32Array(n * 3);
+    const col = new Float32Array(n * 3);
+    const c = new THREE.Color();
+    // A handful of muted galaxy hues: warm ellipticals, cool spirals, pale in between.
+    const hues = [0.11, 0.58, 0.62, 0.75, 0.05];
+    for (let i = 0; i < n; i++) {
+      const u = rand() * 2 - 1;
+      const th = rand() * Math.PI * 2;
+      const rad = 90 + rand() * 140;
+      const s2 = Math.sqrt(1 - u * u);
+      pos.set([Math.cos(th) * s2 * rad, u * rad, Math.sin(th) * s2 * rad], i * 3);
+      const h = hues[i % hues.length] + (rand() - 0.5) * 0.03;
+      c.setHSL(h, 0.35 + rand() * 0.2, 0.55 + rand() * 0.2);
+      col.set([c.r, c.g, c.b], i * 3);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    return g;
+  }, []);
+  const deepFieldMat = useMemo(
+    () => new THREE.PointsMaterial({ size: 2.4, map: nebulaMap, sizeAttenuation: false, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.4 }),
+    [nebulaMap],
+  );
+  useEffect(() => () => deepField.dispose(), [deepField]);
+  useEffect(() => () => deepFieldMat.dispose(), [deepFieldMat]);
 
   // Bridges: a lasting line from someone at home to the community you found them in. New ones fade in.
   const seenBridges = useRef(new Set<string>());
@@ -862,8 +905,9 @@ function Scene({
     },
     pullBackToOverview: async (duration = 2800) => {
       nodeMat.uniforms.uMe.value = 1;
-      // With community galaxies around, the overview is the whole universe, not just home.
-      const view = universe ?? { x: hub.x, y: hub.y, z: hub.z, dist: overviewDist };
+      // With community galaxies around, the overview is the whole universe, not just home. Lift the
+      // pivot so the bottom panel doesn't cover one of them.
+      const view = universe ? { ...universe, lift: 0.18 } : { x: hub.x, y: hub.y, z: hub.z, dist: overviewDist, lift: 0 };
       await Promise.all([
         moveCamera({ ...view, yaw: 0, pitch: 0 }, duration),
         fadeUniform(nodeMat.uniforms.uOthers, 1, duration * 0.85, "others"),
@@ -1165,6 +1209,12 @@ function Scene({
     // Community names fade in as you pull back past home, and out as you arrive in one.
     const far = clamp((c.dist - overviewDist * 1.2) / (overviewDist * 0.8), 0, 1);
     for (const sp of destLabels) sp.material.opacity = far;
+    for (const g of destGlows) {
+      g.glow.material.opacity = DEST_GLOW_OPACITY * far;
+      g.core.material.opacity = DEST_CORE_OPACITY * far;
+    }
+    // A trace stays visible even at home, so the communities read as "there", not absent.
+    destDustMat.opacity = DEST_DUST_OPACITY * (0.08 + far * 0.92);
     bondMat.uniforms.uTime.value = time;
     const others = nodeMat.uniforms.uOthers.value;
     for (const { id, sprite } of nebulae) {
@@ -1198,6 +1248,7 @@ function Scene({
           <primitive object={g.core} />
         </group>
       ))}
+      {destPoints.length ? <points geometry={deepField} material={deepFieldMat} /> : null}
       <points geometry={destDust} material={destDustMat} />
       {destLabels.map((sp) => (
         <primitive key={sp.uuid} object={sp} />
