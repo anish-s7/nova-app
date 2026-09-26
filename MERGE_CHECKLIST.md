@@ -92,6 +92,11 @@ Mock-backed today (`lib/galaxy-sample.ts` over the mock world). Real pieces: `GE
 - Map `GalaxyWindow` to `GalaxyResponse`: `topMotivations: []` (NOT IN CONTRACT), `isMe` from `meId`, add `far`, and put `me` first in `nodes`. `hidden` and `sampled` pass through as-is.
 - Map `GalaxyMoreWindow` to `GalaxyMore.arrivals`: one `{ node, edges }` per node, edges touching that node.
 - Wire `?limit` only for demos; the real default is 200.
+- **Scaffolded:** `lib/galaxy-adapter.ts` does the mapping above (pure functions), and `getGalaxy`/`getGalaxyMore` in
+  `lib/api.ts` switch to it when `NEXT_PUBLIC_GALAXY_SOURCE=http` (default: mock). Remaining: a real auth session,
+  applying `supabase/migrations/20260927010000_galaxy_window.sql` (adds `profiles.primary_cluster`, `wander_picks`,
+  `galaxy_pool`, `galaxy_cluster_counts`; `db/galaxy_window.sql` is now just the reference copy), then `getUser`/edge
+  enrichment (`sharedSongs`, `topMotivations` stay empty until #4).
 
 ## Things that can't be done inside `lib/api.ts` (need a decision)
 
@@ -117,3 +122,14 @@ Mock-backed today (`lib/galaxy-sample.ts` over the mock world). Real pieces: `GE
 - **Step 1 unlocks immediately for** profile reads/writes and text messages, *once* #12
   (auth) exists. Picks, match list, and cards are additionally blocked on #3 (the
   tags/valence/energy product decision) until that's resolved.
+
+## The `/sim` demo does not matter for merging
+
+`app/sim/` + `lib/sim/` are self-contained: nothing outside them imports from them, and they touch no Supabase,
+auth, or `lib/api.ts`. They only *read* shared pieces (`components/galaxy/*`, `lib/clusters`, `lib/tags`,
+`lib/emotion`, `lib/music-context`, `lib/types`). So anyone (or any agent, on any machine) wiring the frontend to the
+backend can ignore `/sim` entirely, and can leave it out of reviews. Two rules keep it that way:
+
+- Don't add imports *from* `lib/sim` or `app/sim` into real code paths.
+- If you change a shared type or galaxy component prop and `/sim` stops compiling, fix it with the smallest edit
+  (or delete `app/sim` + `lib/sim`); don't redesign around it. It is safe to remove.

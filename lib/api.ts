@@ -18,6 +18,7 @@ import { CLUSTER_IDS, getCluster } from "./clusters";
 import { infer, primaryCluster } from "./inference";
 import { mockDb, resetMockDb } from "./mock-db";
 import { expandOrder, sampleGalaxy } from "./galaxy-sample";
+import { galaxyFromWindow, galaxyMoreFromWindow, type GalaxyMoreWindow, type GalaxyWindow } from "./galaxy-adapter";
 import { buildSongLayer, type SongLayer } from "./song-layer";
 import { buildClusterDetail, type ClusterDetail } from "./cluster-songs";
 import { listeningMoment } from "./texture";
@@ -287,7 +288,24 @@ function mockWindow(limit?: number) {
   return { me, everyone, candidates, sample };
 }
 
+/**
+ * Galaxy swap point. Set NEXT_PUBLIC_GALAXY_SOURCE=http to read the real bounded window
+ * (GET /api/galaxy) instead of the mock world. Needs a Supabase session and the
+ * 20260927010000_galaxy_window migration. Default stays mock so the demo keeps working.
+ */
+const GALAXY_HTTP = process.env.NEXT_PUBLIC_GALAXY_SOURCE === "http";
+
+async function galaxyFetch<T>(path: string): Promise<T> {
+  const res = await fetch(path, { credentials: "same-origin" });
+  if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to see your galaxy." : "The galaxy didn't load.");
+  return res.json() as Promise<T>;
+}
+
 export async function getGalaxy(query: GalaxyQuery = {}): Promise<GalaxyResponse> {
+  if (GALAXY_HTTP) {
+    const qs = query.limit ? `?limit=${query.limit}` : "";
+    return galaxyFromWindow(await galaxyFetch<GalaxyWindow>(`/api/galaxy${qs}`));
+  }
   await delay(700);
   maybeFail("galaxy");
   // Bounded window: only the sampled people are drawn or edged. At today's size this keeps everyone.
@@ -319,6 +337,11 @@ export async function getGalaxy(query: GalaxyQuery = {}): Promise<GalaxyResponse
 
 /** "More here": the next people in one cluster, ready to fade in as arrivals. `have` is how many extra this cluster already shows. */
 export async function getGalaxyMore(cluster: string, have: number, step = 40, limit?: number): Promise<GalaxyMore> {
+  if (GALAXY_HTTP) {
+    const qs = new URLSearchParams({ cluster, have: String(have), ...(limit ? { limit: String(limit) } : {}) });
+    // Arrivals are never "me", so no meId is needed.
+    return galaxyMoreFromWindow(await galaxyFetch<GalaxyMoreWindow>(`/api/galaxy/more?${qs}`), "");
+  }
   await delay(350);
   maybeFail("galaxy");
   const { me, everyone, candidates, sample } = mockWindow(limit);
