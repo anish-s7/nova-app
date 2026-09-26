@@ -191,14 +191,13 @@ building user profiles. Practical rule for this codebase:
   Gemini, including a deliberate wander pair (Sam and Noor both picked
   "Landslide", opposite feelings). Every persona has a `primary_cluster`.
   Daniel also has a real account with no picks (shows as `unassigned`).
-- **Pending cleanup**: a MusicBrainz-throttled re-run of the seed created 3
-  duplicate picks and 3 duplicate catalog rows (song_picks
-  `d9a85944-96a0-44b1-82eb-2220829b1424`, `e453b0b1-2fcb-4a82-8a8f-39550b1b2433`,
-  `96a09780-518c-480b-9469-3446ededc9d0`; songs
-  `7280930f-676d-4bb7-b3fb-2afccb708346`, `886bd9a8-2e0f-4658-a165-358379c7264a`,
-  `7859b6a8-49b1-49ee-bd20-ead9ae2c56dc`). Delete them in the SQL Editor
-  (service role has no DELETE grant), then re-run the seed once to recompute
-  clusters. The seed script is now idempotent (loose title match per persona).
+- A MusicBrainz-throttled re-run of the seed once created 3 duplicate picks and
+  3 duplicate catalog rows; they were deleted in the SQL Editor on 2026-09-26
+  and clusters recomputed. The seed script is now idempotent (loose title match
+  per persona, checked before any MusicBrainz/Gemini call).
+- Verification left behind real demo data: cached match cards for Maya's
+  matches, a contrast card for Sam/Noor, and one test message from Maya to Theo
+  ("verification: what song makes a quiet evening feel less lonely?").
 - **Pending dashboard step**: Authentication → URL Configuration → add
   `http://localhost:3000/auth/callback` to Redirect URLs (Vercel URL later).
 
@@ -240,9 +239,8 @@ deliberate minority share (e.g. ~0.3–0.4), then recompute every
 - **Phase A — done** (`f39b861`): merge, v2 contract restored, open redirect
   fixed, `refreshPrimaryCluster` on service role, pnpm removed, galaxy
   migration hardened.
-- **Phase B — verified** except two manual steps: the duplicate cleanup SQL
-  (above) and the dashboard redirect URL. After the cleanup, re-run the seed once
-  and drop the "untested" notes in `db/contract.md`.
+- **Phase B — done and verified**, except the dashboard redirect URL (manual,
+  not checkable from code).
 - **Phase C — next**: onboarding "feel" step at `/onboarding/feel` between
   song selection and saving: per song, 1–3 tags (`components/tag-picker.tsx`,
   reusing `ContextChip`) and a circular valence/energy control
