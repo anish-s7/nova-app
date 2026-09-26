@@ -21,7 +21,7 @@ export function ThemeTag({
     <span
       style={{ "--tone": c.color } as CSSProperties}
       className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded-full border border-[color-mix(in_oklch,var(--tone)_35%,transparent)] bg-[color-mix(in_oklch,var(--tone)_12%,transparent)] font-medium text-[var(--tone)]",
+        "inline-flex max-w-full items-center gap-1.5 rounded-md border border-[color-mix(in_oklch,var(--tone)_35%,transparent)] font-medium text-foreground",
         size === "sm" ? "px-2 py-0.5 text-xs" : "px-3 py-1 text-sm",
         className,
       )}

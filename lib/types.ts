@@ -90,12 +90,22 @@ export type InferredMotivation = {
   note?: string;
 };
 
+/** A specific, human listening moment: what someone would say out loud, plus the song behind it. */
+export type ListeningMoment = {
+  text: string;
+  song: Song;
+  playlist?: string;
+  when: string;
+};
+
 export type User = {
   id: string;
   name: string;
   avatarUrl?: string;
   songs: Song[];
   motivations: InferredMotivation[];
+  /** NOT IN CONTRACT: mocked in lib/texture.ts. */
+  listening?: ListeningMoment;
 };
 
 export type AnalysisResult = {

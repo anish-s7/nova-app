@@ -15,6 +15,8 @@ export type SessionState = {
   analysis?: AnalysisResult;
   motivations: InferredMotivation[];
   revealSeen: boolean;
+  /** Optional answer to "what do you reach for when you can't decide what to play?" */
+  reach?: string;
   /** Bumped whenever anything that affects the galaxy changes, used in SWR keys. */
   version: number;
 };

@@ -14,11 +14,11 @@ const pron = (s: Subject) => (s.isMe ? "you" : "they");
 const poss = (s: Subject) => (s.isMe ? "your" : `${s.name}'s`);
 
 const HEADLINES: Record<ClusterId, string> = {
-  quiet_company: "You don't use music to fill silence. You use it to keep yourself company in it.",
-  armor_up: "Music isn't background for you. It's how you get ready to face things.",
-  carrying_loss: "You use music to stay close to people and places you can't get back to.",
-  somewhere_else: "When things get heavy, music is your way out, even if it's only for four minutes.",
-  old_selves: "Music is how you keep in touch with the people you used to be.",
+  quiet_company: "You put music on so you're not alone with the quiet.",
+  armor_up: "Music is how you get ready for the hard parts of the day.",
+  carrying_loss: "Your songs keep you close to people and places you miss.",
+  somewhere_else: "When things get heavy, music is how you step out for a few minutes.",
+  old_selves: "Certain songs put you right back in an earlier year.",
 };
 
 function songScore(song: Song, signal: ListeningSignal | undefined, cluster: ClusterId) {

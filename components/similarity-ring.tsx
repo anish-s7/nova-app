@@ -21,7 +21,7 @@ export function SimilarityRing({ value, cluster, size, children }: { value: numb
           strokeLinecap="round"
           pathLength={1}
           strokeDasharray={`${value} 1`}
-          className="drop-shadow-[0_0_4px_var(--tone)]"
+         
         />
       </svg>
       {children}

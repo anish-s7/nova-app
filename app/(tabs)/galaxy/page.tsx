@@ -3,8 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { Hand, LocateFixed, Sparkles, X } from "lucide-react";
-import { animate, stagger } from "animejs";
+import { LocateFixed, X } from "lucide-react";
 import { BottomSheet } from "@/components/bottom-sheet";
 import { GalaxyCanvas, GalaxySkeleton } from "@/components/galaxy/galaxy-canvas";
 import type { GalaxyApi } from "@/components/galaxy/types";
@@ -16,7 +15,6 @@ import { ThemeTag } from "@/components/theme-tag";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
-import { useAnime } from "@/hooks/use-anime";
 import { useGalaxyRealtime } from "@/hooks/use-galaxy-realtime";
 import { getGalaxy, getUser, ME_ID } from "@/lib/api";
 import { getCluster } from "@/lib/clusters";
@@ -53,15 +51,11 @@ export default function GalaxyPage() {
     apiRef.current?.flyToCluster(id);
   };
 
-  const strip = useAnime<HTMLUListElement>(() => {
-    animate("li", { opacity: [0, 1], translateY: [10, 0], duration: 500, delay: stagger(50, { start: 400 }), ease: "outQuart" });
-  }, [closest.map((c) => c.node.userId).join()]);
-
   if (error) {
     return (
       <main className="starfield flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
         <p className="font-serif text-2xl italic">The galaxy didn&apos;t load.</p>
-        <Button className="h-11 rounded-full px-6" disabled={isValidating} onClick={() => mutate()}>
+        <Button className="h-11 px-6" disabled={isValidating} onClick={() => mutate()}>
           Try again
         </Button>
       </main>
@@ -88,55 +82,49 @@ export default function GalaxyPage() {
         <GalaxySkeleton label="Arranging everyone by why they listen…" />
       )}
 
-      <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3 p-4">
-        <div className="pointer-events-auto rounded-full bg-background/60 px-3 py-2 backdrop-blur-md">
+      <header className="relative z-10 border-b border-white/10 bg-background/90">
+        <div className="flex items-center justify-between gap-3 px-4 py-3">
           <Logo />
+          {data ? (
+            <p className="text-xs text-muted-foreground">
+              <span className="font-semibold tabular-nums text-foreground">{nodes.length - 1}</span> listeners
+            </p>
+          ) : null}
         </div>
-        {data ? (
-          <p className="rounded-full bg-background/60 px-3 py-2 text-xs text-muted-foreground backdrop-blur-md">
-            <span className="font-semibold tabular-nums text-foreground">{nodes.length - 1}</span> listeners
+        {data ? <ClusterFilter nodes={nodes} value={focusCluster} onChange={focus} className="pb-3" /> : null}
+        {focusCluster ? (
+          <p key={focusCluster} className="mx-4 mb-3 border-l-2 pl-3 text-pretty text-sm leading-snug text-foreground/80" style={{ borderColor: getCluster(focusCluster).color }}>
+            {getCluster(focusCluster).description}
           </p>
         ) : null}
-      </div>
-
-      {data ? <ClusterFilter nodes={nodes} value={focusCluster} onChange={focus} className="relative z-10 -mt-1" /> : null}
-      {focusCluster ? (
-        <p key={focusCluster} className="relative z-10 mx-4 mt-2 text-pretty font-serif text-sm italic leading-snug motion-safe:animate-rise-in" style={{ color: getCluster(focusCluster).color }}>
-          {getCluster(focusCluster).description}
-        </p>
-      ) : null}
+      </header>
 
       {arrival && !dismissedArrival ? (
-        <div role="status" className="relative z-10 mx-4 mt-2 flex items-center gap-2 rounded-full border border-white/10 bg-background/80 py-1 pl-1 pr-1 backdrop-blur-md motion-safe:animate-rise-in">
+        <div role="status" className="relative z-10 mx-4 mt-2 flex items-center gap-2 border border-white/10 bg-background/90 py-1 pl-1 pr-1">
           <UserAvatar name={arrival.name} cluster={arrival.cluster} size={32} />
           <button type="button" onClick={() => select(arrival.userId)} className="min-h-10 min-w-0 flex-1 truncate text-left text-sm">
             <span className="font-medium">{arrival.name}</span> <span className="text-muted-foreground">just joined, close to you</span>
           </button>
-          <button type="button" onClick={() => setDismissedArrival(true)} aria-label="Dismiss" className="inline-flex size-10 items-center justify-center rounded-full text-muted-foreground hover:bg-white/5">
+          <button type="button" onClick={() => setDismissedArrival(true)} aria-label="Dismiss" className="inline-flex size-10 items-center justify-center text-muted-foreground hover:bg-white/5">
             <X className="size-4" aria-hidden />
           </button>
         </div>
       ) : null}
 
       {hint.visible && data ? (
-        <div className="pointer-events-none absolute inset-x-0 top-1/2 z-10 flex justify-center motion-safe:animate-rise-in">
-          <p className="flex items-center gap-2 rounded-full border border-white/10 bg-background/75 px-4 py-2 text-xs text-muted-foreground backdrop-blur-md">
-            <Hand className="size-3.5 text-primary" aria-hidden />
-            Drag to explore · pinch to zoom · tap a star
-          </p>
-        </div>
+        <p className="pointer-events-none relative z-10 mx-4 mt-2 text-xs text-muted-foreground">Drag to explore, pinch to zoom, tap a person.</p>
       ) : null}
 
       <div className="pointer-events-none relative z-10 mt-auto flex items-end gap-2 p-4">
         {data ? (
-          <section aria-labelledby="closest-heading" className="pointer-events-auto min-w-0 flex-1 rounded-3xl border border-white/10 bg-background/70 px-3 pb-2 pt-2.5 backdrop-blur-md">
+          <section aria-labelledby="closest-heading" className="pointer-events-auto min-w-0 flex-1 border border-white/10 bg-background/90 px-3 pb-2 pt-2.5">
             <h2 id="closest-heading" className="px-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              {focusCluster ? `Closest in ${getCluster(focusCluster).short.toLowerCase()}` : "Closest to you"}
+              {focusCluster ? `Closest · ${getCluster(focusCluster).short}` : "Closest to you"}
             </h2>
             {closest.length === 0 ? (
               <p className="px-1 pb-1.5 pt-1 text-xs text-muted-foreground">Nobody here is close to you yet. Tap a star to meet them anyway.</p>
             ) : null}
-            <ul ref={strip} className="no-scrollbar -mx-1 mt-1 flex gap-1 overflow-x-auto px-1">
+            <ul className="no-scrollbar -mx-1 mt-1 flex gap-1 overflow-x-auto px-1">
               {closest.map(({ node, similarity }) => (
                 <li key={node.userId} className="shrink-0">
                   <button
@@ -144,7 +132,7 @@ export default function GalaxyPage() {
                     onClick={() => select(node.userId)}
                     aria-pressed={selectedId === node.userId}
                     aria-label={`${node.name}, ${Math.round(similarity * 100)}% same why`}
-                    className={cn("flex w-14 flex-col items-center gap-0.5 rounded-2xl py-1 transition-colors hover:bg-white/5", selectedId === node.userId && "bg-white/[0.07]")}
+                    className={cn("flex w-14 flex-col items-center gap-0.5 py-1 transition-colors hover:bg-white/5", selectedId === node.userId && "bg-white/[0.07]")}
                   >
                     <SimilarityRing value={similarity} cluster={node.cluster} size={34}>
                       <UserAvatar name={node.name} cluster={node.cluster} size={34} />
@@ -166,7 +154,7 @@ export default function GalaxyPage() {
             apiRef.current?.recenter();
           }}
           aria-label="Recenter on the whole galaxy"
-          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-background/70 backdrop-blur-md hover:bg-background"
+          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center border border-white/10 bg-background/90 hover:bg-background"
         >
           <LocateFixed className="size-5" aria-hidden />
         </button>
@@ -192,14 +180,7 @@ function StarPreview({ node }: { node: GalaxyNode }) {
             <ThemeTag cluster={node.cluster} size="sm" className="mt-1" />
           </div>
         </div>
-        <ul className="flex flex-wrap gap-2">
-          {node.topMotivations.map((m) => (
-            <li key={m} className="rounded-full border border-white/10 px-3 py-1 text-sm text-foreground/85">
-              {m}
-            </li>
-          ))}
-        </ul>
-        <Link href="/me" className={cn(buttonVariants({ variant: "secondary" }), "h-11 rounded-full")}>
+        <Link href="/me" className={cn(buttonVariants({ variant: "secondary" }), "h-11")}>
           Review your reasons
         </Link>
       </div>
@@ -207,6 +188,7 @@ function StarPreview({ node }: { node: GalaxyNode }) {
   }
 
   const edge = data?.edge;
+  const moment = data?.listening;
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
@@ -217,18 +199,34 @@ function StarPreview({ node }: { node: GalaxyNode }) {
         </div>
       </div>
 
-      <div>
-        <p className="font-serif text-lg italic text-muted-foreground">You listen for the same reason:</p>
-        {edge ? <ThemeTag label={edge.sharedMotivation} className="mt-2" /> : <Skeleton className="mt-2 h-8 w-48 rounded-full" />}
+      <div className="border-l-2 pl-3" style={{ borderColor: getCluster(node.cluster).color }}>
+        {edge && moment ? (
+          <>
+            <p className="text-xs text-muted-foreground">You both: {edge.sharedMotivation}</p>
+            <p className="mt-2 font-serif text-lg italic leading-snug">“{moment.text}”</p>
+            <p className="mt-1.5 text-sm text-foreground/80">
+              {moment.song.title} <span className="text-muted-foreground">· {moment.song.artist}</span>
+            </p>
+            <p className="mt-0.5 text-xs text-muted-foreground">
+              {moment.playlist ? `In “${moment.playlist}” · ` : ""}
+              {moment.when}
+            </p>
+          </>
+        ) : (
+          <>
+            <Skeleton className="h-4 w-56" />
+            <Skeleton className="mt-3 h-6 w-64" />
+            <Skeleton className="mt-2 h-4 w-40" />
+          </>
+        )}
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Link href={`/people/${node.userId}/card`} className={cn(buttonVariants(), "h-11 rounded-full")}>
-          <Sparkles className="size-4" aria-hidden />
-          What you share
+      <div className="flex items-center gap-4">
+        <Link href={`/messages/${node.userId}/swap`} className={cn(buttonVariants(), "h-11 flex-1")}>
+          Send a song
         </Link>
-        <Link href={`/people/${node.userId}`} className={cn(buttonVariants({ variant: "secondary" }), "h-11 rounded-full")}>
-          Profile
+        <Link href={`/people/${node.userId}/card`} className="text-sm text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
+          What you share
         </Link>
       </div>
     </div>

@@ -74,7 +74,7 @@ export function ReadingSequence() {
   if (error) {
     return (
       <main className="starfield flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-        <p className="font-serif text-2xl italic">We couldn&apos;t read your music just now.</p>
+        <p className="font-serif text-2xl italic">We couldn&apos;t get through your songs just now.</p>
         <p className="text-sm text-muted-foreground">Your songs are saved. Give it another try.</p>
         <Button className="mt-2 h-11 rounded-full px-6" disabled={isValidating} onClick={() => mutate()}>
           Try again
@@ -141,9 +141,9 @@ export function ReadingSequence() {
             {currentHighlight}
           </p>
         ) : converging ? (
-          <p key="converge" data-caption className="font-serif text-xl italic text-muted-foreground">I think I see it.</p>
+          <p key="converge" data-caption className="font-serif text-xl italic text-muted-foreground">Here&apos;s a first pass.</p>
         ) : (
-          <p className="text-sm text-muted-foreground">Reading your music…</p>
+          <p className="text-sm text-muted-foreground">Going through your songs…</p>
         )}
       </div>
     </main>

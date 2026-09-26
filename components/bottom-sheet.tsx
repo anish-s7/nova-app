@@ -43,12 +43,12 @@ export function BottomSheet({
         aria-label={label}
         tabIndex={-1}
         className={cn(
-          "absolute inset-x-0 bottom-0 rounded-t-3xl border-t border-white/10 bg-popover px-5 pb-6 pt-3 shadow-[0_-20px_60px_-10px_rgba(0,0,0,0.6)] outline-none transition-transform duration-300 ease-out",
+          "absolute inset-x-0 bottom-0 border-t border-white/10 bg-popover px-5 pb-6 pt-3 outline-none transition-transform duration-300 ease-out",
           open ? "translate-y-0" : "translate-y-full",
           className,
         )}
       >
-        <div className="mx-auto mb-4 h-1 w-10 rounded-full bg-white/20" aria-hidden />
+        <div className="mx-auto mb-4 h-1 w-10 bg-white/20" aria-hidden />
         {open ? children : null}
       </div>
     </div>

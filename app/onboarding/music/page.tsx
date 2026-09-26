@@ -45,7 +45,7 @@ export default function BringYourMusicPage() {
             <Check className="size-5" aria-hidden />
           </span>
           <h1 className="mt-4 text-2xl font-semibold tracking-tight">Imported {songs.length} songs</h1>
-          <p className="mt-2 text-pretty text-muted-foreground">Your recent listening, including when and how often you play things. That&apos;s what we read, not just the titles.</p>
+          <p className="mt-2 text-pretty text-muted-foreground">Your recent listening, including when and how often you play things. We look at when and how often you play things, not just the titles.</p>
 
           <ul className="no-scrollbar -mx-6 mt-8 flex gap-3 overflow-x-auto px-6 pb-2" aria-label="Imported songs">
             {songs.map((s, i) => (
@@ -83,7 +83,7 @@ export default function BringYourMusicPage() {
             </span>
             <span>
               <span className="block text-lg font-semibold">{importing ? "Connecting to Spotify…" : "Connect Spotify"}</span>
-              <span className="mt-1 block text-sm text-muted-foreground">We read your recent listening. Nothing gets posted.</span>
+              <span className="mt-1 block text-sm text-muted-foreground">We look at your recent listening. Nothing gets posted.</span>
             </span>
           </button>
 

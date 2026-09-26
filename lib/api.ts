@@ -17,6 +17,7 @@
 import { getCluster } from "./clusters";
 import { infer, primaryCluster } from "./inference";
 import { mockDb } from "./mock-db";
+import { listeningMoment } from "./texture";
 import { SONG_CATALOG, songById } from "./music-context";
 import {
   DEMO_BIAS,
@@ -292,6 +293,7 @@ export async function getUser(id: string): Promise<User & { cluster: string; edg
     songs: songs.map(songFromRow),
     motivations: u.motivations.filter((m) => m.isPublic),
     cluster: u.primary,
+    listening: listeningMoment(u.id, u.songs, u.primary),
     edge: edgeBetween(meParty(), partyFromWorld(u)),
   };
 }

@@ -31,12 +31,10 @@ const nodeVertex = /* glsl */ `
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     float birth = aBirth < 0.0 ? 1.0 : smoothstep(0.0, 1.8, uTime - aBirth);
-    float pulse = aIsMe * 0.14 * sin(uTime * 1.7);
-    float twinkle = (1.0 - aIsMe) * 0.1 * sin(uTime * 1.3 + aPhase);
     float vis = mix(uOthers, uMe, aIsMe) * birth;
     float dim = mix(0.14, 1.0, aDim);
     float hl = clamp(aHighlight, 0.0, 1.0);
-    float size = aSize * (1.0 + pulse + twinkle + hl * 0.4) * (0.3 + 0.7 * birth) * mix(0.7, 1.0, aDim);
+    float size = aSize * (1.0 + hl * 0.4) * (0.3 + 0.7 * birth) * mix(0.7, 1.0, aDim);
     gl_PointSize = max(size * uScale / -mv.z, 7.0 * vis) * uPixelRatio;
     gl_Position = projectionMatrix * mv;
     vColor = color;
@@ -53,7 +51,7 @@ const nodeFragment = /* glsl */ `
     float d = length(gl_PointCoord - 0.5) * 2.0;
     if (d > 1.0) discard;
     float core = smoothstep(0.26, 0.0, d);
-    float halo = pow(1.0 - d, 2.6) * 0.6;
+    float halo = pow(1.0 - d, 3.2) * 0.32;
     float ring = vRing * (1.0 - smoothstep(0.0, 0.04, abs(d - 0.86))) * 0.6;
     vec3 c = vColor * (halo + core * 0.9 + ring) + vec3(core * 0.55 + ring * 0.25);
     gl_FragColor = vec4(c * vAlpha, 1.0);
@@ -95,17 +93,15 @@ const bondVertex = /* glsl */ `
   }
 `;
 
-/** The bond between you and the selected star: a steady thread with light flowing toward them. */
+/** The bond between you and the selected star: a steady thread. */
 const bondFragment = /* glsl */ `
   uniform float uTime;
   uniform float uOpacity;
   varying vec3 vColor;
   varying float vT;
   void main() {
-    float p = fract(vT * 2.0 - uTime * 0.55);
-    float glow = smoothstep(0.0, 0.12, p) * smoothstep(0.32, 0.12, p);
     float ends = smoothstep(0.0, 0.08, vT) * smoothstep(1.0, 0.92, vT);
-    gl_FragColor = vec4(vColor * (0.35 + glow * 1.2) * ends * uOpacity, 1.0);
+    gl_FragColor = vec4(vColor * 0.55 * ends * uOpacity, 1.0);
     #include <colorspace_fragment>
   }
 `;
@@ -605,14 +601,6 @@ function Scene({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- register once
   }, []);
 
-  // Slow ambient drift and the pulse on my star; paused while the tab is hidden.
-  useEffect(() => {
-    const id = setInterval(() => {
-      if (!document.hidden) invalidate();
-    }, 1000 / 24);
-    return () => clearInterval(id);
-  }, [invalidate]);
-
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
@@ -791,21 +779,26 @@ function Scene({
     if (starGroup.current) {
       // The sky rides along with the pivot so it reads as infinitely far away.
       starGroup.current.position.set(c.x, c.y, c.z);
-      starGroup.current.rotation.z = time * 0.004;
     }
     bondMat.uniforms.uTime.value = time;
     const others = nodeMat.uniforms.uOthers.value;
     for (const { id, sprite } of nebulae) {
       const focus = !focusCluster ? 1 : id === focusCluster ? 1.5 : 0.25;
-      sprite.material.opacity = 0.2 * others * focus;
+      sprite.material.opacity = 0.07 * others * focus;
     }
-    // Cluster names read at overview distance and fade as you fly in among the stars.
-    const zoomFade = clamp((c.dist - 16) / 14, 0, 1) * clamp((others - 0.5) * 2, 0, 1);
+    // Cluster names appear for the selected cluster, or for the one you've zoomed into. Never all at once at overview distance.
+    const zoomIn = clamp((30 - c.dist) / 10, 0, 1) * clamp((others - 0.5) * 2, 0, 1);
+    let nearest: string | null = null;
+    let nearestD = Infinity;
+    for (const k of centers) {
+      const d = Math.hypot(k.x - c.x, k.y - c.y, k.z - c.z);
+      if (d < nearestD) [nearest, nearestD] = [k.id, d];
+    }
     layoutClusterLabels(
       centers.map((k) => ({
         el: clusterLabelRefs.current.get(k.id) ?? null,
         at: labelPos.set(k.x, k.y + k.spread + 2.4, k.z).project(camera).clone(),
-        opacity: zoomFade * (!focusCluster || focusCluster === k.id ? 1 : 0),
+        opacity: focusCluster ? (focusCluster === k.id ? 1 : 0) : k.id === nearest ? zoomIn : 0,
       })),
       size.width,
       size.height,
@@ -813,7 +806,7 @@ function Scene({
     const hov = hovered.current && hovered.current !== selectedId && hovered.current !== meId ? points.get(hovered.current) : undefined;
     placeLabel(hoverLabelRef.current, hov ? labelPos.set(hov.x, hov.y - 1.4, hov.z) : null, camera, size.width, size.height, hov ? (nameById.get(hov.id) ?? "") : undefined);
 
-    const meLabel = labelsOn.current && me ? labelPos.set(me.x, me.y - 1.6, me.z) : null;
+    const meLabel = labelsOn.current && me && (initialPhase === "dark" || c.dist < 30) ? labelPos.set(me.x, me.y - 1.6, me.z) : null;
     placeLabel(meLabelRef.current, meLabel, camera, size.width, size.height);
     const sel = selectedId && selectedId !== meId ? points.get(selectedId) : undefined;
     placeLabel(
@@ -825,6 +818,8 @@ function Scene({
       sel ? `${nameById.get(selectedId!) ?? ""}${simToMe.has(selectedId!) ? ` · ${Math.round(simToMe.get(selectedId!)! * 100)}% same why` : ""}` : undefined,
     );
 
+    // New arrivals fade in; nothing else moves on its own.
+    for (const born of births.current.values()) if (time - born < 2) active = true;
     if (active) invalidate();
   });
 
@@ -880,10 +875,10 @@ export default function GalaxyScene(props: GalaxyViewProps) {
               }}
               onClick={() => onFocusCluster?.(focusCluster === id ? null : id)}
               className={cn(
-                "invisible absolute left-0 top-0 whitespace-nowrap rounded-full px-2 py-1 font-serif text-[13px] italic opacity-0",
-                interactive && onFocusCluster && "pointer-events-auto hover:bg-white/5",
+                "invisible absolute left-0 top-0 whitespace-nowrap px-1 py-1 text-xs font-medium",
+                interactive && onFocusCluster && "pointer-events-auto",
               )}
-              style={{ color: c.color, textShadow: `0 0 12px ${c.color}66` }}
+              style={{ color: c.color }}
             >
               {c.label}
             </button>
@@ -895,7 +890,7 @@ export default function GalaxyScene(props: GalaxyViewProps) {
         <span
           ref={selectedLabelRef}
           aria-hidden
-          className="invisible absolute left-0 top-0 whitespace-nowrap rounded-full bg-background/70 px-2 py-0.5 text-xs font-semibold text-foreground opacity-0 backdrop-blur-sm"
+          className="invisible absolute left-0 top-0 whitespace-nowrap bg-background/80 px-2 py-0.5 text-xs font-medium text-foreground opacity-0"
         />
         <span ref={hoverLabelRef} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap text-xs font-medium text-foreground/80 opacity-0" />
       </div>
