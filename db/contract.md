@@ -36,7 +36,7 @@ PR so backend and DB never drift silently.
 | id | uuid, PK | |
 | song_id | uuid, FK -> songs.id | |
 | label | text | e.g. "company during loneliness" — Gemini output |
-| embedding | vector(N) | N = whatever dimension the chosen Gemini embedding model returns; confirm before creating the column |
+| embedding | vector(768) | Gemini embedding output is fixed at 768 dimensions |
 | created_at | timestamptz | |
 
 ### `connection_cards`
@@ -64,15 +64,16 @@ Unique constraint on `(user_a, user_b)` for the cache lookup.
 
 ### `match_profiles(target_profile_id uuid, match_count int default 10)`
 Returns `table (profile_id uuid, display_name text, similarity float)` —
-nearest-neighbor search over `motivations.embedding` (averaged or best-match
-per profile, DB teammate's call), excluding `target_profile_id` itself.
+nearest-neighbor search over `motivations.embedding`, using the best cosine
+similarity between any target/candidate motivation pair and excluding
+`target_profile_id` itself. Target motivations may come from any of the target
+user's songs; candidate motivations only come from public songs.
 Used by `lib/matching/findMatches.ts`.
 
 ## Open questions for @db-teammate
 - Precompute matches into a `connections` table, or always query pgvector
   live at read time in `/api/match`? Backend plan assumes **live query**
   (simpler, no extra table) unless matching gets too slow to demo.
-- Embedding dimension: pin down once we've chosen the Gemini embedding
-  model, then set `vector(N)` accordingly — don't leave it unset.
-- Index type for `motivations.embedding`: ivfflat is fine at hackathon scale
-  (small N); no need for hnsw.
+- Embedding dimension is fixed at 768. The embedding caller must request or
+  return exactly that many values.
+- `motivations.embedding` uses an HNSW cosine-similarity index.
