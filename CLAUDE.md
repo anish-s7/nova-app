@@ -9,13 +9,16 @@ as a side effect of an unrelated architecture or code change — update
 `db/contract.md` and the code instead, and leave this file alone unless
 someone specifically asks for a CLAUDE.md update.
 
-Last full update: 2026-09-26, after merging `galaxy-clusters` into `main` (`f39b861`).
+Last full update: 2026-09-26, after the onboarding feel step (`2fb87c0`) and Daniel's real-data
+wiring + galaxy hop (`6c36720`).
 
 ## Team split
 - **Anish** — backend (routes, Supabase glue, Gemini/MusicBrainz pipeline, matching) and, since
   2026-09-26, the database (schema, migrations, RLS, `db/contract.md`).
-- **James** — frontend (onboarding, auth UI / `login-signup`, screens).
-- **Daniel** — galaxy frontend (clusters, galaxy window, wander UI) and the `/sim` demo.
+- **James** — frontend (onboarding, auth UI / `login-signup`, email-confirmation handoff, Messages
+  and Profile screens).
+- **Daniel** — galaxy frontend (clusters, why-mix placement, galaxy window, hop, wander UI), the
+  real-data wiring of `lib/api.ts` (`lib/http-db.ts`, `lib/real-api.ts`), cover art, and the `/sim` demo.
 - **Bao** — floating backend/frontend (Gemini testing, early schema work).
 
 ## Tech stack
@@ -28,7 +31,8 @@ Last full update: 2026-09-26, after merging `galaxy-clusters` into `main` (`f39b
 | Backend | Next.js Route Handlers (`app/api/`) |
 | Database | Supabase (Postgres) + pgvector |
 | Auth | Supabase Auth (cookie sessions via `@supabase/ssr`), email/password live; Google/Apple scaffolded but disabled |
-| Messaging | Supabase `messages` table (Realtime publication enabled; client reads not wired yet) |
+| Messaging | Supabase `messages` table; the app polls `GET /api/messages` (Realtime publication is enabled but no client subscribes yet) |
+| Album art | Cover Art Archive → iTunes → Deezer (`lib/cover-art.ts`), looked up when a song enters the catalog |
 | LLM | Google Gemini API (`gemini-flash-lite-latest` for text, `gemini-embedding-001` at 768 dims for vectors) |
 | Song identity | MusicBrainz API (primary), Gemini (fallback only) — see below |
 | Music data (optional) | Spotify Web API — OAuth top-tracks import only, display purposes only |
@@ -38,31 +42,47 @@ Last full update: 2026-09-26, after merging `galaxy-clusters` into `main` (`f39b
 ## Directory map
 ```
 app/api/                     Route handlers — the only thing the frontend calls
-  picks/                     POST: resolve song (MusicBrainz → Gemini), insert song_pick, refresh cluster
+  picks/                     POST: resolve song (MusicBrainz → Gemini), cover art, insert song_pick, refresh cluster
   match/                     GET: pgvector candidates → AI evidence-check → confirmed matches with cards
+                             (cached pairs aren't re-sent to Gemini)
   cards/[matchId]/           GET cached card / POST generate one for a specific pair
-  profile/                   GET profile + picks (private picks only for the owner) / POST display name
-  messages/                  POST send (GET read route is planned, not built)
-  galaxy/, galaxy/more/      GET bounded galaxy window / page one cluster
+  profile/                   GET ?id=<uuid|me> profile + picks (private picks only for the owner) / POST display name
+  messages/                  GET ?with=<profileId> (session client, RLS-scoped) / POST send
+  galaxy/, galaxy/more/      GET bounded galaxy window / page one cluster; ?center=<id> hops (403 if not in your window)
+  galaxy/songs/              GET the song layer for your window (no Gemini)
   wander/                    POST "same song, different feeling" contrast cards
   spotify/                   Optional OAuth top-tracks import
 app/auth/callback/           Supabase OAuth / email-confirmation landing (exchanges code for session)
+app/auth/confirmed/          Email-confirmation tab handoff back to the tab that signed up (lib/auth-handoff.ts)
 app/login/, app/signup/      Auth screens (components/auth/auth-form.tsx)
-app/(tabs)/, app/onboarding/ Frontend screens (galaxy, connections, messages, people, me; onboarding flow)
+app/onboarding/              music (Spotify or manual) → pick → feel → reading → why → reveal
+app/onboarding/feel/         Per song: 1–3 tags + the valence/energy mood circle (one song at a time)
+app/(tabs)/                  galaxy, connections, messages, people/[id] (+ /card, /contrast), me
+app/proto/                   Prototype screens (pick-constellation, reading-constellation); not linked from the app
 app/sim/, lib/sim/           /sim demo ONLY — see "Demo simulation" below; never import from app code
 components/                  UI components; components/galaxy/ holds the 3D scene + SVG fallback
+components/mood-circle.tsx   The circular valence/energy control (drag, tap, arrow keys; clamped to the circle)
+components/tag-picker.tsx    1–3 tags from lib/tags.ts as ContextChip chips
 proxy.ts                     Next 16's middleware: refreshes the session cookie, gates app screens
-lib/api.ts                   The frontend's single data-access seam. Still mock-backed (see status)
-lib/mock-db.ts               Mock implementation of the v2 Db contract (lib/types.ts)
+lib/data-source.ts           REAL_DATA: real backend whenever Supabase keys are set (NEXT_PUBLIC_DATA_SOURCE=mock overrides)
+lib/api.ts                   The frontend's single data-access seam: `db = REAL_DATA ? httpDb : mockDb`
+lib/http-db.ts               Real implementation of the v2 Db contract over the API routes
+lib/real-api.ts              Real-mode bodies for the view functions (getMe, getConnections, getConversation, …)
+lib/mock-db.ts               Mock implementation of the v2 Db contract (demo mode)
 lib/mock-world.ts            Mock people/songs used by mock-db and "NOT IN CONTRACT" enrichment
 lib/types.ts                 View types (UI) + "DB contract rows" (v2) + the Db interface
+lib/session.ts               Client session store (onboarding songs, feelings, save status, read state)
 lib/galaxy-adapter.ts        Maps GET /api/galaxy responses to the galaxy view types
+lib/why-mix.ts               Five-why listening mix; places people between their top two whys
+lib/song-connections.ts, lib/connection-groups.ts, lib/read-state.ts  Song-star connections, grouped
+                             connections list, unread state for Messages
+lib/cover-art.ts             Album art lookup chain (Cover Art Archive → iTunes → Deezer)
 lib/supabase/                server.ts (service role), serverAuth.ts (session), browser.ts (client),
                              proxy.ts (session refresh), config.ts (keys present?), vector.ts (parseVector)
 lib/musicbrainz/             Song identity resolution (title/artist → canonical mbid)
 lib/gemini/                  Song context + embedding, evidence-check/match cards, contrast cards
 lib/matching/                findMatches (match_picks), findWander (wander_picks), galaxyWindow,
-                             refreshPrimaryCluster, alignCardEvidence, cosineSimilarity
+                             galaxySongs, refreshPrimaryCluster, alignCardEvidence, cosineSimilarity
 lib/cluster-assign.ts        Tags + valence/energy → one of five clusters (no LLM, no embeddings)
 lib/clusters.ts              The five cluster ids/labels/colors (CLUSTER_IDS)
 lib/tags.ts                  Fixed mood/context tag taxonomy (10 tags)
@@ -72,6 +92,7 @@ supabase/migrations/         The real schema, applied in order via the SQL Edito
 supabase/seed.sql            Old fabricated-vector seed; superseded by scripts/seed-real-data.ts
 scripts/seed-real-data.ts    Seeds demo personas through the real MusicBrainz + Gemini pipeline
 scripts/test-gemini.ts       Standalone Gemini smoke test (no DB writes)
+scripts/backfill-cover-art.ts  Fills songs.album_art_url for catalog rows that predate cover-art lookup
 scripts/build-sim-embeddings.ts  Regenerates lib/sim/song-vectors.json for /sim
 db/contract.md               Schema source of truth — read before touching any table or RPC
 MERGE_CHECKLIST.md           How the frontend gets wired to the real backend, method by method
@@ -135,6 +156,11 @@ See `db/contract.md` for exact table shapes and every RPC.
 - **Any `?next=` redirect target goes through `safeNextPath()`** (`lib/safe-next.ts`).
   `"/\evil.com"` passes a naive `startsWith("/") && !startsWith("//")` check and
   resolves to `http://evil.com/` (browsers treat `\` as `/`). Found and fixed 2026-09-26.
+  The callback, login page, auth form, `/auth/confirmed` and `lib/auth-handoff.ts` all use it.
+- Email signup: the confirmation link carries `?via=email&next=…` to `/auth/callback`, which
+  sends it to `/auth/confirmed` so the original tab can pick the session up. Supabase's
+  Redirect URLs must allow those query strings — use `http://localhost:3000/**`, not an
+  exact `/auth/callback` entry (see status).
 
 ## Hard rule: Spotify data can never touch the LLM
 Spotify's Developer Policy prohibits (a) feeding Spotify Content into any
@@ -177,6 +203,20 @@ building user profiles. Practical rule for this codebase:
 - Don't swallow errors with an empty `catch {}`; log them. Two silent
   failures this week were only found by reading code.
 - `/sim` is out of scope for app work (see below).
+- **Pull before you push**, and bring uncommitted work along safely:
+  ```bash
+  git stash push -u -m "wip"   # -u includes new (untracked) files
+  git pull origin main
+  git stash pop                # on conflict: keep both sides if they do different things,
+                               # delete the <<<<<<< ======= >>>>>>> lines, git add <file>, git stash drop
+  npx tsc --noEmit && npx next build
+  ```
+  Stop any running `npm run dev` before `next build` (both write to `.next/`). Never force-push `main`.
+- **Data modes** (`lib/data-source.ts`): with Supabase keys in `.env.local` the app is signed-in
+  only and uses the **real** backend — anything you do in onboarding writes real rows. To try
+  UI on demo data with no login, blank the keys for that run:
+  `NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= npm run dev`.
+  (`NEXT_PUBLIC_DATA_SOURCE=mock` also forces demo data, but login is still required.)
 
 ## Implementation status (2026-09-26)
 
@@ -197,9 +237,12 @@ building user profiles. Practical rule for this codebase:
   per persona, checked before any MusicBrainz/Gemini call).
 - Verification left behind real demo data: cached match cards for Maya's
   matches, a contrast card for Sam/Noor, and one test message from Maya to Theo
-  ("verification: what song makes a quiet evening feel less lonely?").
-- **Pending dashboard step**: Authentication → URL Configuration → add
-  `http://localhost:3000/auth/callback` to Redirect URLs (Vercel URL later).
+  ("verification: what song makes a quiet evening feel less lonely?"). **Delete that
+  message before a demo** (SQL Editor; the service role has no DELETE grant).
+- **Dashboard step**: Authentication → URL Configuration → Site URL
+  `http://localhost:3000`, and add `http://localhost:3000/**` to Redirect URLs (the
+  wildcard is needed because email-confirmation links add `?via=email&next=…`). Add the
+  Vercel URL the same way at deploy time.
 
 ### Backend
 Every route above is implemented against the v2 schema with session auth.
@@ -212,7 +255,7 @@ written), `GET /api/profile`; signed-out calls return 401. RPCs `wander_picks`,
 `galaxy_pool`, `galaxy_cluster_counts` return correct rows; signup with a
 120-char name is truncated to 80 instead of failing.
 
-**Matching-quality issue found during verification (needs a decision):** in
+**Matching-quality issue found during verification — fix this next (see "Next up"):** in
 every pick vector the 768-dim song embedding has a norm of ~0.59 (truncated
 Gemini embeddings are not unit length) while the two emotion dims
 (valence/energy × `EMOTION_WEIGHT` = 5) have a norm of ~3.16. Cosine
@@ -221,37 +264,52 @@ song's meaning: picks with the same slider position score ~0.99 regardless of
 song, and opposite positions score ~-0.95. Likely fix: L2-normalize the song
 embedding before appending, lower `EMOTION_WEIGHT` so the emotion part is a
 deliberate minority share (e.g. ~0.3–0.4), then recompute every
-`song_picks.embedding` (re-seed; nothing real depends on the old vectors yet).
-`/sim` also reads `EMOTION_WEIGHT`, so its numbers shift too.
+`song_picks.embedding` (a one-off script, since real users' picks now exist too).
+`/sim` also reads `EMOTION_WEIGHT`, so its numbers shift too. This is more urgent now:
+real-data mode is live, and `GET /api/match` returns `similarity` to the UI, so the
+skewed scores are user-visible.
 
 ### Frontend
-- Real auth works (signup/login/callback/proxy), but **all app data is still
-  mock**: `lib/api.ts` uses `mockDb` for everything except the galaxy, which has
-  its own switch (`NEXT_PUBLIC_GALAXY_SOURCE=http`, default mock).
-- `lib/types.ts` holds the v2 contract again (the `galaxy-clusters` branch had
-  reverted it to the pre-redesign shape; restored in `f39b861`), and
-  `mockDb` implements it.
-- `saveSongs` currently sends **placeholder** `tags: ["comfort"]`,
-  `valence: 0`, `energy: 0` for every song, because onboarding doesn't collect
-  them yet. Don't treat real-mode picks as meaningful until the feel step exists.
+- **Real-data mode is live** (Daniel, `0a615ce`): whenever Supabase keys are set,
+  `lib/api.ts` uses `httpDb` (`lib/http-db.ts`) and `lib/real-api.ts` instead of the mock
+  world. Profile, picks, matches (with cached cards), cards, wander, galaxy (+ hop and the
+  song layer), and messages (send + polled reads) all hit the real routes. With no keys, or
+  `NEXT_PUBLIC_DATA_SOURCE=mock`, it's the demo data. `mockDb` still implements the v2 `Db`.
+- **Onboarding feel step is live** (`2fb87c0`): music (Spotify or manual) → pick → **feel**
+  → reading → why → reveal. Per song, 1–3 tags and a mood-circle position; a Spotify import
+  is capped to 5 songs to describe. `chooseSongs` stores the songs (session only);
+  `saveSongs` then saves each described song sequentially while the reading screen plays,
+  and the reading screen waits for it, with a retry that skips songs already saved (no
+  duplicate picks). In real mode these are real `POST /api/picks` writes with the user's
+  own tags/valence/energy.
+- **Known gap**: the galaxy's "+" add-a-song (`addSong` in `lib/api.ts`,
+  `components/galaxy/add-song-sheet.tsx`) still sends placeholder `tags: ["comfort"]`,
+  `valence: 0`, `energy: 0` — it predates the feel step. It should reuse
+  `TagPicker` + `MoodCircle`.
+- The "why" page's motivation review is still mock inference (backburner #7).
+- Album art is now populated (Cover Art Archive → iTunes → Deezer, or a Spotify `i.scdn.co`
+  URL passed in); `scripts/backfill-cover-art.ts` fills older catalog rows.
 
-### Active plan (`merge-galaxy-clusters` → main)
+### Plan status
 - **Phase A — done** (`f39b861`): merge, v2 contract restored, open redirect
   fixed, `refreshPrimaryCluster` on service role, pnpm removed, galaxy
   migration hardened.
-- **Phase B — done and verified**, except the dashboard redirect URL (manual,
-  not checkable from code).
-- **Phase C — next**: onboarding "feel" step at `/onboarding/feel` between
-  song selection and saving: per song, 1–3 tags (`components/tag-picker.tsx`,
-  reusing `ContextChip`) and a circular valence/energy control
-  (`components/mood-circle.tsx`); cap of 5 songs from a Spotify import; save runs
-  sequentially while the reading screen plays, with retry on failure.
-- **Phase D**: `httpDb` in `lib/api.ts`, composed per method — real for
-  profile, picks, matches, cards, message reads/writes; wander and galaxy
-  flipped to real after Phase B verification; `mockDb` entirely when Supabase
-  isn't configured. New `GET /api/messages` (session client, RLS-scoped) so chat
-  is two-way; the chat view polls. `ME_ID` becomes the signed-in user's id in
-  real mode. Update `MERGE_CHECKLIST.md` as items resolve.
+- **Phase B — done and verified** (migrations applied, seed idempotent, RPCs and
+  routes checked with real sessions).
+- **Phase C — done** (`2fb87c0`): the onboarding feel step (above).
+- **Phase D — done by Daniel** as real-data mode (`0a615ce`), including the planned
+  `GET /api/messages` read route and `GET /api/profile?id=me`. Not yet verified end to
+  end by the backend side.
+
+### Next up (in order)
+1. **Fix the matching balance** (issue above) and recompute every `song_picks.embedding`,
+   before more real picks accumulate.
+2. **Give the galaxy "+" add-a-song the tags + mood circle** instead of placeholders.
+3. **Verify real-data mode end to end**: sign up → onboarding feel step → rows in
+   `song_picks` with the chosen tags/valence/energy → galaxy; Maya ↔ Theo two-way chat in two
+   browsers; connections show real cards.
+4. **Demo prep**: delete the verification test message; confirm the Redirect URLs wildcard.
+5. Update `MERGE_CHECKLIST.md` to reflect what real-data mode resolved.
 
 ## Known gotchas (read before touching the relevant code)
 - **Gemini model names go stale fast.** `gemini-2.5-flash` was retired for new
@@ -304,7 +362,7 @@ Roughly in priority order. None of these are in the active plan.
 3. **Real song swap.** No table yet; swaps are mock-only. Needs a `song_swaps`
    table (or swaps as a message kind) plus a route. It's an MVP priority in the
    project brief, deferred for scope.
-4. **Realtime messages.** Chat will poll `GET /api/messages`; switch to a
+4. **Realtime messages.** Chat polls `GET /api/messages` today; switch to a
    Supabase Realtime subscription (publication is already enabled on
    `messages`).
 5. **Real users and density.** Team/testers sign up and onboard for real; add
@@ -315,9 +373,9 @@ Roughly in priority order. None of these are in the active plan.
 7. **`why` page motivations.** The "Here's what I heard" review is still mock
    inference: not persisted, not used for matching (`lib/types.ts` #4).
 8. **Remaining contract mismatches** (`lib/types.ts` header, `MERGE_CHECKLIST.md`):
-   song id space vs catalog slugs (#1), album art never populated (#2), richer
-   card structure than `card_json` has (#7), no conversations/avatar/analysis
-   storage (#10, #11).
+   song id space vs catalog slugs (#1), richer card structure than `card_json`
+   has (#7), no conversations/avatar/analysis storage (#10, #11). (#2, album art,
+   is resolved by `lib/cover-art.ts`.)
 9. **Scale.** Resolve MusicBrainz in the background instead of blocking the
    pick request; move Gemini to a paid tier; revisit synchronous LLM calls in
    route handlers.
@@ -353,7 +411,11 @@ npm install
 cp .env.local.example .env.local   # Supabase + Gemini + MUSICBRAINZ_CONTACT_EMAIL (Spotify optional)
 npm run dev
 ```
-Without the `NEXT_PUBLIC_SUPABASE_*` keys the app runs on mock data with no sign-in.
+With the Supabase keys set, the app requires sign-in and uses the **real** backend
+(onboarding writes real rows). To try UI on demo data with no sign-in:
+```bash
+NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= npm run dev
+```
 
 Seed demo personas through the real pipeline (safe to re-run):
 ```bash
