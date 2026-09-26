@@ -10,8 +10,12 @@ const AUTH_PAGES = ["/login", "/signup"];
 const matches = (path: string, prefixes: string[]) => prefixes.some((p) => path === p || path.startsWith(`${p}/`));
 
 export async function proxy(request: NextRequest) {
-  // No Supabase keys yet: run the mock app without sign-in (see AUTH_SETUP.md).
-  if (!isSupabaseConfigured()) return;
+  if (!isSupabaseConfigured()) {
+    // A deployment must never fall back to the open, no-sign-in demo because a key is missing.
+    if (process.env.VERCEL) return new Response("Song Galaxy isn't configured: missing Supabase keys.", { status: 503 });
+    // Local, no Supabase keys yet: run the mock app without sign-in (see AUTH_SETUP.md).
+    return;
+  }
 
   const { response, user } = await updateSession(request);
   const { pathname, search } = request.nextUrl;

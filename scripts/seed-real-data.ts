@@ -104,7 +104,12 @@ const PERSONAS: Persona[] = [
   },
 ];
 
-const DEMO_PASSWORD = "song-galaxy-demo";
+// Never hardcode this: the repo is public, and anyone with it could sign in as a demo persona.
+// Set SEED_DEMO_PASSWORD in .env.local; re-running the seed also applies it to existing personas.
+const DEMO_PASSWORD = process.env.SEED_DEMO_PASSWORD ?? "";
+if (DEMO_PASSWORD.length < 12) {
+  throw new Error("Set SEED_DEMO_PASSWORD (12+ characters) in .env.local before seeding.");
+}
 
 // Gemini's free tier caps gemini-flash-lite-latest at 15 requests/minute
 // (confirmed via a live 429 on 2026-09-26). This is a seed-script-only
@@ -172,7 +177,9 @@ async function ensureProfile(supabase: ReturnType<typeof createServerClient>, em
   const { data: existing } = await supabase.auth.admin.listUsers();
   const found = existing?.users.find((u) => u.email === email);
   if (found) {
-    console.log(`  profile exists: ${displayName} (${found.id})`);
+    const { error } = await supabase.auth.admin.updateUserById(found.id, { password: DEMO_PASSWORD });
+    if (error) throw new Error(`Failed to update the password for ${email}: ${error.message}`);
+    console.log(`  profile exists: ${displayName} (${found.id}), password set from SEED_DEMO_PASSWORD`);
     return found.id;
   }
 
