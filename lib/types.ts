@@ -188,6 +188,15 @@ export type GalaxyNode = {
   weight?: number;
   /** An ambient far star: distant from you, but with a strong thread. Drawn dim; tapping explains. */
   far?: boolean;
+  /**
+   * Home galaxy only. "connected": a completed Song Handshake, in orbit around you. "nearby": a
+   * suggestion from matching, drawn faint outside your orbit. "arriving": mid-flight into orbit.
+   */
+  relationship?: "connected" | "nearby" | "arriving";
+  /** Connected: how close their orbit is, 0 (outer, newer or quieter) .. 1 (inner, frequent). */
+  orbit?: number;
+  /** A member of a distant community galaxy (GalaxyDestination.id): drawn there, not at home. */
+  destinationId?: string;
 };
 
 export type GalaxyEdge = {

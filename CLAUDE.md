@@ -10,7 +10,9 @@ as a side effect of an unrelated architecture or code change — update
 someone specifically asks for a CLAUDE.md update.
 
 Last full update: 2026-09-26, after the AI portraits + whole-profile connection assessment
-(`ai-portraits`, `89fee8a`), the matching-balance fix (`b5f84e3`) and the galaxy "+" fix (`d9614b5`).
+(`ai-portraits`, `89fee8a`), the matching-balance fix (`b5f84e3`), the galaxy "+" fix (`d9614b5`),
+and merging `pitch-demo` into `main` (`148db04`): the 3D reading-constellation, `/pitch`, and its
+warp-streak travel effect.
 
 ## Team split
 - **Anish** — backend (routes, Supabase glue, Gemini/MusicBrainz pipeline, matching) and, since
@@ -18,7 +20,8 @@ Last full update: 2026-09-26, after the AI portraits + whole-profile connection 
 - **James** — frontend (onboarding, auth UI / `login-signup`, email-confirmation handoff, Messages
   and Profile screens).
 - **Daniel** — galaxy frontend (clusters, why-mix placement, galaxy window, hop, wander UI), the
-  real-data wiring of `lib/api.ts` (`lib/http-db.ts`, `lib/real-api.ts`), cover art, and the `/sim` demo.
+  real-data wiring of `lib/api.ts` (`lib/http-db.ts`, `lib/real-api.ts`), cover art, the `/sim`
+  demo, the 3D reading-constellation, and `/pitch` (the scripted social-discovery-loop demo).
 - **Bao** — floating backend/frontend (Gemini testing, early schema work).
 
 ## Tech stack
@@ -59,9 +62,18 @@ app/login/, app/signup/      Auth screens (components/auth/auth-form.tsx)
 app/onboarding/              music (Spotify or manual) → pick → feel → reading → why → reveal
 app/onboarding/feel/         Per song: 1–3 tags + the valence/energy mood circle (one song at a time)
 app/(tabs)/                  galaxy, connections, messages, people/[id] (+ /card, /contrast), me
-app/proto/                   Prototype screens (pick-constellation, reading-constellation); not linked from the app
+app/proto/                   Prototype screens (pick-constellation, reading-constellation); not linked from the app.
+                             reading-constellation renders 3D (react-three-fiber) when WebGL is available and motion
+                             isn't reduced, via components/reading-constellation-scene.tsx; otherwise SVG.
+app/pitch/                   A scripted, end-to-end demo of the social-discovery loop (home → explore → travel to
+                             a community → Song Handshake → bring them home), built from the same GalaxyCanvas as
+                             the app but with its own "home" arrangement (lib/galaxy-layout.ts: computeHomeLayout,
+                             home-only) and a warp-streak overlay (components/pitch/warp-overlay.tsx) during the big
+                             camera moves. Data is scripted in app/pitch/script.ts, not live. Not linked from the app.
 app/sim/, lib/sim/           /sim demo ONLY — see "Demo simulation" below; never import from app code
 components/                  UI components; components/galaxy/ holds the 3D scene + SVG fallback
+components/reading-constellation-scene.tsx  The 3D scene for app/proto/reading-constellation (see above)
+components/pitch/warp-overlay.tsx  Radial light-streak burst for app/pitch's travel beats (see above)
 components/mood-circle.tsx   The circular valence/energy control (drag, tap, arrow keys; clamped to the circle)
 components/tag-picker.tsx    1–3 tags from lib/tags.ts as ContextChip chips
 proxy.ts                     Next 16's middleware: refreshes the session cookie, gates app screens
@@ -74,6 +86,8 @@ lib/mock-world.ts            Mock people/songs used by mock-db and "NOT IN CONTR
 lib/types.ts                 View types (UI) + "DB contract rows" (v2) + the Db interface
 lib/session.ts               Client session store (onboarding songs, feelings, save status, read state)
 lib/galaxy-adapter.ts        Maps GET /api/galaxy responses to the galaxy view types
+lib/galaxy-layout.ts         computeLayout (real galaxy, "whys" arrangement) and computeHomeLayout
+                             (you-at-center orbits + distant community galaxies; app/pitch only)
 lib/why-mix.ts               Five-why listening mix; places people between their top two whys
 lib/song-connections.ts, lib/connection-groups.ts, lib/read-state.ts  Song-star connections, grouped
                              connections list, unread state for Messages
@@ -377,6 +391,12 @@ onboarding's reading/why screens showing the real portrait, and the Me page load
   bundled docs in `node_modules/next/dist/docs/` before writing Next code.
 - **zsh eats `:l`/`:h`/`:t` after a variable**: `git show $B:lib/x.ts` becomes
   `origin/branchib/x.ts`. Quote it: `git show "${B}:lib/x.ts"`.
+- **`/pitch`'s galaxy intentionally doesn't look like the real `/galaxy`.** The real page always
+  uses `arrangement="whys"` (`computeLayout`, clustering by why you listen). `/pitch` passes
+  `arrangement="home"` (`computeHomeLayout`), a different visual model built only for its
+  egocentric story: you fixed at the center, connections on relationship-based orbit rings,
+  community galaxies scattered at the edge. If `/pitch` looks visually inconsistent with the app,
+  that's this, not a bug — check `computeHomeLayout` before "fixing" it to match `computeLayout`.
 
 ## Backburner (known work, deliberately deferred)
 Roughly in priority order. None of these are in the active plan.
