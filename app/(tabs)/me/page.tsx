@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { AudioLines, ListMusic, Orbit } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
+import { AccountRow } from "@/components/auth/account-row";
 import { EmptyState } from "@/components/empty-state";
 import { MotivationCard } from "@/components/motivation-card";
 import { ReachQuestion } from "@/components/reach-question";
@@ -88,6 +89,8 @@ export default function MePage() {
             Replay reveal
           </Link>
         </div>
+
+        <AccountRow />
       </div>
     </main>
   );
