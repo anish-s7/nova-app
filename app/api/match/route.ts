@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
 import { findMatches } from "@/lib/matching/findMatches";
 
 export async function GET(req: NextRequest) {
-  const profileId = req.nextUrl.searchParams.get("profileId");
-  const limitParam = req.nextUrl.searchParams.get("limit");
-
+  const profileId = await getCurrentProfileId();
   if (!profileId) {
-    return NextResponse.json({ error: "profileId query param is required" }, { status: 400 });
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
+
+  const limitParam = req.nextUrl.searchParams.get("limit");
 
   try {
     const matches = await findMatches(profileId, limitParam ? Number(limitParam) : undefined);
