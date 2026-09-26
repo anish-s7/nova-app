@@ -23,6 +23,7 @@ import { buildSongLayer, type SongLayer } from "./song-layer";
 import { classifyMix, mixFromScores } from "./why-mix";
 import { buildClusterDetail, type ClusterDetail } from "./cluster-songs";
 import { listeningMoment } from "./texture";
+import { threadFrom } from "./thread";
 import { SONG_CATALOG, songById } from "./music-context";
 import {
   DEMO_BIAS,
@@ -501,7 +502,17 @@ export async function getConversations(): Promise<ConversationSummary[]> {
       const profile = await db.getProfile(userId);
       const u = lookupUser(userId); // NOT IN CONTRACT: cluster
       if (!profile || !u) return [];
-      return [{ userId, name: profile.display_name, cluster: u.primary, lastMessage: byTime(msgs).at(-1), threadSongs: msgs.filter((m) => m.kind === "swap").length }];
+      const ordered = byTime(msgs);
+      return [
+        {
+          userId,
+          name: profile.display_name,
+          cluster: u.primary,
+          lastMessage: ordered.at(-1),
+          threadSongs: msgs.filter((m) => m.kind === "swap").length,
+          turn: threadFrom(ordered, ME_ID).turn,
+        },
+      ];
     }),
   );
   return summaries.flat().sort((a, b) => (b.lastMessage?.sentAt ?? "").localeCompare(a.lastMessage?.sentAt ?? ""));

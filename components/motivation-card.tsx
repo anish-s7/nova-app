@@ -11,7 +11,8 @@ import { getCluster } from "@/lib/clusters";
 import type { InferredMotivation, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function MotivationCard({ motivation: m, songs, className }: { motivation: InferredMotivation; songs: Song[]; className?: string }) {
+/** `inline`: rendered inside a list row that already shows the reason's name (Profile), so skip the card chrome and heading. */
+export function MotivationCard({ motivation: m, songs, className, inline = false }: { motivation: InferredMotivation; songs: Song[]; className?: string; inline?: boolean }) {
   const id = useId();
   const [note, setNote] = useState(m.note ?? "");
   const ref = useRef<HTMLElement>(null);
@@ -19,14 +20,14 @@ export function MotivationCard({ motivation: m, songs, className }: { motivation
 
   if (m.feedback === "rejected") {
     return (
-      <article style={tone} className={cn("flex min-h-14 items-center gap-3 rounded-2xl border border-dashed border-white/10 px-4 py-2", className)}>
+      <article style={tone} className={cn("flex min-h-14 items-center gap-3", inline ? "px-4 pb-3" : "rounded-2xl border border-dashed border-white/10 px-4 py-2", className)}>
         <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
           <span className="line-through decoration-white/30">{m.label}</span> · not you, so we&apos;ll leave it out
         </p>
         <button
           type="button"
           onClick={() => updateMotivation(m.id, { feedback: "unreviewed" })}
-          className="-mr-2 inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground"
+          className={cn("-mr-2 inline-flex min-h-11 items-center gap-1.5 px-3 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground", !inline && "rounded-full")}
         >
           <RotateCcw className="size-3.5" aria-hidden />
           Undo
@@ -43,19 +44,21 @@ export function MotivationCard({ motivation: m, songs, className }: { motivation
       style={tone}
       aria-labelledby={`${id}-label`}
       className={cn(
-        "surface relative rounded-3xl border bg-card/70 p-5 transition-colors",
-        confirmed ? "border-[color-mix(in_oklch,var(--tone)_40%,transparent)]" : "border-white/10",
+        inline ? "relative px-4 pb-4" : "surface relative rounded-3xl border bg-card/70 p-5 transition-colors",
+        !inline && (confirmed ? "border-[color-mix(in_oklch,var(--tone)_40%,transparent)]" : "border-white/10"),
         className,
       )}
     >
-      <div className="flex items-center justify-between gap-3">
-        <ThemeTag cluster={m.cluster} size="sm" short />
-        <span className="text-xs tabular-nums text-muted-foreground">{Math.round(m.confidence * 100)}% sure</span>
-      </div>
-      <h3 id={`${id}-label`} className="mt-3 text-xl font-semibold leading-tight">
+      {inline ? null : (
+        <div className="flex items-center justify-between gap-3">
+          <ThemeTag cluster={m.cluster} size="sm" short />
+          <span className="text-xs tabular-nums text-muted-foreground">{Math.round(m.confidence * 100)}% sure</span>
+        </div>
+      )}
+      <h3 id={`${id}-label`} className={inline ? "sr-only" : "mt-3 text-xl font-semibold leading-tight"}>
         {m.label}
       </h3>
-      <p className="mt-1.5 text-pretty font-serif text-[17px] italic leading-snug text-foreground/85">{m.description}</p>
+      <p className={cn(inline ? "" : "mt-1.5", "text-pretty font-serif text-[17px] italic leading-snug text-foreground/85")}>{m.description}</p>
 
       <ul className="mt-4 flex flex-col gap-3 border-t border-white/5 pt-4" aria-label="Why we think so">
         {m.evidence.slice(0, 3).map((e, i) => (
@@ -87,7 +90,7 @@ export function MotivationCard({ motivation: m, songs, className }: { motivation
               onChange={(e) => setNote(e.target.value)}
               onBlur={() => note !== (m.note ?? "") && updateMotivation(m.id, { note: note.trim() || undefined })}
               placeholder="Say it in your own words, if you want to."
-              className="mt-1.5 w-full resize-none rounded-xl border border-white/10 bg-background/60 px-3 py-2.5 font-serif text-base italic outline-none placeholder:font-sans placeholder:not-italic placeholder:text-muted-foreground focus:border-[var(--tone)]"
+              className={cn("mt-1.5 w-full resize-none border border-white/10 bg-background/60 px-3 py-2.5 font-serif text-base italic outline-none placeholder:font-sans placeholder:not-italic placeholder:text-muted-foreground focus:border-[var(--tone)]", !inline && "rounded-xl")}
             />
           </div>
 
@@ -116,7 +119,7 @@ export function MotivationCard({ motivation: m, songs, className }: { motivation
               }
               updateMotivation(m.id, { feedback: "confirmed" });
             }}
-            className="inline-flex min-h-12 items-center justify-center gap-1.5 rounded-full bg-[color-mix(in_oklch,var(--tone)_20%,transparent)] font-medium text-[var(--tone)] transition-colors hover:bg-[color-mix(in_oklch,var(--tone)_28%,transparent)]"
+            className={cn("inline-flex min-h-12 items-center justify-center gap-1.5 bg-[color-mix(in_oklch,var(--tone)_20%,transparent)] font-medium text-[var(--tone)] transition-colors hover:bg-[color-mix(in_oklch,var(--tone)_28%,transparent)]", !inline && "rounded-full")}
           >
             <Check className="size-4" aria-hidden />
             That&apos;s me
@@ -124,7 +127,7 @@ export function MotivationCard({ motivation: m, songs, className }: { motivation
           <button
             type="button"
             onClick={() => updateMotivation(m.id, { feedback: "rejected" })}
-            className="inline-flex min-h-12 items-center justify-center gap-1.5 rounded-full border border-white/10 font-medium text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
+            className={cn("inline-flex min-h-12 items-center justify-center gap-1.5 border border-white/10 font-medium text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground", !inline && "rounded-full")}
           >
             <X className="size-4" aria-hidden />
             Not quite
