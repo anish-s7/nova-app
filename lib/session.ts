@@ -20,6 +20,8 @@ export type SessionState = {
   reach?: string;
   /** Songs added from the galaxy after onboarding, with the reason typed for each. Kept out of `songs` so adding one grows the galaxy without re-laying it out. */
   picks?: SongPick[];
+  /** Per conversation, the sentAt of the newest message you've seen. Drives unread dots in Messages. */
+  readAt?: Record<string, string>;
   /** Bumped whenever anything that affects the galaxy changes, used in SWR keys. */
   version: number;
 };
