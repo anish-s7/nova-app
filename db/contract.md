@@ -151,6 +151,7 @@ day so reloads don't reshuffle. Edges are only computed among the drawn people.
   everyone but the target. The route subtracts what it drew to get `hidden`.
 - **Far stars** reuse `wander_picks` (same song, far apart in feeling) with no Gemini call:
   loading the galaxy never spends LLM calls. Tapping a far star points at Wander.
+- **Hop**: `GET /api/galaxy?center=<profileId>` (and `/more?...&center=`) centers the window on another star. The center must already be in the viewer's own window (else 403). Response `meId` is the center; `viewerId` is the real viewer, included as an anchor node. Same public-picks-only RPCs, no LLM, no schema change.
 - `GET /api/galaxy/more?cluster=&have=` pages the next 40 people in one cluster ("More
   here"). It ranks at most the pool (600), so a cluster larger than that can't be paged
   to the end. That is deliberate: past a screenful, use Wander or search instead.

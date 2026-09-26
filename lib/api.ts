@@ -346,15 +346,41 @@ async function galaxyFetch<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Mock hop: the star's nearest neighbors by the mock similarity, with you as the anchor. */
+function mockHop(centerId: string): GalaxyResponse {
+  const me = meParty();
+  const centerUser = worldUser(centerId);
+  if (!centerUser) throw new ApiError("That star isn't in your galaxy");
+  const center = partyFromWorld(centerUser);
+  const near = WORLD.filter((u) => u.id !== centerId)
+    .map(partyFromWorld)
+    .map((p) => ({ p, edge: edgeBetween(center, p) }))
+    .sort((a, b) => b.edge.similarity - a.edge.similarity)
+    .slice(0, 14);
+  const yours = (p: Party) => edgeBetween(me, p).similarity;
+  return {
+    nodes: [
+      { ...nodeFor(me, true), youSimilarity: 1 },
+      { ...nodeFor(center, false), youSimilarity: yours(center) },
+      ...near.map(({ p }) => ({ ...nodeFor(p, false), youSimilarity: yours(p) })),
+    ],
+    edges: near.map(({ edge }) => edge),
+    centerId,
+    status: "ready",
+  };
+}
+
 export async function getGalaxy(query: GalaxyQuery = {}): Promise<GalaxyResponse> {
   if (GALAXY_HTTP) {
-    const qs = query.limit ? `?limit=${query.limit}` : "";
-    const galaxy = galaxyFromWindow(await galaxyFetch<GalaxyWindow>(`/api/galaxy${qs}`), ME_ID);
-    real.rememberSimilarities(galaxy.edges);
+    const qs = new URLSearchParams({ ...(query.limit ? { limit: String(query.limit) } : {}), ...(query.center ? { center: query.center } : {}) }).toString();
+    const galaxy = galaxyFromWindow(await galaxyFetch<GalaxyWindow>(`/api/galaxy${qs ? `?${qs}` : ""}`), ME_ID);
+    // Edges in a hopped window are the star's, not yours, so they say nothing about your similarity.
+    if (!query.center) real.rememberSimilarities(galaxy.edges);
     return galaxy;
   }
   await delay(700);
   maybeFail("galaxy");
+  if (query.center) return mockHop(query.center);
   // Bounded window: only the sampled people are drawn or edged. At today's size this keeps everyone.
   const { me, everyone, sample } = mockWindow(query.limit);
   const keep = new Set(sample.ids);
@@ -383,14 +409,15 @@ export async function getGalaxy(query: GalaxyQuery = {}): Promise<GalaxyResponse
 }
 
 /** "More here": the next people in one cluster, ready to fade in as arrivals. `have` is how many extra this cluster already shows. */
-export async function getGalaxyMore(cluster: string, have: number, step = 40, limit?: number): Promise<GalaxyMore> {
+export async function getGalaxyMore(cluster: string, have: number, step = 40, limit?: number, center?: string): Promise<GalaxyMore> {
   if (GALAXY_HTTP) {
-    const qs = new URLSearchParams({ cluster, have: String(have), ...(limit ? { limit: String(limit) } : {}) });
+    const qs = new URLSearchParams({ cluster, have: String(have), ...(limit ? { limit: String(limit) } : {}), ...(center ? { center } : {}) });
     // Arrivals are never "me", so no meId is needed.
     return galaxyMoreFromWindow(await galaxyFetch<GalaxyMoreWindow>(`/api/galaxy/more?${qs}`), "");
   }
   await delay(350);
   maybeFail("galaxy");
+  if (center) return { arrivals: [], remaining: 0 }; // mock hops show the star's whole neighborhood already
   const { me, everyone, candidates, sample } = mockWindow(limit);
   const order = expandOrder(candidates, new Set(sample.ids), cluster);
   const byId = new Map(everyone.map((p) => [p.id, p]));

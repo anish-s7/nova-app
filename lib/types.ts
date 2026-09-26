@@ -163,6 +163,8 @@ export type GalaxyNode = {
   userId: string;
   name: string;
   avatarUrl?: string;
+  /** Hopped galaxies only: how similar this person is to the real viewer, when known. */
+  youSimilarity?: number;
   /** The strongest why: color, filters, short labels. Position uses `whys`. */
   cluster: string;
   /**
@@ -199,7 +201,8 @@ export type GalaxyEdge = {
  * The galaxy is a bounded window onto your neighborhood, not everyone. `limit` caps the nodes
  * drawn (default lib/galaxy-sample.ts DEFAULT_BUDGET). More of one cluster comes from getGalaxyMore.
  */
-export type GalaxyQuery = { limit?: number };
+/** `center`: hop to another star's galaxy (a profile id already in your window). */
+export type GalaxyQuery = { limit?: number; center?: string };
 
 /** "More here": the next people in one cluster, as arrivals so they fade in without moving anyone. */
 export type GalaxyMore = {
@@ -212,6 +215,8 @@ export type GalaxyResponse = {
   nodes: GalaxyNode[];
   edges: GalaxyEdge[];
   topMatchId?: string;
+  /** Set only when the window is centered on another star (a hop); the viewer is then a dimmed anchor node with isMe. */
+  centerId?: string;
   status: "ready" | "processing";
   /** True when people were left out to stay within the budget. */
   sampled?: boolean;

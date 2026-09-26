@@ -32,6 +32,8 @@ import { BOND_AT } from "@/lib/thread";
 import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+const MAX_HOPS = 4;
+
 export default function GalaxyPage() {
   const session = useSession();
   const version = session.version;
@@ -41,13 +43,16 @@ export default function GalaxyPage() {
     const n = Number(new URLSearchParams(location.search).get("limit"));
     return Number.isFinite(n) && n > 1 ? n : undefined;
   });
-  const { data, error, mutate, isValidating } = useSWR(["galaxy", version, limit], () => getGalaxy({ limit }), { revalidateOnFocus: false });
-  const liveArrivals = useGalaxyRealtime(!!data);
-  // "More here" pages, per cluster. Keyed by session version so a reset starts clean.
-  const [moreState, setMoreState] = useState<{ version: number; byCluster: Record<string, { arrivals: Arrival[]; remaining: number }> }>({ version, byCluster: {} });
+  // Hops: the stars you've stepped through, in order. Empty = your own galaxy; the last entry is the current center.
+  const [trail, setTrail] = useState<{ id: string; name: string }[]>([]);
+  const center = trail.length ? trail[trail.length - 1].id : undefined;
+  const { data, error, mutate, isValidating } = useSWR(["galaxy", version, limit, center], () => getGalaxy({ limit, center }), { revalidateOnFocus: false });
+  const liveArrivals = useGalaxyRealtime(!!data && !center);
+  // "More here" pages, per cluster. Keyed by session version and center so a reset or a hop starts clean.
+  const [moreState, setMoreState] = useState<{ version: number; center?: string; byCluster: Record<string, { arrivals: Arrival[]; remaining: number }> }>({ version, center, byCluster: {} });
   const [loadingMore, setLoadingMore] = useState(false);
-  const more = useMemo(() => (moreState.version === version ? moreState.byCluster : {}), [moreState, version]);
-  const arrivals = useMemo(() => [...liveArrivals, ...Object.values(more).flatMap((m) => m.arrivals)], [liveArrivals, more]);
+  const more = useMemo(() => (moreState.version === version && moreState.center === center ? moreState.byCluster : {}), [moreState, version, center]);
+  const arrivals = useMemo(() => [...(center ? [] : liveArrivals), ...Object.values(more).flatMap((m) => m.arrivals)], [liveArrivals, more, center]);
   const { data: convos } = useSWR(["conversations", version], getConversations, { refreshInterval: 4000 });
   const threads = useMemo(() => (convos ?? []).filter((c) => c.threadSongs).map((c) => ({ userId: c.userId, count: c.threadSongs! })), [convos]);
   const apiRef = useRef<GalaxyApi | null>(null);
@@ -67,6 +72,32 @@ export default function GalaxyPage() {
   const nodes: GalaxyNode[] = data ? [...data.nodes, ...arrivals.map((a) => a.node)] : [];
   const edges: GalaxyEdge[] = data ? [...data.edges, ...arrivals.flatMap((a) => a.edges)] : [];
   const selected = nodes.find((n) => n.userId === selectedId);
+  // While hopped, the scene draws the hopped star at the center; you become an ordinary star labelled "You".
+  const viewNodes = useMemo(
+    () => (data ? (center ? data.nodes.map((n) => (n.userId === center ? { ...n, isMe: true } : n.isMe ? { ...n, isMe: false, name: "You" } : n)) : data.nodes) : []),
+    [data, center],
+  );
+  const hop = (id: string, name: string) => {
+    if (trail.length >= MAX_HOPS || id === center) return;
+    setTrail([...trail, { id, name }]);
+    resetForNewCenter();
+  };
+  const backTo = (depth: number) => {
+    setTrail(trail.slice(0, depth));
+    resetForNewCenter();
+  };
+  const resetForNewCenter = () => {
+    setSelectedId(null);
+    setFocusCluster(null);
+    setClusterOpen(false);
+    setConnecting(false);
+  };
+  // A new center is a new layout: frame it once it has loaded.
+  useEffect(() => {
+    if (!data) return;
+    const t = setTimeout(() => apiRef.current?.recenter(), 250);
+    return () => clearTimeout(t);
+  }, [center, data]);
   const arrival = liveArrivals[0]?.node;
   // People still hidden, after whatever "more here" has revealed.
   const hiddenNow = useMemo(() => {
@@ -86,10 +117,10 @@ export default function GalaxyPage() {
     setLoadingMore(true);
     try {
       const have = more[cluster]?.arrivals.length ?? 0;
-      const page = await getGalaxyMore(cluster, have, 40, limit);
+      const page = await getGalaxyMore(cluster, have, 40, limit, center);
       setMoreState((s) => {
-        const cur = s.version === version ? s.byCluster : {};
-        return { version, byCluster: { ...cur, [cluster]: { arrivals: [...(cur[cluster]?.arrivals ?? []), ...page.arrivals], remaining: page.remaining } } };
+        const cur = s.version === version && s.center === center ? s.byCluster : {};
+        return { version, center, byCluster: { ...cur, [cluster]: { arrivals: [...(cur[cluster]?.arrivals ?? []), ...page.arrivals], remaining: page.remaining } } };
       });
       // The new stars need a frame to be placed before the camera can frame the cluster.
       setTimeout(() => apiRef.current?.flyToCluster(cluster), 150);
@@ -110,7 +141,7 @@ export default function GalaxyPage() {
     apiRef.current?.flyToGroup(connectionKey.split("|").map(songNodeId));
   }, [connectionKey]);
   const songList = layer ? (themeState ? layer.stars.filter((st) => themeState.songIds.includes(st.id)) : layer.stars).slice(0, 12) : [];
-  const closest = closestTo(ME_ID, nodes, edges, focusCluster, 6);
+  const closest = closestTo(center ?? ME_ID, nodes, edges, focusCluster, 6);
 
   const select = (id: string | null) => {
     const keepConnecting = connecting && !!id && isSongNode(id);
@@ -222,7 +253,7 @@ export default function GalaxyPage() {
       {data ? (
         <div className="absolute inset-0" onPointerDown={hint.dismiss}>
           <GalaxyCanvas
-            nodes={data.nodes}
+            nodes={viewNodes}
             edges={data.edges}
             arrivals={arrivals}
             apiRef={apiRef}
@@ -253,6 +284,7 @@ export default function GalaxyPage() {
             <ModeToggle value={mode} onChange={changeMode} />
           </div>
         </div>
+        {trail.length ? <HopTrail trail={trail} onBack={backTo} /> : null}
         {data && mode === "people" ? <ClusterFilter nodes={nodes} hidden={hiddenNow?.byCluster} value={focusCluster} onChange={focus} className="pb-3" /> : null}
         {data && mode === "songs" && layer ? <ThemeFilter themes={layer.themes} value={themeFocus} onChange={focusTheme} className="pb-3" /> : null}
         {mode === "songs" && themeState ? (
@@ -456,13 +488,45 @@ export default function GalaxyPage() {
       </BottomSheet>
 
       <BottomSheet open={!!selected} onClose={() => setSelectedId(null)} label={selected ? `${selected.name}'s star` : "Star"}>
-        {selected ? <StarPreview node={selected} traded={threads.find((t) => t.userId === selected.userId)?.count ?? 0} /> : null}
+        {selected ? <StarPreview
+            node={selected}
+            traded={threads.find((t) => t.userId === selected.userId)?.count ?? 0}
+            hop={{ isCenter: selected.userId === center, hopped: !!center, canHop: trail.length < MAX_HOPS, onHop: () => hop(selected.userId, selected.name), onBack: () => backTo(0) }}
+          /> : null}
       </BottomSheet>
     </main>
   );
 }
 
-function StarPreview({ node, traded }: { node: GalaxyNode; traded: number }) {
+type HopControls = { isCenter: boolean; hopped: boolean; canHop: boolean; onHop: () => void; onBack: () => void };
+
+/** Breadcrumb for hops: You › Maya › Theo. Tapping a crumb steps back to it. */
+function HopTrail({ trail, onBack }: { trail: { id: string; name: string }[]; onBack: (depth: number) => void }) {
+  const crumb = "inline-flex min-h-9 items-center px-1 text-xs";
+  return (
+    <nav aria-label="Galaxy trail" className="mx-4 mb-3 flex flex-wrap items-center gap-x-1 text-muted-foreground">
+      <button type="button" onClick={() => onBack(0)} className={cn(crumb, "hover:text-foreground")}>
+        You
+      </button>
+      {trail.map((h, i) => (
+        <span key={h.id} className="inline-flex items-center gap-1">
+          <span aria-hidden>›</span>
+          {i === trail.length - 1 ? (
+            <span aria-current="page" className={cn(crumb, "font-medium text-foreground")}>
+              {h.name}&apos;s galaxy
+            </span>
+          ) : (
+            <button type="button" onClick={() => onBack(i + 1)} className={cn(crumb, "hover:text-foreground")}>
+              {h.name}
+            </button>
+          )}
+        </span>
+      ))}
+    </nav>
+  );
+}
+
+function StarPreview({ node, traded, hop }: { node: GalaxyNode; traded: number; hop: HopControls }) {
   const { data } = useSWR(node.isMe ? null : ["user", node.userId], ([, id]) => getUser(id));
 
   if (node.isMe) {
@@ -475,6 +539,11 @@ function StarPreview({ node, traded }: { node: GalaxyNode; traded: number }) {
             <ThemeTag cluster={node.cluster} size="sm" className="mt-1" />
           </div>
         </div>
+        {hop.hopped ? (
+          <Button className="h-11" onClick={hop.onBack}>
+            Back to your galaxy
+          </Button>
+        ) : null}
         <Link href="/me" className={cn(buttonVariants({ variant: "secondary" }), "h-11")}>
           Review your reasons
         </Link>
@@ -516,6 +585,8 @@ function StarPreview({ node, traded }: { node: GalaxyNode; traded: number }) {
         )}
       </div>
 
+      {node.youSimilarity != null && hop.hopped ? <p className="-mt-1 text-sm text-muted-foreground">{Math.round(Math.max(0, node.youSimilarity) * 100)}% like you</p> : null}
+
       {node.far ? <p className="-mt-1 text-sm text-muted-foreground">Far from your usual neighborhood, but you share a song. Wander shows how you hear it differently.</p> : null}
 
       {traded > 0 ? (
@@ -528,6 +599,14 @@ function StarPreview({ node, traded }: { node: GalaxyNode; traded: number }) {
             Open thread
           </Link>
         </p>
+      ) : null}
+
+      {hop.isCenter ? (
+        <p className="text-sm text-muted-foreground">You&apos;re looking at their galaxy.</p>
+      ) : hop.canHop ? (
+        <Button variant="secondary" className="h-11" onClick={hop.onHop}>
+          Explore {node.name}&apos;s galaxy
+        </Button>
       ) : null}
 
       <div className="flex items-center gap-4">

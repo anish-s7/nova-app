@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
-import { getGalaxyMoreWindow } from "@/lib/matching/galaxyWindow";
+import { getGalaxyMoreWindow, HopNotAllowedError } from "@/lib/matching/galaxyWindow";
 
 /** "More here": the next page of people in one cluster. */
 export async function GET(req: NextRequest) {
@@ -14,8 +14,9 @@ export async function GET(req: NextRequest) {
   const limit = Number(q.get("limit"));
 
   try {
-    return NextResponse.json(await getGalaxyMoreWindow(profileId, cluster, have, undefined, Number.isFinite(limit) && limit > 1 ? limit : undefined));
+    return NextResponse.json(await getGalaxyMoreWindow(profileId, cluster, have, undefined, Number.isFinite(limit) && limit > 1 ? limit : undefined, q.get("center") ?? undefined));
   } catch (err) {
+    if (err instanceof HopNotAllowedError) return NextResponse.json({ error: err.message }, { status: 403 });
     return NextResponse.json({ error: err instanceof Error ? err.message : "Galaxy failed" }, { status: 500 });
   }
 }
