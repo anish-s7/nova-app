@@ -11,6 +11,15 @@ the rules that must not be broken.
 - **Floating** (backend/frontend as needed)
 - **Frontend** (Galaxy visualization, forms, Connection Card UI)
 
+## This is NOT the Next.js you know
+This version of Next.js has breaking changes — APIs, conventions, and file
+structure may all differ from your training data. Read the relevant guide in
+`node_modules/next/dist/docs/` before writing any code. Heed deprecation
+notices.
+
+(`next dev` may also generate an `AGENTS.md` containing this same rule —
+verify at `node_modules/next/dist/server/lib/generate-agent-files.js`.)
+
 ## Tech stack
 | Layer | Technology |
 |---|---|
