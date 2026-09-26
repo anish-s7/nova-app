@@ -18,6 +18,7 @@ export interface MusicBrainzResolution {
   artist: string;
   mbid: string;
   confidence: number; // 0..1
+  releaseIds: string[]; // releases containing this recording, best guess first (for cover art)
 }
 
 let lastRequestAt = 0;
@@ -35,6 +36,7 @@ interface MusicBrainzRecording {
   title: string;
   score?: number;
   "artist-credit"?: { name: string }[];
+  releases?: { id: string; status?: string }[];
 }
 
 interface MusicBrainzSearchResponse {
@@ -84,5 +86,32 @@ export async function resolveSong(title: string, artist: string): Promise<MusicB
     artist: resolvedArtist,
     mbid: best.id,
     confidence,
+    releaseIds: (best.releases ?? [])
+      .slice()
+      .sort((a, b) => Number(b.status === "Official") - Number(a.status === "Official"))
+      .map((r) => r.id),
   };
+}
+
+/**
+ * First front cover found in the Cover Art Archive for any of the given
+ * releases, as a stable image URL, or null. The archive answers with a
+ * redirect when art exists and 404 when it doesn't, so we probe without
+ * following it. Not subject to MusicBrainz's 1 req/sec limit.
+ */
+export async function findCoverArtUrl(releaseIds: string[]): Promise<string | null> {
+  for (const id of releaseIds.slice(0, 3)) {
+    const url = `https://coverartarchive.org/release/${id}/front-250`;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        const res = await fetch(url, { method: "HEAD", redirect: "manual" });
+        if (res.status >= 300 && res.status < 400) return url;
+        break; // a definite "no cover" answer; try the next release
+      } catch (err) {
+        console.error("Cover Art Archive lookup failed", id, err);
+        await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt)); // the archive drops connections under load; back off
+      }
+    }
+  }
+  return null;
 }

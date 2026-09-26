@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
 import { generateSongContext } from "@/lib/gemini/generateSongContext";
+import { findCover } from "@/lib/cover-art";
 import { resolveSong } from "@/lib/musicbrainz/client";
 import { EMOTION_WEIGHT, clampEmotionValue } from "@/lib/emotion";
 import { isValidTag } from "@/lib/tags";
@@ -85,6 +86,7 @@ export async function POST(req: NextRequest) {
     // COMPLIANCE: only title/artist strings go to Gemini, never Spotify's
     // API response or anything MusicBrainz-derived beyond the plain name.
     const { contextSummary, embedding } = await generateSongContext(canonicalTitle, canonicalArtist);
+    const coverArt = albumArtUrl ?? (await findCover(canonicalTitle, canonicalArtist, resolution?.releaseIds));
 
     const { data: inserted, error: insertError } = await supabase
       .from("songs")
@@ -95,7 +97,7 @@ export async function POST(req: NextRequest) {
         fallback_key: resolution ? null : fallbackKey(title, artist),
         resolution_source: resolution ? "musicbrainz" : "gemini_fallback",
         spotify_track_id: spotifyTrackId ?? null,
-        album_art_url: albumArtUrl ?? null,
+        album_art_url: coverArt,
         context_summary: contextSummary,
         embedding,
       })
