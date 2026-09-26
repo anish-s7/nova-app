@@ -9,6 +9,7 @@ export function getSpotifyAuthUrl(state: string) {
     redirect_uri: process.env.SPOTIFY_REDIRECT_URI ?? "",
     scope: "user-top-read",
     state,
+    show_dialog: "true",
   });
   return `${SPOTIFY_AUTH_URL}?${params.toString()}`;
 }
@@ -19,7 +20,7 @@ export async function exchangeCodeForToken(code: string) {
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
       Authorization: `Basic ${Buffer.from(
-        `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`
+        `${process.env.SPOTIFY_CLIENT_ID}:${process.env.SPOTIFY_CLIENT_SECRET}`,
       ).toString("base64")}`,
     },
     body: new URLSearchParams({
@@ -42,7 +43,10 @@ export interface SpotifyTopTrack {
   spotifyTrackId: string;
 }
 
-export async function getTopTracks(accessToken: string, limit = 5): Promise<SpotifyTopTrack[]> {
+export async function getTopTracks(
+  accessToken: string,
+  limit = 5,
+): Promise<SpotifyTopTrack[]> {
   const res = await fetch(`${SPOTIFY_API_BASE}/me/top/tracks?limit=${limit}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -52,9 +56,11 @@ export async function getTopTracks(accessToken: string, limit = 5): Promise<Spot
   }
 
   const data = await res.json();
-  return data.items.map((item: { name: string; artists: { name: string }[]; id: string }) => ({
-    name: item.name,
-    artist: item.artists[0]?.name ?? "Unknown",
-    spotifyTrackId: item.id,
-  }));
+  return data.items.map(
+    (item: { name: string; artists: { name: string }[]; id: string }) => ({
+      name: item.name,
+      artist: item.artists[0]?.name ?? "Unknown",
+      spotifyTrackId: item.id,
+    }),
+  );
 }

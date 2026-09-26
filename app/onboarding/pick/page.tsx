@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import useSWR from "swr";
 import { Check, Plus, Search, X } from "lucide-react";
 import { ContextChip } from "@/components/context-chip";
@@ -19,16 +19,44 @@ const MAX = 10;
 
 function initialPicks() {
   const s = getSession();
-  if (s.source !== "manual") return { songs: [] as Song[], tags: {} as Record<string, ContextTag[]> };
-  return { songs: s.songs, tags: Object.fromEntries(s.signals.map((g) => [g.songId, g.contextTags])) };
+  if (s.source !== "manual")
+    return { songs: [] as Song[], tags: {} as Record<string, ContextTag[]> };
+  return {
+    songs: s.songs,
+    tags: Object.fromEntries(s.signals.map((g) => [g.songId, g.contextTags])),
+  };
 }
 
 export default function PickSongsPage() {
   const router = useRouter();
-  const [picks, setPicks] = useState(initialPicks);
+  const searchParams = useSearchParams();
+
+  const [picks, setPicks] = useState(() => {
+    const rawTracks = searchParams.get("tracks");
+
+    if (rawTracks) {
+      const spotifyTracks = JSON.parse(rawTracks);
+
+      return {
+        songs: spotifyTracks.map((track: any) => ({
+          id: track.spotifyTrackId,
+          title: track.name,
+          artist: track.artist,
+        })),
+        tags: {},
+      };
+    }
+
+    return initialPicks();
+  });
+
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
-  const { data: results, isLoading } = useSWR(["songs", deferred], ([, q]) => searchSongs(q), { keepPreviousData: true });
+  const { data: results, isLoading } = useSWR(
+    ["songs", deferred],
+    ([, q]) => searchSongs(q),
+    { keepPreviousData: true },
+  );
 
   const count = picks.songs.length;
   const isPicked = (id: string) => picks.songs.some((s) => s.id === id);
@@ -45,14 +73,25 @@ export default function PickSongsPage() {
   const toggleTag = (songId: string, tag: ContextTag) =>
     setPicks((p) => {
       const cur = p.tags[songId] ?? [];
-      return { ...p, tags: { ...p.tags, [songId]: cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag] } };
+      return {
+        ...p,
+        tags: {
+          ...p.tags,
+          [songId]: cur.includes(tag)
+            ? cur.filter((t) => t !== tag)
+            : [...cur, tag],
+        },
+      };
     });
 
   const finish = async () => {
     await saveSongs({
       source: "manual",
       songs: picks.songs,
-      signals: picks.songs.map((s) => ({ songId: s.id, contextTags: picks.tags[s.id] ?? [] })),
+      signals: picks.songs.map((s) => ({
+        songId: s.id,
+        contextTags: picks.tags[s.id] ?? [],
+      })),
     });
     router.push("/onboarding/reading");
   };
@@ -63,19 +102,39 @@ export default function PickSongsPage() {
         backHref="/onboarding/music"
         title="Pick your songs"
         trailing={
-          <span className="text-sm tabular-nums text-muted-foreground" aria-live="polite">
-            <span className={cn("font-semibold", count >= MIN ? "text-primary" : "text-foreground")}>{count}</span>/{MAX}
+          <span
+            className="text-sm tabular-nums text-muted-foreground"
+            aria-live="polite"
+          >
+            <span
+              className={cn(
+                "font-semibold",
+                count >= MIN ? "text-primary" : "text-foreground",
+              )}
+            >
+              {count}
+            </span>
+            /{MAX}
           </span>
         }
       />
-      <div className="mx-5 h-1 overflow-hidden rounded-full bg-white/10" aria-hidden>
-        <div className="h-full rounded-full bg-primary transition-[width] duration-300" style={{ width: `${(count / MAX) * 100}%` }} />
+      <div
+        className="mx-5 h-1 overflow-hidden rounded-full bg-white/10"
+        aria-hidden
+      >
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-300"
+          style={{ width: `${(count / MAX) * 100}%` }}
+        />
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-6">
         {count > 0 ? (
           <section className="mt-5" aria-labelledby="picks-heading">
-            <h2 id="picks-heading" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            <h2
+              id="picks-heading"
+              className="text-xs font-medium uppercase tracking-wider text-muted-foreground"
+            >
               Your picks · tap when you play them (optional)
             </h2>
             <ul className="mt-2 flex flex-col divide-y divide-white/5">
@@ -95,9 +154,18 @@ export default function PickSongsPage() {
                       </button>
                     }
                   />
-                  <div className="no-scrollbar -mx-5 mt-2 flex gap-2 overflow-x-auto px-5" role="group" aria-label={`When you play ${song.title}`}>
+                  <div
+                    className="no-scrollbar -mx-5 mt-2 flex gap-2 overflow-x-auto px-5"
+                    role="group"
+                    aria-label={`When you play ${song.title}`}
+                  >
                     {CONTEXT_TAGS.map((t) => (
-                      <ContextChip key={t.id} label={t.label} selected={(picks.tags[song.id] ?? []).includes(t.id)} onToggle={() => toggleTag(song.id, t.id)} />
+                      <ContextChip
+                        key={t.id}
+                        label={t.label}
+                        selected={(picks.tags[song.id] ?? []).includes(t.id)}
+                        onToggle={() => toggleTag(song.id, t.id)}
+                      />
                     ))}
                   </div>
                 </li>
@@ -122,7 +190,13 @@ export default function PickSongsPage() {
             />
           </label>
 
-          <ul className={cn("mt-2 flex flex-col transition-opacity", isLoading && "opacity-60")} aria-busy={isLoading}>
+          <ul
+            className={cn(
+              "mt-2 flex flex-col transition-opacity",
+              isLoading && "opacity-60",
+            )}
+            aria-busy={isLoading}
+          >
             {(results ?? []).map((song) => {
               const picked = isPicked(song.id);
               const full = !picked && count >= MAX;
@@ -139,8 +213,19 @@ export default function PickSongsPage() {
                       song={song}
                       artSize={44}
                       trailing={
-                        <span className={cn("inline-flex size-8 items-center justify-center rounded-full border", picked ? "border-primary bg-primary text-primary-foreground" : "border-white/15 text-muted-foreground")}>
-                          {picked ? <Check className="size-4" aria-hidden /> : <Plus className="size-4" aria-hidden />}
+                        <span
+                          className={cn(
+                            "inline-flex size-8 items-center justify-center rounded-full border",
+                            picked
+                              ? "border-primary bg-primary text-primary-foreground"
+                              : "border-white/15 text-muted-foreground",
+                          )}
+                        >
+                          {picked ? (
+                            <Check className="size-4" aria-hidden />
+                          ) : (
+                            <Plus className="size-4" aria-hidden />
+                          )}
                         </span>
                       }
                     />
@@ -148,13 +233,21 @@ export default function PickSongsPage() {
                 </li>
               );
             })}
-            {results && results.length === 0 ? <li className="py-8 text-center text-sm text-muted-foreground">No songs match &ldquo;{deferred}&rdquo;.</li> : null}
+            {results && results.length === 0 ? (
+              <li className="py-8 text-center text-sm text-muted-foreground">
+                No songs match &ldquo;{deferred}&rdquo;.
+              </li>
+            ) : null}
           </ul>
         </section>
       </div>
 
       <div className="border-t border-white/5 bg-background/90 px-5 pb-6 pt-3 backdrop-blur">
-        <Button className="h-12 w-full rounded-full text-base" disabled={count < MIN} onClick={finish}>
+        <Button
+          className="h-12 w-full rounded-full text-base"
+          disabled={count < MIN}
+          onClick={finish}
+        >
           {count < MIN ? `Pick ${MIN - count} more` : "Read my music"}
         </Button>
       </div>
