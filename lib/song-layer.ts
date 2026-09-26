@@ -1,8 +1,9 @@
 import { getCluster, type ClusterId } from "./clusters";
 import { contextFor, songById } from "./music-context";
 import { effectiveSongs, getSession } from "./session";
-import { ME_ID, WORLD } from "./mock-world";
+import { ME_ID, meParty, WORLD } from "./mock-world";
 import { reasonFor } from "./texture";
+import { listenerWhy, mixFromScores, type WhyMix } from "./why-mix";
 import { THEME_IDS, THEME_THRESHOLD, THEMES, type Theme, type ThemeId } from "./themes";
 import type { Song } from "./types";
 
@@ -12,16 +13,23 @@ import type { Song } from "./types";
  */
 export type SongPick = { songId: string; reason: string; themes: ThemeId[]; addedAt: number };
 
-export type SongListener = { id: string; name: string; isMe: boolean; reason: string; daysAgo: number };
+/** `why` is why this person has this song, which can differ from the person sitting next to them. */
+export type SongListener = { id: string; name: string; isMe: boolean; reason: string; daysAgo: number; why: ClusterId };
 
 export type SongStar = {
   /** Catalog song id. The scene uses `songNodeId(id)`. */
   id: string;
   song: Song;
   meaning: string;
-  /** The "why" this song leans hardest toward, used for color and placement. */
+  /** The why most of its listeners have it for, used for color. Ties go to the song's own strongest lean. */
   cluster: ClusterId;
   listeners: SongListener[];
+  /** People per why, strongest first. More than one entry makes this a bridge. */
+  whyCounts: { id: ClusterId; count: number }[];
+  /** Two or more listeners, with two or more different whys among them. */
+  isBridge: boolean;
+  /** Why this song would land for you, whether or not you have it. */
+  myWhy: ClusterId;
   themes: ThemeId[];
   weight: number;
   isNew: boolean;
@@ -57,20 +65,24 @@ export function buildSongLayer(picks: SongPick[] = []): SongLayer {
     bySong.set(songId, list);
   };
 
+  const mixOf = new Map<string, WhyMix>(WORLD.map((u) => [u.id, mixFromScores(u.vector)]));
+  const whyOf = (userId: string, songId: string) => listenerWhy(contextFor(songId).clusters, mixOf.get(userId)!);
+
   for (const u of WORLD) {
     for (const s of u.songs) {
       const { text, daysAgo } = reasonFor(u.id, s.id, dominantCluster(s.id));
-      add(s.id, { id: u.id, name: u.name, isMe: false, reason: text, daysAgo });
+      add(s.id, { id: u.id, name: u.name, isMe: false, reason: text, daysAgo, why: whyOf(u.id, s.id) });
     }
   }
+  mixOf.set(ME_ID, mixFromScores(meParty().vector));
 
   const mine = new Map<string, SongListener>();
   for (const s of effectiveSongs(getSession())) {
     const { text, daysAgo } = reasonFor(ME_ID, s.id, dominantCluster(s.id));
-    mine.set(s.id, { id: ME_ID, name: "You", isMe: true, reason: text, daysAgo });
+    mine.set(s.id, { id: ME_ID, name: "You", isMe: true, reason: text, daysAgo, why: whyOf(ME_ID, s.id) });
   }
   // What you typed yourself always wins over the generated line.
-  for (const p of picks) mine.set(p.songId, { id: ME_ID, name: "You", isMe: true, reason: p.reason || "It just means something to me", daysAgo: 0 });
+  for (const p of picks) mine.set(p.songId, { id: ME_ID, name: "You", isMe: true, reason: p.reason || "It just means something to me", daysAgo: 0, why: whyOf(ME_ID, p.songId) });
   for (const [songId, l] of mine) add(songId, l);
 
   const themesFor = new Map<string, Set<ThemeId>>();
@@ -80,12 +92,19 @@ export function buildSongLayer(picks: SongPick[] = []): SongLayer {
 
   const stars: SongStar[] = [...bySong].map(([songId, listeners]) => {
     const sorted = [...listeners].sort((a, b) => Number(b.isMe) - Number(a.isMe) || a.daysAgo - b.daysAgo);
+    const own = dominantCluster(songId);
+    const counts = new Map<ClusterId, number>();
+    for (const l of sorted) counts.set(l.why, (counts.get(l.why) ?? 0) + 1);
+    const whyCounts = [...counts].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count || Number(b.id === own) - Number(a.id === own));
     return {
       id: songId,
       song: songById(songId),
       meaning: contextFor(songId).meaning,
-      cluster: dominantCluster(songId),
+      cluster: whyCounts[0]?.id ?? own,
       listeners: sorted,
+      whyCounts,
+      isBridge: sorted.length >= 2 && whyCounts.length >= 2,
+      myWhy: whyOf(ME_ID, songId),
       themes: [...(themesFor.get(songId) ?? [])],
       weight: sorted.length,
       isNew: sorted.some((l) => l.daysAgo <= NEW_WITHIN_DAYS),

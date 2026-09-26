@@ -14,7 +14,7 @@ export async function refreshPrimaryCluster(supabase: SupabaseClient<Database>, 
   ]);
   if (error) throw new Error(`refreshPrimaryCluster failed to load picks: ${error.message}`);
 
-  const cluster = primaryClusterFor(picks ?? []);
+  const cluster = primaryClusterFor(picks ?? [], profileId);
   if (cluster && cluster !== profile?.primary_cluster) {
     const { error: updateError } = await supabase.from("profiles").update({ primary_cluster: cluster }).eq("id", profileId);
     if (updateError) throw new Error(`refreshPrimaryCluster failed to write: ${updateError.message}`);

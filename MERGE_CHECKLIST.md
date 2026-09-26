@@ -123,6 +123,58 @@ Mock-backed today (`lib/galaxy-sample.ts` over the mock world). Real pieces: `GE
   (auth) exists. Picks, match list, and cards are additionally blocked on #3 (the
   tags/valence/energy product decision) until that's resolved.
 
+## Why mix and bridge songs
+
+The five whys describe *why* people listen; the edges say how strongly their actual music overlaps; bridge
+songs are where two whys meet, and the way in to someone. Nothing here feeds matching, which stays per pick.
+
+### Phase 1: done (mock-backed demo, no schema or API change)
+
+- **Pure math**: `lib/why-mix.ts` (`mixFromScores`, `classifyMix`, `topTwo`, `listenerWhy`). `classifyMix` calls the top
+  two "blended" when they're within `BLEND_MARGIN` (0.08) and breaks the tie by hashing the profile id instead of by
+  `CLUSTER_IDS` order, so near-ties no longer all fall to `quiet_company`.
+- **Production scorer**: `lib/cluster-assign.ts` gained `whyMixFor`, `classifyPicks`, `pickWhy`; `primaryClusterFor`
+  takes a `seed` (`refreshPrimaryCluster` passes the profile id). Still writes only `profiles.primary_cluster`.
+- **Nodes**: `GalaxyNode` has optional `whys`, `blended`, `bridge`. Absent `whys` means one-hot on `cluster`, so the
+  http galaxy renders exactly as before.
+- **Placement**: `lib/galaxy-layout.ts` anchors each person at the weighted center of their top two whys (not all five,
+  which would collapse the ring). Color, filters and labels still use the strongest why.
+- **Bridge songs**: `lib/song-layer.ts` gives each listener a `why` for that song and each star `whyCounts`,
+  `isBridge` (2+ listeners, 2+ whys) and `myWhy`. Bridge stars are larger and blended toward their second why's color
+  (SVG fallback: a second-color ring). Tapping one threads it to its listeners and lights them.
+- **Song sheet**: header reads like "5 for missing someone, 2 for going back"; listeners are grouped by why; each
+  "Say hi with a song" opens the existing swap composer with an editable opener prefilled (`lib/bridge-opener.ts`,
+  a template, no LLM call, plain title strings only). It goes through `?opener=` into `initialReason`.
+- In the mock world this yields 7 bridge songs. No mock person is `blended` (their vectors have a clear winner), so
+  blended placement only shows on real data until the mock is unified (below).
+
+Known gaps in Phase 1:
+- The mock `nodeFor` still takes `cluster` from `inference.primaryCluster`, not `classifyMix`, to stay consistent with
+  `getMe`/`Connection.cluster`. Fixed by "one scorer" below.
+- The composer prefill and the signed-in galaxy page were not exercised in a browser (both need a session); the bridge
+  sheet, listener threads and opener links were, on a temporary public page that has been removed.
+
+### Phase 2: make it real (needs DB owner for the first two)
+
+1. **Store the mix.** Add the five shares to `profiles` (e.g. `why_mix jsonb`, plus `why_blended boolean`), written by
+   `refreshPrimaryCluster` from `classifyPicks`; return them from `galaxy_pool`; map through `lib/galaxy-adapter.ts`
+   into `GalaxyNode.whys/blended`. Update `db/contract.md` and add a migration in the same PR.
+2. **A real song layer.** No endpoint exists (`getSongLayer` is mock-only). Add a `galaxy_songs` RPC: songs shared by
+   people in the window, their listener ids, and each pick's tags/valence/energy, so `pickWhy` runs server-side and
+   `SongStar.listeners[].why` is real. Bounded like the people window.
+3. **One scorer.** Have `lib/mock-world.ts` generate picks (tags, valence, energy) and run them through
+   `lib/cluster-assign.ts`, then retire the separate cluster math in `lib/inference.ts` for placement/labels. Compare
+   before/after galaxy screenshots: the mock's shape will change.
+4. **Per-pair shared why for Connections.** `groupByWhy` (`lib/connection-groups.ts`) groups by each person's global
+   cluster. Group by the why where the two mixes overlap most (largest `min(a[c], b[c])`), falling back to a neutral
+   "something else in common" under about 0.15.
+5. **Edge explanations.** Tap an edge for the shared songs and tags, or the cached Connection Card's evidence. Never a
+   Gemini call per edge.
+6. **Messages.** `Say hi` goes through the mock song-swap flow. Real threads need the `messages` route and #12 (auth).
+
+Decisions still open: show the mix as bars or "mostly / partly" (not percentages, since the weights are hand-set);
+whether `blended` should also change the person's label copy; the per-pair overlap floor in item 4.
+
 ## The `/sim` demo does not matter for merging
 
 `app/sim/` + `lib/sim/` are self-contained: nothing outside them imports from them, and they touch no Supabase,

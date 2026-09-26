@@ -5,6 +5,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { getCluster } from "@/lib/clusters";
 import { isSongNode } from "@/lib/song-layer";
+import { topTwo } from "@/lib/why-mix";
 import { BOND_AT } from "@/lib/thread";
 import type { LayoutPoint } from "@/lib/galaxy-layout";
 import type { GalaxyApi, GalaxyViewProps } from "./types";
@@ -123,6 +124,8 @@ function nebulaTexture() {
   g.fillRect(0, 0, 128, 128);
   return new THREE.CanvasTexture(c);
 }
+
+const bridgeTo = new THREE.Color();
 
 export type ClusterCenter = { id: string; x: number; y: number; z: number; spread: number; extent: number; count: number };
 
@@ -283,7 +286,8 @@ function Scene({
       return !focusIds || focusIds.has(n.userId) || n.userId === selectedId ? 1 : 0;
     }
     if (n.isMe) return 1;
-    if (mode === "songs") return 0;
+    // A selected song lights the people who have it; everyone else steps back.
+    if (mode === "songs") return focusIds?.has(n.userId) ? 1 : 0;
     // Ambient far stars stay faint until you tap one; they should be easy to ignore.
     if (n.far) return selectedId === n.userId ? 1 : !focusCluster || n.cluster === focusCluster ? 0.45 : 0;
     return !focusCluster || n.cluster === focusCluster || n.userId === selectedId ? 1 : 0;
@@ -304,8 +308,13 @@ function Scene({
       const p = points.get(node.userId)!;
       pos.set([p.x, p.y, p.z], i * 3);
       c.set(getCluster(node.cluster).color);
+      // A bridge song is drawn between its two whys: their colors, weighted by how many listeners each has.
+      if (node.kind === "song" && node.bridge && node.whys) {
+        const [a, b] = topTwo(node.whys);
+        if (b) c.lerp(bridgeTo.set(getCluster(b.id).color), 1 - a.w);
+      }
       col.set([c.r, c.g, c.b], i * 3);
-      sizeA[i] = node.isMe ? 3.4 : node.kind === "song" ? 1.5 + 0.3 * Math.min(6, node.weight ?? 1) : node.far ? 1.6 : 2.1;
+      sizeA[i] = node.isMe ? 3.4 : node.kind === "song" ? (1.5 + 0.3 * Math.min(6, node.weight ?? 1)) * (node.bridge ? 1.3 : 1) : node.far ? 1.6 : 2.1;
       isMe[i] = node.isMe ? 1 : 0;
       if (!known.current.has(node.userId) && !births.current.has(node.userId)) births.current.set(node.userId, now());
       birth[i] = births.current.get(node.userId) ?? -1;
@@ -369,7 +378,7 @@ function Scene({
       if (!touched && (focusCluster || focusIds)) a *= inFocus(e.source) && inFocus(e.target) ? 1.8 : 0.15;
       // Each layer only draws its own threads; the other one fades back.
       const songEdge = isSongNode(e.source) && isSongNode(e.target);
-      if (mode === "songs") a *= songEdge ? 1.6 : 0.08;
+      if (mode === "songs") a *= songEdge ? 1.6 : touched ? 1 : 0.08;
       else if (songEdge) a = 0;
       alpha.setX(i * 2, a);
       alpha.setX(i * 2 + 1, a);

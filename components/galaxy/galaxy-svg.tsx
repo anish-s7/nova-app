@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { topTwo } from "@/lib/why-mix";
 import { getCluster } from "@/lib/clusters";
 import type { LayoutPoint } from "@/lib/galaxy-layout";
 import { BOND_AT } from "@/lib/thread";
@@ -136,7 +137,7 @@ export function GalaxySvg({
         const song = n.kind === "song";
         // The song layer and the people layer take turns; the other one is ghosted or hidden.
         const visible = n.isMe ? phase !== "dark" : phase === "all" && (!song || mode === "songs");
-        const dimmed = song ? !!focusIds && !focusIds.has(n.userId) : !n.isMe && (mode === "songs" || (!!focusCluster && n.cluster !== focusCluster));
+        const dimmed = song ? !!focusIds && !focusIds.has(n.userId) : !n.isMe && (mode === "songs" ? !focusIds?.has(n.userId) : !!focusCluster && n.cluster !== focusCluster);
         const on = n.userId === highlight;
         const size = n.isMe ? 1.3 : on ? 1.1 : song ? 0.5 + 0.1 * Math.min(6, n.weight ?? 1) : 0.75;
         return (
@@ -149,6 +150,7 @@ export function GalaxySvg({
           >
             <circle r={size * 2.6} fill={color} opacity={0.18} />
             <circle r={size} fill={color} />
+            {song && n.bridge && n.whys ? <circle r={size * 1.5} fill="none" stroke={getCluster(topTwo(n.whys)[1]?.id ?? n.cluster).color} strokeWidth={0.14} /> : null}
             <circle r={size * 0.45} fill="url(#glow)" />
             {interactive ? <circle r={3} fill="transparent" /> : null}
             {n.userId === meId && !compact ? (

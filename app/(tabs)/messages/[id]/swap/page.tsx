@@ -6,5 +6,5 @@ import { SongSwapComposer } from "@/components/song-swap-composer";
 export default function SongSwapPage() {
   const { id } = useParams<{ id: string }>();
   const params = useSearchParams();
-  return <SongSwapComposer userId={id} replyToSwapId={params.get("replyTo") ?? undefined} initialSongId={params.get("song") ?? undefined} />;
+  return <SongSwapComposer userId={id} replyToSwapId={params.get("replyTo") ?? undefined} initialSongId={params.get("song") ?? undefined} initialReason={params.get("opener") ?? undefined} />;
 }

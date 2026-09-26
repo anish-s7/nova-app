@@ -1,11 +1,12 @@
 import { forceLink, forceManyBody, forceSimulation, forceX, forceY, forceZ, type SimNode } from "d3-force-3d";
 import { CLUSTER_IDS } from "./clusters";
 import type { GalaxyEdge, GalaxyNode } from "./types";
+import { topTwo } from "./why-mix";
 
 export type LayoutPoint = { id: string; x: number; y: number; z: number; cluster: string };
 export type Layout = { points: Map<string, LayoutPoint>; radius: number };
 
-type N = SimNode & { cluster: string };
+type N = SimNode & { cluster: string; ax: number; ay: number; az: number };
 type L = { source: string | N; target: string | N; similarity: number };
 
 const TARGET_RADIUS = 22;
@@ -33,10 +34,35 @@ function anchor(cluster: string) {
   return { x: Math.cos(a) * 30, y: Math.sin(a) * 30, z: Math.sin(a * 2 + 0.6) * 14 };
 }
 
+/**
+ * Where a person is pulled to: the weighted center of their top two whys, so someone split between
+ * two regions settles between them. Only two, because the anchors sit on a ring and averaging all
+ * five would drag everyone to the middle and collapse the regions. With no mix it is the cluster's anchor.
+ */
+function nodeAnchor(n: Pick<GalaxyNode, "cluster" | "whys">) {
+  if (!n.whys) return anchor(n.cluster);
+  const top = topTwo(n.whys);
+  const p = { x: 0, y: 0, z: 0 };
+  for (const { id, w } of top) {
+    const a = anchor(id);
+    p.x += a.x * w;
+    p.y += a.y * w;
+    p.z += a.z * w;
+  }
+  return p;
+}
+
+const whysKey = (n: GalaxyNode) =>
+  n.whys
+    ? topTwo(n.whys)
+        .map((t) => `${t.id}${t.w.toFixed(2)}`)
+        .join("+")
+    : "";
+
 const cache = new Map<string, Layout>();
 
 export function layoutKey(nodes: GalaxyNode[], edges: GalaxyEdge[]) {
-  return `${nodes.map((n) => `${n.userId}:${n.cluster}`).join("|")}#${edges.map((e) => `${e.source}-${e.target}-${e.similarity.toFixed(2)}`).join("|")}`;
+  return `${nodes.map((n) => `${n.userId}:${n.cluster}${n.whys ? `:${whysKey(n)}` : ""}`).join("|")}#${edges.map((e) => `${e.source}-${e.target}-${e.similarity.toFixed(2)}`).join("|")}`;
 }
 
 /**
@@ -50,8 +76,8 @@ export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[]): Layout 
 
   const rand = seeded(hash(key));
   const simNodes: N[] = nodes.map((n) => {
-    const a = anchor(n.cluster);
-    return { id: n.userId, cluster: n.cluster, x: a.x + (rand() - 0.5) * 16, y: a.y + (rand() - 0.5) * 16, z: a.z + (rand() - 0.5) * 16 };
+    const a = nodeAnchor(n);
+    return { id: n.userId, cluster: n.cluster, ax: a.x, ay: a.y, az: a.z, x: a.x + (rand() - 0.5) * 16, y: a.y + (rand() - 0.5) * 16, z: a.z + (rand() - 0.5) * 16 };
   });
   const ids = new Set(simNodes.map((n) => n.id));
   const links: L[] = edges
@@ -67,9 +93,9 @@ export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[]): Layout 
         .strength((l) => 0.08 + l.similarity * l.similarity * 0.7),
     )
     .force("charge", forceManyBody<N>().strength(-22).distanceMax(45))
-    .force("x", forceX<N>((d) => anchor(d.cluster).x).strength(0.05))
-    .force("y", forceY<N>((d) => anchor(d.cluster).y).strength(0.05))
-    .force("z", forceZ<N>((d) => anchor(d.cluster).z).strength(0.05))
+    .force("x", forceX<N>((d) => d.ax).strength(0.05))
+    .force("y", forceY<N>((d) => d.ay).strength(0.05))
+    .force("z", forceZ<N>((d) => d.az).strength(0.05))
     .stop()
     .tick(300);
 

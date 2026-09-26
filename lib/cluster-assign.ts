@@ -1,5 +1,6 @@
 import { CLUSTER_IDS, type ClusterId } from "./clusters";
 import type { Tag } from "./tags";
+import { classifyMix, mixFromScores, type MixClass, type WhyMix } from "./why-mix";
 
 /**
  * Which "why" a profile belongs to, from the picks they've made. Deterministic and free: no LLM,
@@ -41,10 +42,29 @@ export function scorePick(pick: PickForCluster): Record<ClusterId, number> {
   return s;
 }
 
-/** The cluster a profile leans toward overall, or null with no picks. Ties go to the earlier cluster in CLUSTER_IDS, so it is stable. */
-export function primaryClusterFor(picks: PickForCluster[]): ClusterId | null {
+/** A profile's listening profile: each pick's lean summed across the five whys, as shares that sum to 1. Null with no picks. */
+export function whyMixFor(picks: PickForCluster[]): WhyMix | null {
   if (!picks.length) return null;
   const total = Object.fromEntries(CLUSTER_IDS.map((c) => [c, 0])) as Record<ClusterId, number>;
-  for (const p of picks) for (const c of CLUSTER_IDS) total[c] += scorePick(p)[c];
-  return CLUSTER_IDS.reduce((best, c) => (total[c] > total[best] ? c : best), CLUSTER_IDS[0]);
+  for (const p of picks) {
+    const s = scorePick(p);
+    for (const c of CLUSTER_IDS) total[c] += s[c];
+  }
+  return mixFromScores(total);
+}
+
+/** The mix plus its primary/secondary/blended reading, or null with no picks. `seed` (the profile id) breaks near-ties without favoring list order. */
+export function classifyPicks(picks: PickForCluster[], seed: string): (MixClass & { mix: WhyMix }) | null {
+  const mix = whyMixFor(picks);
+  return mix ? { mix, ...classifyMix(mix, seed) } : null;
+}
+
+/** The cluster a profile leans toward overall, or null with no picks. Near-ties are broken by `seed`, not by CLUSTER_IDS order. */
+export function primaryClusterFor(picks: PickForCluster[], seed = ""): ClusterId | null {
+  return classifyPicks(picks, seed)?.primary ?? null;
+}
+
+/** Why one pick was made: the why it leans hardest toward. Used to say why someone has a song, not who they are overall. */
+export function pickWhy(pick: PickForCluster, seed = ""): ClusterId {
+  return classifyMix(mixFromScores(scorePick(pick)), seed).primary;
 }
