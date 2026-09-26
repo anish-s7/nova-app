@@ -89,6 +89,12 @@ profile, adding a pick, sending a message); the service-role client is
 only for backend-only operations that legitimately span users (catalog
 lookups, the match RPC).
 
+Sign-in (email/password, Google, Apple) is Supabase Auth end to end — see
+`AUTH_SETUP.md` for dashboard setup and a file map. `proxy.ts` (Next 16's
+name for middleware) refreshes the session cookie and redirects signed-out
+visitors from app screens to `/login`. When the `NEXT_PUBLIC_SUPABASE_*` keys
+are absent, the proxy and auth UI step aside and the app runs on demo data.
+
 ## Hard rule: Spotify data can never touch the LLM
 Spotify's Developer Policy prohibits (a) feeding Spotify Content into any
 ML/AI model, and (b) analyzing Spotify content for any purpose, including

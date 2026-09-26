@@ -35,13 +35,23 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "id query param is required" }, { status: 400 });
   }
 
+  const requesterId = await getCurrentProfileId();
   const supabase = createServerClient();
+
+  let picksQuery = supabase
+    .from("song_picks")
+    .select("id, tags, valence, energy, reason_text, is_public, songs(title, artist, album_art_url)")
+    .eq("profile_id", id);
+
+  // Uses the service-role client, which bypasses RLS, so privacy has to be
+  // enforced here: only the profile's owner sees their private picks.
+  if (requesterId !== id) {
+    picksQuery = picksQuery.eq("is_public", true);
+  }
+
   const [{ data: profile, error }, { data: picks }] = await Promise.all([
     supabase.from("profiles").select("*").eq("id", id).single(),
-    supabase
-      .from("song_picks")
-      .select("id, tags, valence, energy, reason_text, is_public, songs(title, artist, album_art_url)")
-      .eq("profile_id", id),
+    picksQuery,
   ]);
 
   if (error) {

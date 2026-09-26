@@ -8,7 +8,10 @@ import { Logo } from "@/components/logo";
 import { buttonVariants } from "@/components/ui/button";
 import { useAnime } from "@/hooks/use-anime";
 import { useSession } from "@/lib/session";
+import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { cn } from "@/lib/utils";
+
+const authEnabled = isSupabaseConfigured();
 
 export default function WelcomePage() {
   const { demo } = useSession();
@@ -38,10 +41,18 @@ export default function WelcomePage() {
         </p>
 
         <div data-intro-rest className="mt-auto pt-10">
-          <Link href="/onboarding/music" className={cn(buttonVariants(), "btn-glow h-12 w-full rounded-full text-base")}>
+          <Link href={authEnabled ? "/signup" : "/onboarding/music"} className={cn(buttonVariants(), "btn-glow h-12 w-full rounded-full text-base")}>
             Continue
             <ArrowRight className="size-4" aria-hidden />
           </Link>
+          {authEnabled ? (
+            <p className="mt-4 text-center text-sm text-muted-foreground">
+              Already have an account?{" "}
+              <Link href="/login" className="font-medium text-foreground hover:text-primary">
+                Log in
+              </Link>
+            </p>
+          ) : null}
         </div>
       </div>
     </main>
