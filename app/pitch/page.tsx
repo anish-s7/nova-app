@@ -5,6 +5,7 @@ import { ArrowUpRight, Lock, RotateCcw, Sparkles } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
 import { GalaxyCanvas } from "@/components/galaxy/galaxy-canvas";
 import type { GalaxyApi, GalaxyBridge } from "@/components/galaxy/types";
+import { WarpOverlay, type WarpHandle } from "@/components/pitch/warp-overlay";
 import { Button } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { getCluster } from "@/lib/clusters";
@@ -47,6 +48,7 @@ export default function PitchPage() {
 
 function Pitch({ onReplay }: { onReplay: () => void }) {
   const apiRef = useRef<GalaxyApi | null>(null);
+  const warpRef = useRef<WarpHandle | null>(null);
   const [ready, setReady] = useState(false);
   const [beat, setBeat] = useState<Beat>("ignite");
   const [caption, setCaption] = useState("");
@@ -102,6 +104,7 @@ function Pitch({ onReplay }: { onReplay: () => void }) {
   const explore = async () => {
     setTapped(null);
     setBeat("universe");
+    warpRef.current?.play(2800);
     await apiRef.current?.pullBackToOverview(2800);
   };
 
@@ -119,6 +122,7 @@ function Pitch({ onReplay }: { onReplay: () => void }) {
     if (!api) return;
     setBeat("travel");
     setCaption(`Traveling to ${DESTINATION.name}`);
+    warpRef.current?.play(2800);
     await api.flyToDestination(DESTINATION.id, { duration: 2800 });
     if (!alive.current) return;
     // The community expands into its members as you arrive.
@@ -149,9 +153,11 @@ function Pitch({ onReplay }: { onReplay: () => void }) {
     if (!api) return;
     setBeat("returning");
     setCaption("");
+    warpRef.current?.play(2600);
     await api.returnHome(2600);
     if (!alive.current) return;
     setCaption(`${GATEWAY.name} is coming home with you`);
+    warpRef.current?.play(3000);
     await api.flyIntoOrbit(GATEWAY.userId, 3000);
     if (!alive.current) return;
     setCaption("");
@@ -180,6 +186,7 @@ function Pitch({ onReplay }: { onReplay: () => void }) {
         initialPhase="dark"
         onReady={() => setReady(true)}
       />
+      <WarpOverlay ref={warpRef} />
 
       <header className="pointer-events-none relative z-10 flex items-center justify-between gap-3 p-4 pt-5">
         <span className="rounded-full border border-white/10 bg-background/40 px-2 py-0.5 text-[11px] text-muted-foreground backdrop-blur">Pitch demo · scripted</span>
