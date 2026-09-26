@@ -8,7 +8,7 @@ import { ContextChip } from "@/components/context-chip";
 import { ScreenHeader } from "@/components/screen-header";
 import { SongTile } from "@/components/song-tile";
 import { Button } from "@/components/ui/button";
-import { saveSongs, searchSongs } from "@/lib/api";
+import { chooseSongs, searchSongs } from "@/lib/api";
 import { CONTEXT_TAGS } from "@/lib/clusters";
 import { getSession } from "@/lib/session";
 import type { ContextTag, Song } from "@/lib/types";
@@ -48,13 +48,13 @@ export default function PickSongsPage() {
       return { ...p, tags: { ...p.tags, [songId]: cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag] } };
     });
 
-  const finish = async () => {
-    await saveSongs({
+  const finish = () => {
+    chooseSongs({
       source: "manual",
       songs: picks.songs,
       signals: picks.songs.map((s) => ({ songId: s.id, contextTags: picks.tags[s.id] ?? [] })),
     });
-    router.push("/onboarding/reading");
+    router.push("/onboarding/feel");
   };
 
   return (
@@ -155,7 +155,7 @@ export default function PickSongsPage() {
 
       <div className="border-t border-white/5 bg-background/90 px-5 pb-6 pt-3 backdrop-blur">
         <Button className="h-12 w-full rounded-full text-base" disabled={count < MIN} onClick={finish}>
-          {count < MIN ? `Pick ${MIN - count} more` : "Read my music"}
+          {count < MIN ? `Pick ${MIN - count} more` : "Next: how they feel"}
         </Button>
       </div>
     </main>

@@ -288,6 +288,8 @@ export type ConversationSummary = {
   lastMessage?: Message;
   /** Songs traded in this thread. */
   threadSongs?: number;
+  /** Whose move it is in the Song Swap thread (see lib/thread.ts). Derived from the messages, not stored. */
+  turn?: "mine" | "theirs" | "even" | "open";
 };
 
 export type Conversation = {
