@@ -39,6 +39,7 @@ import {
   partyFromWorld,
   resetWorld as resetMockWorld,
   scheduleReply,
+  scheduleSwapBack,
   synthesizeSignals,
   worldUser,
   type Party,
@@ -364,7 +365,7 @@ export async function getConversations(): Promise<ConversationSummary[]> {
       const profile = await db.getProfile(userId);
       const u = lookupUser(userId); // NOT IN CONTRACT: cluster
       if (!profile || !u) return [];
-      return [{ userId, name: profile.display_name, cluster: u.primary, lastMessage: byTime(msgs).at(-1) }];
+      return [{ userId, name: profile.display_name, cluster: u.primary, lastMessage: byTime(msgs).at(-1), threadSongs: msgs.filter((m) => m.kind === "swap").length }];
     }),
   );
   return summaries.flat().sort((a, b) => (b.lastMessage?.sentAt ?? "").localeCompare(a.lastMessage?.sentAt ?? ""));
@@ -405,6 +406,7 @@ export async function sendSongSwap(userId: string, song: Song, reason: string, r
   };
   conversations.set(userId, [...list, msg]);
   scheduleReply(userId);
+  if (!replyToSwapId) scheduleSwapBack(userId);
   return msg;
 }
 

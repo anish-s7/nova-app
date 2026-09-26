@@ -1,4 +1,5 @@
 import { CLUSTERS, CLUSTER_IDS, type ClusterId } from "./clusters";
+import { reasonFor } from "./texture";
 import { contextFor, songById, songsInCluster, type SongMode } from "./music-context";
 import { cosine, dominantMode, infer, primaryCluster, vectorFromMotivations, type Vector } from "./inference";
 import { effectiveSongs, getSession } from "./session";
@@ -375,6 +376,29 @@ const REPLIES: Record<ClusterId, string> = {
   somewhere_else: "I needed that kind of escape today, I'll put it on tonight",
   old_selves: "wait that's such a specific year for me too",
 };
+
+/** After you send a song, the other person sends one of theirs back a few seconds later, so the thread visibly grows. */
+export function scheduleSwapBack(userId: string) {
+  const u = worldUser(userId);
+  if (!u) return;
+  const traded = new Set((conversations.get(userId) ?? []).flatMap((m) => (m.kind === "swap" ? [m.swap.song.id] : [])));
+  const song = u.songs.find((s) => !traded.has(s.id));
+  if (!song) return;
+  setTimeout(() => {
+    const list = (conversations.get(userId) ?? []).map((m): Message =>
+      m.kind === "swap" && m.fromUserId === ME_ID && m.swap.status === "pending" ? { ...m, swap: { ...m.swap, status: "returned" } } : m,
+    );
+    const id = Date.now();
+    list.push({
+      id: `swapback-${id}`,
+      fromUserId: userId,
+      sentAt: new Date(id).toISOString(),
+      kind: "swap",
+      swap: { id: `sw-back-${id}`, fromUserId: userId, toUserId: ME_ID, song, reason: `Mine, ${reasonFor(userId, song.id, u.primary).text}.`, status: "returned" },
+    });
+    conversations.set(userId, list);
+  }, 6000);
+}
 
 /** Schedules a single canned reply so a live demo chat feels alive. */
 export function scheduleReply(userId: string) {

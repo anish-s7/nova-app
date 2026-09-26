@@ -78,7 +78,7 @@ function SongRow({ entry, clusterId, expanded, onToggle }: { entry: ClusterSong;
       {expanded ? (
         <div className="pb-3 pl-1">
           <p className="mb-2 text-xs italic text-muted-foreground">“{song.title}” {entry.meaning}</p>
-          <ListenerList listeners={listeners} cluster={clusterId} />
+          <ListenerList listeners={listeners} cluster={clusterId} songId={song.id} />
         </div>
       ) : null}
     </li>
@@ -87,7 +87,7 @@ function SongRow({ entry, clusterId, expanded, onToggle }: { entry: ClusterSong;
 
 
 /** Who has this song and what they say about it, each with a way to reach out about it. */
-export function ListenerList({ listeners, cluster }: { listeners: { id: string; name: string; isMe: boolean; reason: string; daysAgo: number }[]; cluster: string }) {
+export function ListenerList({ listeners, cluster, songId }: { songId?: string; listeners: { id: string; name: string; isMe: boolean; reason: string; daysAgo: number }[]; cluster: string }) {
   const others = listeners.filter((l) => !l.isMe);
   return (
     <>
@@ -102,7 +102,7 @@ export function ListenerList({ listeners, cluster }: { listeners: { id: string; 
               <p className="text-[11px] text-muted-foreground">{l.daysAgo === 0 ? "added just now" : `added ${ago(l.daysAgo)}`}</p>
             </div>
             {l.isMe ? null : (
-              <Link href={`/messages/${l.id}/swap`} className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "h-8 shrink-0 px-3 text-xs")}>
+              <Link href={songId ? `/messages/${l.id}/swap?song=${songId}` : `/messages/${l.id}/swap`} className={cn(buttonVariants({ variant: "secondary", size: "sm" }), "h-8 shrink-0 px-3 text-xs")}>
                 Say hi with a song
               </Link>
             )}

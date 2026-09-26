@@ -9,18 +9,21 @@ import { ScreenHeader } from "@/components/screen-header";
 import { SongTile } from "@/components/song-tile";
 import { Button } from "@/components/ui/button";
 import { getConversation, searchSongs, sendSongSwap } from "@/lib/api";
-import { effectiveSongs, useSession } from "@/lib/session";
+import { SONG_CATALOG } from "@/lib/music-context";
+import { effectiveSongs, getSession, useSession } from "@/lib/session";
+import { buildSongLayer } from "@/lib/song-layer";
 import type { Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-export function SongSwapComposer({ userId, replyToSwapId }: { userId: string; replyToSwapId?: string }) {
+export function SongSwapComposer({ userId, replyToSwapId, initialSongId }: { userId: string; replyToSwapId?: string; initialSongId?: string }) {
   const router = useRouter();
   const session = useSession();
   const { data: convo } = useSWR(["conversation", userId], ([, id]) => getConversation(id));
   const [query, setQuery] = useState("");
   const deferred = useDeferredValue(query);
   const { data: results } = useSWR(deferred ? ["songs", deferred] : null, ([, q]) => searchSongs(q), { keepPreviousData: true });
-  const [song, setSong] = useState<Song | null>(null);
+  // Arriving from a song in the galaxy: the song is already chosen, so the only thing left is why.
+  const [song, setSong] = useState<Song | null>(() => SONG_CATALOG.find((s) => s.id === initialSongId) ?? null);
   const [reason, setReason] = useState("");
   const [sending, setSending] = useState(false);
 
@@ -28,6 +31,7 @@ export function SongSwapComposer({ userId, replyToSwapId }: { userId: string; re
   const incoming = replyToSwapId
     ? convo?.messages.find((m) => m.kind === "swap" && m.swap.id === replyToSwapId)
     : undefined;
+  const theyHaveIt = song ? buildSongLayer(getSession().picks ?? []).stars.find((s) => s.id === song.id)?.listeners.some((l) => l.id === userId) : false;
   const list = deferred ? (results ?? []) : effectiveSongs(session);
 
   async function send() {
@@ -81,6 +85,7 @@ export function SongSwapComposer({ userId, replyToSwapId }: { userId: string; re
           <h2 id="reason-step" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
             2 · Why this one, for {name}?
           </h2>
+          {theyHaveIt ? <p className="mt-1 text-sm text-primary">{name} has this one too. Tell them what it is for you.</p> : null}
           <label htmlFor="swap-reason" className="sr-only">
             Your reason
           </label>

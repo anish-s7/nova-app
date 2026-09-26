@@ -7,9 +7,11 @@ import { ArrowUp, Disc3, Sparkles } from "lucide-react";
 import { ScreenHeader } from "@/components/screen-header";
 import { SongSwapCard } from "@/components/song-swap-card";
 import { ThemeTag } from "@/components/theme-tag";
+import { ThreadStrip } from "@/components/thread-strip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { getConversation, ME_ID, sendMessage } from "@/lib/api";
+import { threadFrom } from "@/lib/thread";
 import { cn } from "@/lib/utils";
 
 export function ChatView({ userId, initialDraft }: { userId: string; initialDraft: string }) {
@@ -76,6 +78,8 @@ export function ChatView({ userId, initialDraft }: { userId: string; initialDraf
                 </>
               ) : null}
             </div>
+
+            <ThreadStrip thread={threadFrom(data.messages, ME_ID)} name={data.user.name} userId={userId} />
 
             {data.messages.length === 0 ? (
               <div className="flex flex-col gap-2">

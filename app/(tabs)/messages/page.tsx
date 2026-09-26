@@ -62,7 +62,10 @@ export default function MessagesPage() {
                       <p className="truncate font-semibold">{c.name}</p>
                       {c.lastMessage ? <span className="shrink-0 text-xs text-muted-foreground">{relativeTime(c.lastMessage.sentAt)}</span> : null}
                     </div>
-                    <p className="truncate text-sm text-muted-foreground">{preview(c.lastMessage)}</p>
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <span className="min-w-0 flex-1 truncate">{preview(c.lastMessage)}</span>
+                      {c.threadSongs ? <span className="shrink-0 text-[11px] tabular-nums text-primary/80">{c.threadSongs} {c.threadSongs === 1 ? "song" : "songs"}</span> : null}
+                    </p>
                   </div>
                 </Link>
               </li>

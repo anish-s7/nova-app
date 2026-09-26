@@ -46,7 +46,7 @@ export function SongSheetContent({ star, layer, onAddYours }: { star: SongStar; 
       ) : null}
 
       <div className="-mx-1 max-h-[34vh] overflow-y-auto px-1">
-        <ListenerList listeners={star.listeners} cluster={star.cluster} />
+        <ListenerList listeners={star.listeners} cluster={star.cluster} songId={star.id} />
       </div>
 
       {mine ? null : (

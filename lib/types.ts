@@ -185,6 +185,8 @@ export type ConversationSummary = {
   avatarUrl?: string;
   cluster: string;
   lastMessage?: Message;
+  /** Songs traded in this thread. */
+  threadSongs?: number;
 };
 
 export type Conversation = {
