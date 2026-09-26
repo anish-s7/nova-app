@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { LocateFixed, Plus, X } from "lucide-react";
+import { Compass, LocateFixed, Plus, X } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
 import { BottomSheet } from "@/components/bottom-sheet";
 import { GalaxyCanvas, GalaxySkeleton } from "@/components/galaxy/galaxy-canvas";
@@ -12,6 +12,7 @@ import { ClusterFilter } from "@/components/galaxy/cluster-filter";
 import { AddSongSheetContent, type AddedInfo } from "@/components/galaxy/add-song-sheet";
 import { ClusterSheetContent } from "@/components/galaxy/cluster-sheet";
 import { SongSheetContent } from "@/components/galaxy/song-sheet";
+import { WanderSheetContent } from "@/components/galaxy/wander-sheet";
 import { ModeToggle, ThemeFilter } from "@/components/galaxy/theme-filter";
 import { Logo } from "@/components/logo";
 import { OverlapBadge } from "@/components/overlap-badge";
@@ -20,8 +21,8 @@ import { ThemeTag } from "@/components/theme-tag";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
-import { useGalaxyRealtime } from "@/hooks/use-galaxy-realtime";
-import { getConversations, getGalaxy, getSongLayer, getUser, ME_ID } from "@/lib/api";
+import { useGalaxyRealtime, type Arrival } from "@/hooks/use-galaxy-realtime";
+import { getConversations, getGalaxy, getGalaxyMore, getSongLayer, getUser, ME_ID } from "@/lib/api";
 import { getCluster } from "@/lib/clusters";
 import { useSession } from "@/lib/session";
 import { isSongNode, songNodeId } from "@/lib/song-layer";
@@ -33,8 +34,19 @@ import { cn } from "@/lib/utils";
 export default function GalaxyPage() {
   const session = useSession();
   const version = session.version;
-  const { data, error, mutate, isValidating } = useSWR(["galaxy", version], getGalaxy, { revalidateOnFocus: false });
-  const arrivals = useGalaxyRealtime(!!data);
+  // ?limit=20 shrinks the window so the bounded view is easy to see with the small mock world.
+  const [limit] = useState<number | undefined>(() => {
+    if (typeof window === "undefined") return undefined;
+    const n = Number(new URLSearchParams(location.search).get("limit"));
+    return Number.isFinite(n) && n > 1 ? n : undefined;
+  });
+  const { data, error, mutate, isValidating } = useSWR(["galaxy", version, limit], () => getGalaxy({ limit }), { revalidateOnFocus: false });
+  const liveArrivals = useGalaxyRealtime(!!data);
+  // "More here" pages, per cluster. Keyed by session version so a reset starts clean.
+  const [moreState, setMoreState] = useState<{ version: number; byCluster: Record<string, { arrivals: Arrival[]; remaining: number }> }>({ version, byCluster: {} });
+  const [loadingMore, setLoadingMore] = useState(false);
+  const more = useMemo(() => (moreState.version === version ? moreState.byCluster : {}), [moreState, version]);
+  const arrivals = useMemo(() => [...liveArrivals, ...Object.values(more).flatMap((m) => m.arrivals)], [liveArrivals, more]);
   const { data: convos } = useSWR(["conversations", version], getConversations, { refreshInterval: 4000 });
   const threads = useMemo(() => (convos ?? []).filter((c) => c.threadSongs).map((c) => ({ userId: c.userId, count: c.threadSongs! })), [convos]);
   const apiRef = useRef<GalaxyApi | null>(null);
@@ -42,6 +54,7 @@ export default function GalaxyPage() {
   const [dismissedArrival, setDismissedArrival] = useState(false);
   const [focusCluster, setFocusCluster] = useState<string | null>(null);
   const [clusterOpen, setClusterOpen] = useState(false);
+  const [wandering, setWandering] = useState(false);
   const [mode, setMode] = useState<"people" | "songs">("people");
   const [themeFocus, setThemeFocus] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ songId: string | null } | null>(null);
@@ -53,7 +66,36 @@ export default function GalaxyPage() {
   const nodes: GalaxyNode[] = data ? [...data.nodes, ...arrivals.map((a) => a.node)] : [];
   const edges: GalaxyEdge[] = data ? [...data.edges, ...arrivals.flatMap((a) => a.edges)] : [];
   const selected = nodes.find((n) => n.userId === selectedId);
-  const arrival = arrivals[0]?.node;
+  const arrival = liveArrivals[0]?.node;
+  // People still hidden, after whatever "more here" has revealed.
+  const hiddenNow = useMemo(() => {
+    if (!data?.hidden) return undefined;
+    const byCluster = { ...data.hidden.byCluster };
+    let total = data.hidden.total;
+    for (const [id, m] of Object.entries(more)) {
+      byCluster[id] = Math.max(0, (byCluster[id] ?? 0) - m.arrivals.length);
+      total -= m.arrivals.length;
+    }
+    return { total: Math.max(0, total), byCluster };
+  }, [data, more]);
+  const hiddenHere = focusCluster ? (hiddenNow?.byCluster[focusCluster] ?? 0) : 0;
+
+  const showMore = async (cluster: string) => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const have = more[cluster]?.arrivals.length ?? 0;
+      const page = await getGalaxyMore(cluster, have, 40, limit);
+      setMoreState((s) => {
+        const cur = s.version === version ? s.byCluster : {};
+        return { version, byCluster: { ...cur, [cluster]: { arrivals: [...(cur[cluster]?.arrivals ?? []), ...page.arrivals], remaining: page.remaining } } };
+      });
+      // The new stars need a frame to be placed before the camera can frame the cluster.
+      setTimeout(() => apiRef.current?.flyToCluster(cluster), 150);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
   const themeState = layer?.themes.find((t) => t.theme.id === themeFocus);
   const focusSongIds = mode === "songs" && themeState ? themeState.songIds : null;
   const selectedSong = selectedId && isSongNode(selectedId) ? layer?.stars.find((st) => songNodeId(st.id) === selectedId) : undefined;
@@ -143,7 +185,10 @@ export default function GalaxyPage() {
     setClusterOpen(false);
     setSelectedId(null);
     hint.dismiss();
-    apiRef.current?.flyToCluster(id);
+    // A cluster with nobody drawn has nothing to fly to: reveal its first page instead.
+    const drawnHere = id ? nodes.some((n) => !n.isMe && n.cluster === id) : true;
+    if (id && !drawnHere && (hiddenNow?.byCluster[id] ?? 0) > 0) void showMore(id);
+    else apiRef.current?.flyToCluster(id);
   };
 
   if (error) {
@@ -174,6 +219,7 @@ export default function GalaxyPage() {
             threads={threads}
             songs={layer?.stars}
             focusSongIds={focusSongIds}
+            hidden={hiddenNow}
           />
         </div>
       ) : (
@@ -186,13 +232,13 @@ export default function GalaxyPage() {
           <div className="flex items-center gap-3">
             {data && mode === "people" ? (
               <p className="text-xs text-muted-foreground">
-                <span className="font-semibold tabular-nums text-foreground">{nodes.length - 1}</span> listeners
+                <span className="font-semibold tabular-nums text-foreground">{(nodes.length - 1 + (hiddenNow?.total ?? 0)).toLocaleString()}</span> listeners
               </p>
             ) : null}
             <ModeToggle value={mode} onChange={changeMode} />
           </div>
         </div>
-        {data && mode === "people" ? <ClusterFilter nodes={nodes} value={focusCluster} onChange={focus} className="pb-3" /> : null}
+        {data && mode === "people" ? <ClusterFilter nodes={nodes} hidden={hiddenNow?.byCluster} value={focusCluster} onChange={focus} className="pb-3" /> : null}
         {data && mode === "songs" && layer ? <ThemeFilter themes={layer.themes} value={themeFocus} onChange={focusTheme} className="pb-3" /> : null}
         {mode === "songs" && themeState ? (
           <div key={themeState.theme.id} className="mx-4 mb-3 flex items-center gap-3 border-l-2 pl-3" style={{ borderColor: themeState.theme.color }}>
@@ -222,6 +268,16 @@ export default function GalaxyPage() {
             >
               See the songs
             </button>
+            {hiddenHere > 0 ? (
+              <button
+                type="button"
+                disabled={loadingMore}
+                onClick={() => showMore(focusCluster)}
+                className="inline-flex min-h-9 shrink-0 items-center border border-white/15 px-3 text-xs font-medium hover:bg-white/5 disabled:opacity-60"
+              >
+                {loadingMore ? "Loading…" : `More here · ${hiddenHere.toLocaleString()}`}
+              </button>
+            ) : null}
           </div>
         ) : null}
       </header>
@@ -309,6 +365,18 @@ export default function GalaxyPage() {
         )}
         <button
           type="button"
+          onClick={() => {
+            setSelectedId(null);
+            setClusterOpen(false);
+            setWandering(true);
+          }}
+          aria-label="Wander: find someone who hears your songs differently"
+          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center border border-white/10 bg-background/90 hover:bg-background"
+        >
+          <Compass className="size-5" aria-hidden />
+        </button>
+        <button
+          type="button"
           onClick={() => setAdding({ songId: null })}
           aria-label="Add a song"
           className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center border border-primary/50 bg-primary/15 text-primary hover:bg-primary/25"
@@ -329,6 +397,10 @@ export default function GalaxyPage() {
           <LocateFixed className="size-5" aria-hidden />
         </button>
       </div>
+
+      <BottomSheet open={wandering} onClose={() => setWandering(false)} label="Wander">
+        {wandering ? <WanderSheetContent /> : null}
+      </BottomSheet>
 
       <BottomSheet open={!!adding} onClose={() => setAdding(null)} label="Add a song">
         {adding && layer ? <AddSongSheetContent layer={layer} initialSongId={adding.songId} onAdded={onAdded} /> : null}
@@ -411,6 +483,8 @@ function StarPreview({ node, traded }: { node: GalaxyNode; traded: number }) {
           </>
         )}
       </div>
+
+      {node.far ? <p className="-mt-1 text-sm text-muted-foreground">Far from your usual neighborhood, but you share a song. Wander shows how you hear it differently.</p> : null}
 
       {traded > 0 ? (
         <p className="-mt-1 text-sm text-foreground/85">

@@ -180,6 +180,7 @@ function Scene({
   focusIds = null,
   threads = [],
   fading,
+  hidden,
 }: GalaxyViewProps) {
   const { camera, gl, size, invalidate } = useThree();
   const perspective = camera as THREE.PerspectiveCamera;
@@ -283,6 +284,8 @@ function Scene({
     }
     if (n.isMe) return 1;
     if (mode === "songs") return 0;
+    // Ambient far stars stay faint until you tap one; they should be easy to ignore.
+    if (n.far) return selectedId === n.userId ? 1 : !focusCluster || n.cluster === focusCluster ? 0.45 : 0;
     return !focusCluster || n.cluster === focusCluster || n.userId === selectedId ? 1 : 0;
   };
   const dimForRef = useRef(dimFor);
@@ -302,7 +305,7 @@ function Scene({
       pos.set([p.x, p.y, p.z], i * 3);
       c.set(getCluster(node.cluster).color);
       col.set([c.r, c.g, c.b], i * 3);
-      sizeA[i] = node.isMe ? 3.4 : node.kind === "song" ? 1.5 + 0.3 * Math.min(6, node.weight ?? 1) : 2.1;
+      sizeA[i] = node.isMe ? 3.4 : node.kind === "song" ? 1.5 + 0.3 * Math.min(6, node.weight ?? 1) : node.far ? 1.6 : 2.1;
       isMe[i] = node.isMe ? 1 : 0;
       if (!known.current.has(node.userId) && !births.current.has(node.userId)) births.current.set(node.userId, now());
       birth[i] = births.current.get(node.userId) ?? -1;
@@ -383,14 +386,48 @@ function Scene({
         const m = new THREE.SpriteMaterial({ map: nebulaMap, color: getCluster(c.id).color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
         const sp = new THREE.Sprite(m);
         sp.position.set(c.x, c.y, c.z);
-        // Clusters swell as more people bring songs to them: the biggest cloud reads ~40% larger than the smallest.
-        const growth = 0.8 + 0.45 * (c.count / Math.max(1, ...centers.map((k) => k.count)));
+        // Clusters swell with everyone in them, drawn or not, so a bounded view still shows which "whys" are big.
+        const total = (k: { id: string; count: number }) => k.count + (hidden?.byCluster[k.id] ?? 0);
+        const growth = 0.8 + 0.45 * Math.sqrt(total(c) / Math.max(1, ...centers.map(total)));
         sp.scale.setScalar((c.spread * 4.2 + 6) * growth);
         return { id: c.id, sprite: sp };
       }),
-    [centers, nebulaMap],
+    [centers, nebulaMap, hidden],
   );
   useEffect(() => () => nebulae.forEach((n) => n.sprite.material.dispose()), [nebulae]);
+
+  // Dust: the people who aren't drawn, as a faint haze around each cluster. Density, not nodes: not tappable.
+  const dust = useMemo(() => {
+    const pos: number[] = [];
+    const col: number[] = [];
+    const c = new THREE.Color();
+    for (const k of centers) {
+      const n = Math.min(360, Math.round(Math.sqrt(hidden?.byCluster[k.id] ?? 0) * 5));
+      if (!n) continue;
+      c.set(getCluster(k.id).color);
+      // Seeded per cluster so the haze doesn't shimmer between renders.
+      let a = 0;
+      for (let i = 0; i < k.id.length; i++) a = (Math.imul(a, 31) + k.id.charCodeAt(i)) | 0;
+      const rand = () => {
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+      const gauss = () => (rand() + rand() + rand() - 1.5) * 1.6;
+      for (let i = 0; i < n; i++) {
+        pos.push(k.x + gauss() * k.spread * 1.5, k.y + gauss() * k.spread * 1.5, k.z + gauss() * k.spread);
+        col.push(c.r, c.g, c.b);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pos), 3));
+    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(col), 3));
+    return g;
+  }, [centers, hidden]);
+  const dustMat = useMemo(() => new THREE.PointsMaterial({ size: 1.6, sizeAttenuation: false, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 }), []);
+  useEffect(() => () => dust.dispose(), [dust]);
+  useEffect(() => () => dustMat.dispose(), [dustMat]);
 
   // Bond: a curved thread from you to whoever is selected.
   const bondMat = useMemo(
@@ -807,6 +844,7 @@ function Scene({
       const focus = (!focusCluster ? 1 : id === focusCluster ? 1.5 : 0.25) * (mode === "songs" ? 0.3 : 1);
       sprite.material.opacity = 0.07 * others * focus;
     }
+    dustMat.opacity = 0.4 * others * (mode === "songs" ? 0.2 : focusCluster ? 0.5 : 1);
     // New arrivals fade in; nothing else moves on its own.
     for (const born of births.current.values()) if (time - born < 2) active = true;
     if (active) invalidate();
@@ -823,6 +861,7 @@ function Scene({
       {nebulae.map((n) => (
         <primitive key={n.id} object={n.sprite} />
       ))}
+      <points geometry={dust} material={dustMat} />
       <lineSegments geometry={edgeGeo} material={edgeMat} />
       {bond ? <primitive object={bond} /> : null}
       <primitive object={threadGroup} />

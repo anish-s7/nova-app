@@ -1,6 +1,9 @@
 import { effectiveSongs, getSession } from "./session";
-import { ME_ID, WORLD, buildConnectionCard, conversations, edgeBetween, lookupUser, partyFor, partyFromWorld, scheduleReply } from "./mock-world";
-import type { ConnectionCardRow, Db, Message, MessageRow, Song, SongRow } from "./types";
+import { ME_ID, WORLD, buildConnectionCard, buildContrastJson, wanderCandidates, conversations, edgeBetween, lookupUser, partyFor, partyFromWorld, scheduleReply } from "./mock-world";
+import type { ConnectionCardRow, Db, Message, MessageRow, Song, SongRow, WanderRow } from "./types";
+
+/** Contrast cards Wander has already written, by other profile id. Like the real table, a cached card is never regenerated. */
+const contrastCache = new Map<string, ConnectionCardRow>();
 
 /**
  * The mock world, served in db/contract.md row shapes. Only lib/api.ts imports this;
@@ -33,6 +36,10 @@ function messageRow(otherId: string, m: Extract<Message, { kind: "text" }>): Mes
   return { id: m.id, user_a, user_b, sender_id: m.fromUserId, body: m.text, created_at: m.sentAt };
 }
 
+export function resetMockDb() {
+  contrastCache.clear();
+}
+
 export const mockDb: Db = {
   async getProfile(id) {
     if (id === ME_ID) return { id, display_name: "You", created_at: CREATED_AT };
@@ -61,6 +68,8 @@ export const mockDb: Db = {
   },
 
   async getConnectionCard(profileId, otherProfileId): Promise<ConnectionCardRow | null> {
+    const cached = profileId === ME_ID ? contrastCache.get(otherProfileId) : undefined;
+    if (cached) return cached;
     const a = partyFor(profileId);
     const b = partyFor(otherProfileId);
     if (!a || !b) return null;
@@ -83,6 +92,19 @@ export const mockDb: Db = {
       },
       created_at: CREATED_AT,
     };
+  },
+
+  async wander(profileId, limit = 3): Promise<WanderRow[]> {
+    const me = partyFor(profileId);
+    if (!me) return [];
+    return wanderCandidates(limit).map(({ user, song }) => {
+      const [user_a, user_b] = pair(profileId, user.id);
+      const json = buildContrastJson(me, partyFromWorld(user), song);
+      const card_json = user_a === profileId ? json : { ...json, evidence: { user_a: json.evidence.user_b, user_b: json.evidence.user_a } };
+      const row = contrastCache.get(user.id) ?? { id: `card-${user_a}-${user_b}`, user_a, user_b, card_json, created_at: CREATED_AT };
+      contrastCache.set(user.id, row);
+      return { profile_id: user.id, display_name: user.name, card: row };
+    });
   },
 
   async listMessages(profileId, otherProfileId) {

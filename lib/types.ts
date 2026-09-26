@@ -126,6 +126,8 @@ export type GalaxyNode = {
   kind?: "song";
   /** Song stars: how many people share it. */
   weight?: number;
+  /** An ambient far star: distant from you, but with a strong thread. Drawn dim; tapping explains. */
+  far?: boolean;
 };
 
 export type GalaxyEdge = {
@@ -137,11 +139,28 @@ export type GalaxyEdge = {
   sharedArtists: number;
 };
 
+/**
+ * The galaxy is a bounded window onto your neighborhood, not everyone. `limit` caps the nodes
+ * drawn (default lib/galaxy-sample.ts DEFAULT_BUDGET). More of one cluster comes from getGalaxyMore.
+ */
+export type GalaxyQuery = { limit?: number };
+
+/** "More here": the next people in one cluster, as arrivals so they fade in without moving anyone. */
+export type GalaxyMore = {
+  arrivals: { node: GalaxyNode; edges: GalaxyEdge[] }[];
+  /** Still hidden in this cluster after this page. */
+  remaining: number;
+};
+
 export type GalaxyResponse = {
   nodes: GalaxyNode[];
   edges: GalaxyEdge[];
   topMatchId?: string;
   status: "ready" | "processing";
+  /** True when people were left out to stay within the budget. */
+  sampled?: boolean;
+  /** Everyone not drawn, so the far field can show as density instead of nodes. */
+  hidden?: { total: number; byCluster: Record<string, number> };
 };
 
 export type SharedEvidence = { song: Song; text: string };
@@ -153,6 +172,30 @@ export type ConnectionCard = {
   sharedMotivations: { motivation: string; evidenceA: SharedEvidence; evidenceB: SharedEvidence }[];
   meaningfulDifference: { summary: string; evidenceA: string; evidenceB: string };
   suggestedOpeners: string[];
+};
+
+/**
+ * Wander: someone who picked the same song as you but feels it differently.
+ * Viewer-relative (A = me), mapped from a `kind: "contrast"` card_json.
+ * `song` resolves from card_json.shared_song by title + artist (NOT IN CONTRACT: mismatch #1).
+ */
+export type ContrastCard = {
+  userA: string;
+  userB: string;
+  song: Song;
+  /** The thread: the one song you both picked. */
+  sharedThread: string;
+  feelA: string;
+  feelB: string;
+  /** How you differ. */
+  difference: string;
+  suggestedOpeners: string[];
+  swapPrompt: string;
+};
+
+export type WanderEntry = {
+  user: { id: string; name: string; cluster: string };
+  card: ContrastCard;
 };
 
 export type SongSwap = {
@@ -236,6 +279,9 @@ export type ConnectionCardJson = {
   difference: string;
   openers: string[];
   suggested_swap_prompt: string;
+  /** Absent means a regular match card. "contrast" cards come from Wander (same song, different feeling). */
+  kind?: "match" | "contrast";
+  shared_song?: { title: string; artist: string };
 };
 
 export type ConnectionCardRow = {
@@ -266,6 +312,13 @@ export type MatchProfileRow = {
   similarity: number;
 };
 
+/** One confirmed Wander result: the candidate plus the contrast card already cached for the pair. */
+export type WanderRow = {
+  profile_id: string;
+  display_name: string;
+  card: ConnectionCardRow;
+};
+
 /**
  * Row-level data access, in contract shapes. lib/api.ts is the only consumer and picks
  * the implementation (lib/mock-db.ts today).
@@ -277,6 +330,8 @@ export type Db = {
   matchProfiles(targetProfileId: string, matchCount?: number): Promise<MatchProfileRow[]>;
   /** Get-or-generate the cached card for the unordered pair. */
   getConnectionCard(profileId: string, otherProfileId: string): Promise<ConnectionCardRow | null>;
+  /** Wander: same song, different feeling. Explicit user action only; each row's card is `kind: "contrast"`. */
+  wander(profileId: string, limit?: number): Promise<WanderRow[]>;
   /** Every message the profile is part of, or only the ones with `otherProfileId`. */
   listMessages(profileId: string, otherProfileId?: string): Promise<MessageRow[]>;
   insertMessage(row: MessageInsert): Promise<MessageRow>;

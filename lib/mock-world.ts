@@ -3,7 +3,7 @@ import { reasonFor } from "./texture";
 import { contextFor, songById, songsInCluster, type SongMode } from "./music-context";
 import { cosine, dominantMode, infer, primaryCluster, vectorFromMotivations, type Vector } from "./inference";
 import { effectiveSongs, getSession } from "./session";
-import type { ConnectionCard, ContextTag, GalaxyEdge, InferredMotivation, ListeningSignal, Message, Song, SongSwap, User } from "./types";
+import type { ConnectionCard, ConnectionCardJson, ContextTag, GalaxyEdge, InferredMotivation, ListeningSignal, Message, Song, SongSwap, User } from "./types";
 
 export const ME_ID = "me";
 
@@ -106,6 +106,23 @@ const SEEDS: Seed[] = [
   { id: "june", name: "June", primary: "old_selves", secondary: "quiet_company" },
 ];
 
+/** Song ids in `cluster` that people use to change the feeling instead of sitting in it. */
+const liftSongs = (cluster: ClusterId, n: number) =>
+  songsInCluster(cluster, 0.6)
+    .filter((s) => contextFor(s.id).mode === "lift")
+    .slice(0, n)
+    .map((s) => s.id);
+
+/**
+ * Wanderers: each shares exactly one song with the demo persona (all lean_in, quiet or lost)
+ * but leans on it the other way, from a different cluster. What Wander should find.
+ */
+const WANDER_SEEDS: Seed[] = [
+  { id: "rafa", name: "Rafa", primary: "armor_up", secondary: "somewhere_else", songIds: ["skinny-love", ...liftSongs("armor_up", 4)] },
+  { id: "dara", name: "Dara", primary: "somewhere_else", secondary: "old_selves", songIds: ["holocene", ...liftSongs("somewhere_else", 4)] },
+  { id: "cole", name: "Cole", primary: "old_selves", secondary: "armor_up", songIds: ["liability", ...liftSongs("old_selves", 4)] },
+];
+
 /** Songs the curated demo matches own. Generated users avoid them so the curated overlap stays at zero. */
 const RESERVED = new Set(SEEDS.slice(0, 3).flatMap((s) => s.songIds ?? []));
 
@@ -149,7 +166,7 @@ function buildUser(seed: Seed): WorldUser {
   };
 }
 
-export const WORLD: WorldUser[] = SEEDS.map(buildUser);
+export const WORLD: WorldUser[] = [...SEEDS, ...WANDER_SEEDS].map(buildUser);
 const worldById = new Map(WORLD.map((u) => [u.id, u]));
 
 export function worldUser(id: string) {
@@ -436,6 +453,55 @@ export function meParty(): Party {
 
 export function myPrimaryCluster(): ClusterId {
   return primaryCluster(myMotivations());
+}
+
+// ---------------------------------------------------------------------------
+// Wander: same song, different feeling
+
+const MODE_VERB: Record<SongMode, string> = { lean_in: "stay inside the feeling", lift: "move the feeling along" };
+
+/**
+ * People who hold at least one of my songs but come at it from a different mode or cluster,
+ * widest difference first. Mock stand-in for the `wander_picks` RPC (db/contract.md).
+ */
+export function wanderCandidates(limit = 3): { user: WorldUser; song: Song }[] {
+  const me = meParty();
+  const myCluster = primaryCluster(me.motivations);
+  const mine = new Set(me.songs.map((s) => s.id));
+  return WORLD.flatMap((user) => {
+    const song = user.songs.find((s) => mine.has(s.id));
+    const gap = (user.mode !== me.mode ? 2 : 0) + (user.primary !== myCluster ? 1 : 0);
+    return song && gap > 0 ? [{ user, song, gap }] : [];
+  })
+    .sort((a, b) => b.gap - a.gap)
+    .slice(0, limit);
+}
+
+/**
+ * Mock stand-in for the Gemini contrast card. Written from `a`'s side: evidence.user_a is a's,
+ * exactly like evaluateContrastCard, so callers align it with the stored pair order.
+ */
+export function buildContrastJson(a: Party, b: Party, song: Song): ConnectionCardJson {
+  const ca = primaryCluster(a.motivations);
+  const cb = primaryCluster(b.motivations);
+  const t = `"${song.title}"`;
+  const difference =
+    a.mode !== b.mode
+      ? `Same song, opposite direction. You use ${t} to ${MODE_VERB[a.mode]}. ${b.name} uses it to ${MODE_VERB[b.mode]}.`
+      : `Same song, different reason. For you it's "${CLUSTERS[ca].label.toLowerCase()}". For ${b.name}, it's "${CLUSTERS[cb].label.toLowerCase()}".`;
+  return {
+    kind: "contrast",
+    shared_song: { title: song.title, artist: song.artist },
+    shared_why: `You both picked ${t} by ${song.artist}.`,
+    evidence: { user_a: `You ${APPROACH[ca][a.mode][0]}.`, user_b: `${b.name} ${APPROACH[cb][b.mode][1]}.` },
+    difference,
+    openers: [
+      `What does ${t} do for you? For me it's how I ${MODE_VERB[a.mode]}.`,
+      `When do you put on ${t}?`,
+      `I think we hear ${t} completely differently. Tell me your side?`,
+    ],
+    suggested_swap_prompt: `Trade a song from the other side of the feeling: send ${b.name} one that helps you ${MODE_VERB[a.mode]}, and ask for one that helps them ${MODE_VERB[b.mode]}.`,
+  };
 }
 
 let arrivalUser: WorldUser | undefined;

@@ -38,4 +38,6 @@ export type GalaxyViewProps = {
   focusIds?: ReadonlySet<string> | null;
   /** Stars mid-departure, by id: 0 fully lit .. 1 gone. Used by the live simulation. */
   fading?: ReadonlyMap<string, number>;
+  /** People who exist but aren't drawn, per cluster. Rendered as dust so a bounded view doesn't read as a small galaxy. */
+  hidden?: { total: number; byCluster: Record<string, number> };
 };

@@ -13,6 +13,10 @@ export interface ConnectionCardJson {
   difference: string;
   openers: string[];
   suggested_swap_prompt: string;
+  /** Absent means a regular match card. "contrast" cards come from Wander (same song, different feeling). */
+  kind?: "match" | "contrast";
+  /** Contrast cards only: the one song both people picked. Plain strings, never a Spotify payload. */
+  shared_song?: { title: string; artist: string };
 }
 
 export interface Database {
@@ -22,14 +26,18 @@ export interface Database {
         Row: {
           id: string;
           display_name: string;
+          /** One of lib/clusters.ts CLUSTER_IDS. Not populated yet: needed by galaxy_pool (db/galaxy_window.sql). */
+          primary_cluster: string | null;
           created_at: string;
         };
         Insert: {
           id: string;
           display_name: string;
+          primary_cluster?: string | null;
         };
         Update: Partial<{
           display_name: string;
+          primary_cluster: string | null;
         }>;
         Relationships: [];
       };
@@ -146,6 +154,34 @@ export interface Database {
           song_pick_id: string;
           target_pick_id: string;
           similarity: number;
+        }[];
+      };
+      galaxy_pool: {
+        Args: { target_profile_id: string; near_size?: number; fresh_size?: number; fresh_days?: number };
+        Returns: {
+          profile_id: string;
+          display_name: string;
+          cluster: string;
+          similarity: number;
+          joined_days_ago: number;
+          tags: string[];
+          valence: number;
+          energy: number;
+          source: "near" | "fresh";
+        }[];
+      };
+      galaxy_cluster_counts: {
+        Args: { target_profile_id: string };
+        Returns: { cluster: string; people: number }[];
+      };
+      wander_picks: {
+        Args: { target_profile_id: string; match_count?: number; min_emotion_gap?: number };
+        Returns: {
+          profile_id: string;
+          display_name: string;
+          song_pick_id: string;
+          target_pick_id: string;
+          emotion_gap: number;
         }[];
       };
     };

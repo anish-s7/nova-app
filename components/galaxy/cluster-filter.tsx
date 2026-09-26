@@ -6,9 +6,26 @@ import type { GalaxyNode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** The legend, made useful: each "why" is a chip that spotlights its part of the galaxy. */
-export function ClusterFilter({ nodes, value, onChange, className }: { nodes: GalaxyNode[]; value: string | null; onChange: (id: string | null) => void; className?: string }) {
+/** "4,210", or "12k" once it stops being useful to see every digit. */
+const compact = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : n.toLocaleString());
+
+export function ClusterFilter({
+  nodes,
+  hidden,
+  value,
+  onChange,
+  className,
+}: {
+  nodes: GalaxyNode[];
+  /** People not drawn, per cluster. Chips count everyone, not just who is on screen. */
+  hidden?: Record<string, number>;
+  value: string | null;
+  onChange: (id: string | null) => void;
+  className?: string;
+}) {
   const counts = new Map<string, number>();
   for (const n of nodes) if (!n.isMe) counts.set(n.cluster, (counts.get(n.cluster) ?? 0) + 1);
+  for (const [id, h] of Object.entries(hidden ?? {})) if (h > 0) counts.set(id, (counts.get(id) ?? 0) + h);
   const ids = CLUSTER_IDS.filter((id) => counts.has(id));
 
   const chip = "inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors";
@@ -47,7 +64,7 @@ export function ClusterFilter({ nodes, value, onChange, className }: { nodes: Ga
           >
             <span className="size-1.5 rounded-full bg-[var(--tone)]" aria-hidden />
             {c.short}
-            <span className="tabular-nums text-muted-foreground">{counts.get(id)}</span>
+            <span className="tabular-nums text-muted-foreground">{compact(counts.get(id) ?? 0)}</span>
           </button>
         );
       })}

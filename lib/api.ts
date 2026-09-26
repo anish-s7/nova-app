@@ -14,9 +14,10 @@
  * MERGE_CHECKLIST.md lists exactly which bodies in this file change when the backend lands.
  */
 
-import { getCluster } from "./clusters";
+import { CLUSTER_IDS, getCluster } from "./clusters";
 import { infer, primaryCluster } from "./inference";
-import { mockDb } from "./mock-db";
+import { mockDb, resetMockDb } from "./mock-db";
+import { expandOrder, sampleGalaxy } from "./galaxy-sample";
 import { buildSongLayer, type SongLayer } from "./song-layer";
 import { buildClusterDetail, type ClusterDetail } from "./cluster-songs";
 import { listeningMoment } from "./texture";
@@ -41,6 +42,7 @@ import {
   scheduleReply,
   scheduleSwapBack,
   synthesizeSignals,
+  wanderCandidates,
   worldUser,
   type Party,
 } from "./mock-world";
@@ -50,11 +52,14 @@ import type {
   Connection,
   ConnectionCard,
   ConnectionCardRow,
+  ContrastCard,
   Conversation,
   ConversationSummary,
   Db,
   GalaxyEdge,
+  GalaxyMore,
   GalaxyNode,
+  GalaxyQuery,
   GalaxyResponse,
   InferredMotivation,
   ListeningSignal,
@@ -64,6 +69,7 @@ import type {
   SongRow,
   SpotifyImport,
   User,
+  WanderEntry,
 } from "./types";
 
 // ===========================================================================
@@ -139,6 +145,28 @@ function cardFromRow(row: ConnectionCardRow, meId: string, extra: ConnectionCard
     ],
     meaningfulDifference: { ...extra.meaningfulDifference, summary: cj.difference }, // evidenceA/B NOT IN CONTRACT
     suggestedOpeners: cj.openers,
+  };
+}
+
+/** Resolves card_json.shared_song to a catalog Song. NOT IN CONTRACT: song identity across users (mismatch #1). */
+function songFromShared(shared: { title: string; artist: string }): Song {
+  return SONG_CATALOG.find((s) => s.title === shared.title && s.artist === shared.artist) ?? { id: `${shared.title}-${shared.artist}`, title: shared.title, artist: shared.artist, source: "manual" };
+}
+
+function contrastFromRow(row: ConnectionCardRow, meId: string): ContrastCard {
+  const cj = row.card_json;
+  if (cj.kind !== "contrast" || !cj.shared_song) throw new ApiError("That card isn't a contrast card.");
+  const iAmA = row.user_a === meId;
+  return {
+    userA: meId,
+    userB: iAmA ? row.user_b : row.user_a,
+    song: songFromShared(cj.shared_song),
+    sharedThread: cj.shared_why,
+    feelA: iAmA ? cj.evidence.user_a : cj.evidence.user_b,
+    feelB: iAmA ? cj.evidence.user_b : cj.evidence.user_a,
+    difference: cj.difference,
+    suggestedOpeners: cj.openers,
+    swapPrompt: cj.suggested_swap_prompt,
   };
 }
 
@@ -233,11 +261,39 @@ function nodeFor(u: Party, isMe: boolean): GalaxyNode {
   };
 }
 
-export async function getGalaxy(): Promise<GalaxyResponse> {
+/** Stable per-person "days since joined" for the mock, which has no join dates. */
+function mockJoinedDaysAgo(id: string) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return h % 60;
+}
+
+/** The mock population as sampler candidates, plus what's needed to sample it. */
+function mockWindow(limit?: number) {
+  const me = meParty();
+  const everyone = WORLD.map(partyFromWorld);
+  // Far-star candidates: people who share one of my songs but come at it from somewhere else (Wander's pool).
+  const bridges = new Set(wanderCandidates(everyone.length).map((c) => c.user.id));
+  const candidates = everyone.map((p) => ({
+    id: p.id,
+    cluster: primaryCluster(p.motivations),
+    vector: CLUSTER_IDS.map((c) => p.vector[c]),
+    similarity: edgeBetween(me, p).similarity,
+    joinedDaysAgo: mockJoinedDaysAgo(p.id),
+    bridge: bridges.has(p.id) ? 1 : 0,
+  }));
+  const day = Math.floor(Date.now() / 86_400_000);
+  const sample = sampleGalaxy(candidates, { budget: limit, seed: `${ME_ID}:${day}` });
+  return { me, everyone, candidates, sample };
+}
+
+export async function getGalaxy(query: GalaxyQuery = {}): Promise<GalaxyResponse> {
   await delay(700);
   maybeFail("galaxy");
-  const me = meParty();
-  const others = WORLD.map(partyFromWorld);
+  // Bounded window: only the sampled people are drawn or edged. At today's size this keeps everyone.
+  const { me, everyone, sample } = mockWindow(query.limit);
+  const keep = new Set(sample.ids);
+  const others = everyone.filter((p) => keep.has(p.id));
   const edges = buildEdges([me, ...others], 4, ME_ID);
   const topMatchId = pickTopMatch(me, edges);
 
@@ -252,11 +308,32 @@ export async function getGalaxy(): Promise<GalaxyResponse> {
   }
 
   return {
-    nodes: [nodeFor(me, true), ...others.map((o) => nodeFor(o, false))],
+    nodes: [nodeFor(me, true), ...others.map((o) => ({ ...nodeFor(o, false), ...(sample.slice.get(o.id) === "far" ? { far: true } : {}) }))],
     edges,
     topMatchId,
     status: "ready",
+    sampled: sample.sampled,
+    hidden: sample.hidden,
   };
+}
+
+/** "More here": the next people in one cluster, ready to fade in as arrivals. `have` is how many extra this cluster already shows. */
+export async function getGalaxyMore(cluster: string, have: number, step = 40, limit?: number): Promise<GalaxyMore> {
+  await delay(350);
+  maybeFail("galaxy");
+  const { me, everyone, candidates, sample } = mockWindow(limit);
+  const order = expandOrder(candidates, new Set(sample.ids), cluster);
+  const byId = new Map(everyone.map((p) => [p.id, p]));
+  const drawn = [me, ...sample.ids.map((id) => byId.get(id)!)];
+  const arrivals = order.slice(have, have + step).map((c) => {
+    const p = byId.get(c.id)!;
+    const edges = drawn
+      .map((o) => edgeBetween(p, o))
+      .sort((x, y) => y.similarity - x.similarity)
+      .slice(0, 2);
+    return { node: nodeFor(p, false), edges };
+  });
+  return { arrivals, remaining: Math.max(0, order.length - have - arrivals.length) };
 }
 
 /** NOT IN CONTRACT: clusters aren't stored yet (lib/types.ts #5). Songs + listeners inside one "why". */
@@ -343,6 +420,27 @@ export async function getConnectionCard(otherId: string): Promise<ConnectionCard
   return cardFromRow(row, ME_ID, buildConnectionCard(meParty(), partyFromWorld(u)));
 }
 
+/**
+ * Wander: people who picked the same song but feel it differently. Only ever called from an
+ * explicit tap, never on load. Real backend: POST /api/wander (Gemini judges each candidate).
+ */
+export async function getWander(): Promise<WanderEntry[]> {
+  await delay(1800); // stands in for the Gemini contrast check
+  maybeFail("card");
+  const rows = await db.wander(ME_ID);
+  return rows.map((r) => ({
+    user: { id: r.profile_id, name: r.display_name, cluster: lookupUser(r.profile_id)?.primary ?? "quiet_company" }, // cluster: NOT IN CONTRACT
+    card: contrastFromRow(r.card, ME_ID),
+  }));
+}
+
+export async function getContrastCard(otherId: string): Promise<ContrastCard> {
+  await delay(300);
+  const row = await db.getConnectionCard(ME_ID, otherId);
+  if (!row) throw new ApiError("That person isn't in the galaxy anymore.");
+  return contrastFromRow(row, ME_ID);
+}
+
 // ---------------------------------------------------------------------------
 // Messages. Text messages are contract rows; song swaps are NOT IN CONTRACT (lib/types.ts #9).
 
@@ -413,6 +511,7 @@ export async function sendSongSwap(userId: string, song: Song, reason: string, r
 /** Mock-only: resets seeded conversations and the realtime arrival (logo long-press). */
 export function resetWorld() {
   resetMockWorld();
+  resetMockDb();
 }
 
 export function clusterColor(cluster: string) {

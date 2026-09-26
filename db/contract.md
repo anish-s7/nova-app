@@ -30,6 +30,7 @@ anything derived from one.
 |---|---|---|
 | id | uuid, PK | = `auth.users.id` |
 | display_name | text | |
+| primary_cluster | text, nullable | one of `lib/clusters.ts` CLUSTER_IDS; read by `galaxy_pool`. Written by `lib/matching/refreshPrimaryCluster.ts` (rule in `lib/cluster-assign.ts`): after every `POST /api/picks`, and lazily for the viewer when the galaxy loads. Null until someone has a pick |
 | created_at | timestamptz | default now() |
 
 No `embedding` column — matching lives entirely on `song_picks` now.
@@ -75,7 +76,7 @@ is final the moment the row is inserted.
 | id | uuid, PK | |
 | user_a | uuid, FK -> profiles.id | store the smaller of the two ids here (unordered pair convention) |
 | user_b | uuid, FK -> profiles.id | store the larger of the two ids here |
-| card_json | jsonb | shape: `{ shared_why, evidence: { user_a, user_b }, difference, openers[], suggested_swap_prompt }` |
+| card_json | jsonb | shape: `{ shared_why, evidence: { user_a, user_b }, difference, openers[], suggested_swap_prompt, kind?, shared_song? }`. `kind` is `"match"` when absent. `"contrast"` cards come from Wander (see below): `shared_why` is the one song both picked, `evidence` is how each person feels it, `difference` is the gap, and `shared_song` is `{ title, artist }` from our own `songs` row. |
 | created_at | timestamptz | |
 
 Unique constraint on `(user_a, user_b)`. Only rows where the evidence-check
@@ -107,6 +108,57 @@ retargeted at `song_picks` instead of `motivations`). Excludes
 evidence-check step (`lib/gemini/evaluateAndGenerateCard.ts`) — the
 backend never shows a raw similarity score to the user, only the result of
 that check.
+
+### `wander_picks(target_profile_id uuid, match_count int default 6, min_emotion_gap float default 0.9)`
+Returns `table (profile_id uuid, display_name text, song_pick_id uuid,
+target_pick_id uuid, emotion_gap float)`. The opposite question from
+`match_picks`: same **song** (`song_picks.song_id` equal), far apart in
+**feeling** (Euclidean distance between the two picks' `(valence, energy)`
+is at least `min_emotion_gap`). One row per candidate profile — the pick pair
+with the widest gap — ordered by `emotion_gap` descending. Excludes the
+target's own profile, non-public candidate picks, and any pair that already
+has a `connection_cards` row (cards are never regenerated). Uses `song_id`
+equality, so it is an index lookup, not a vector search.
+
+Called only from `lib/matching/findWander.ts`, only when the user taps
+Wander (`POST /api/wander`). Each candidate then goes through
+`lib/gemini/evaluateContrast.ts`, which either returns a contrast card or
+"insufficient evidence" (candidate dropped, never cached). Confirmed contrast
+cards are upserted into `connection_cards` like any other card, so a pair
+that already has a card of either kind is never asked about again.
+
+### Galaxy window: `galaxy_pool`, `galaxy_cluster_counts` (SQL in `db/galaxy_window.sql`)
+The front page draws a **bounded window**, never everyone. `GET /api/galaxy?limit=`
+(`lib/matching/galaxyWindow.ts`) returns at most `limit` people (default 200) plus
+`hidden: { total, byCluster }`, which the UI draws as dust around each cluster.
+The window is you, your top global matches, up to 2 ambient **far stars**, a newcomer
+set, then a diversity-ranked near set (`lib/galaxy-sample.ts`), seeded per viewer per
+day so reloads don't reshuffle. Edges are only computed among the drawn people.
+
+- `galaxy_pool(target_profile_id uuid, near_size int default 600, fresh_size int default 100, fresh_days int default 14)`
+  returns `table (profile_id, display_name, cluster text, similarity float, joined_days_ago int, tags text[], valence float, energy float, source text)`.
+  One row per candidate profile: their pick closest to any of the target's picks (the
+  same "best pick pair" grouping as `match_picks`, not a profile average). Each of the
+  target's picks does its own HNSW-ordered lookup (`LATERAL ... ORDER BY <=> LIMIT`), so
+  cost is bounded by `near_size`, not by table size. `source = 'fresh'` rows are recent
+  joiners who weren't near anyone. `tags/valence/energy` are the matched pick's, and feed
+  only the diversity pass; similarity to you is the pgvector score.
+- `galaxy_cluster_counts(target_profile_id uuid)` returns `table (cluster text, people bigint)`,
+  everyone but the target. The route subtracts what it drew to get `hidden`.
+- **Far stars** reuse `wander_picks` (same song, far apart in feeling) with no Gemini call:
+  loading the galaxy never spends LLM calls. Tapping a far star points at Wander.
+- `GET /api/galaxy/more?cluster=&have=` pages the next 40 people in one cluster ("More
+  here"). It ranks at most the pool (600), so a cluster larger than that can't be paged
+  to the end. That is deliberate: past a screenful, use Wander or search instead.
+
+**Clusters:** `profiles.primary_cluster` (one of `lib/clusters.ts` CLUSTER_IDS; nullable,
+treated as `'unassigned'`). It is a label for grouping, not a matching vector.
+`lib/cluster-assign.ts` scores each pick from its mood tags plus valence/energy (tags lead,
+the slider breaks ties) and the profile takes the cluster with the highest total across its
+picks. No LLM, no embeddings. It is recomputed after every pick and lazily for the viewer on
+galaxy load; profiles with no picks stay null. Someone whose picks straddle two "whys" can
+move between clusters as they add songs, and the layout follows.
+`db/galaxy_window.sql` is untested against a live database, like the rest of the schema.
 
 ## Auth model
 Real Supabase Auth — RLS should mirror the standard pattern: profiles are

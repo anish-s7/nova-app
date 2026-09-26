@@ -5,6 +5,8 @@ import { generateSongContext } from "@/lib/gemini/generateSongContext";
 import { resolveSong } from "@/lib/musicbrainz/client";
 import { EMOTION_WEIGHT, clampEmotionValue } from "@/lib/emotion";
 import { isValidTag } from "@/lib/tags";
+import { refreshPrimaryCluster } from "@/lib/matching/refreshPrimaryCluster";
+import { createSessionClient } from "@/lib/supabase/serverAuth";
 
 function fallbackKey(title: string, artist: string) {
   return `${title.trim().toLowerCase()}::${artist.trim().toLowerCase()}`;
@@ -137,6 +139,12 @@ export async function POST(req: NextRequest) {
   if (pickError) {
     return NextResponse.json({ error: pickError.message }, { status: 500 });
   }
+
+  // Keep the galaxy label current. A failure here must not fail the pick, which is already saved:
+  // the next pick, or the next galaxy load, recomputes it.
+  try {
+    await refreshPrimaryCluster(await createSessionClient(), profileId);
+  } catch {}
 
   return NextResponse.json({ song, pick });
 }

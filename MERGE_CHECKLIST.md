@@ -52,6 +52,26 @@ Signatures stay the same in every case. "Enrichment" means the `NOT IN CONTRACT`
 13. **`updateMotivation`**: nothing to write to (#4).
 14. **`resetWorld`**: mock-only. Make it a no-op.
 
+## Wander (same song, different feeling)
+
+Mock-backed today; the real pieces already exist server-side.
+
+- Backend: `POST /api/wander` (`lib/matching/findWander.ts`, `lib/gemini/evaluateContrast.ts`), needs the `wander_picks` RPC from `db/contract.md` applied.
+- `Db.wander(profileId)` → implement as `POST /api/wander`; map `{ wanders: [{ profileId, displayName, card }] }` to `WanderRow` (build the `ConnectionCardRow` with `pair()`, `kind: "contrast"` in `card_json`).
+- `getContrastCard` reads the cached row via `db.getConnectionCard`; `GET /api/cards/:id` already returns cached contrast cards, so the UI must not assume `kind` is absent. `cardFromRow` (match cards) should not be fed a `kind: "contrast"` row.
+- `songFromShared` resolves `shared_song` by title + artist against the mock catalog. Same identity gap as mismatch #1.
+- Mock `getWander` sleeps 1.8s to stand in for Gemini. Delete that with the other `delay()` calls.
+
+## Bounded galaxy (`getGalaxy({ limit })`, `getGalaxyMore`)
+
+Mock-backed today (`lib/galaxy-sample.ts` over the mock world). Real pieces: `GET /api/galaxy`, `GET /api/galaxy/more`
+(`lib/matching/galaxyWindow.ts`), and `db/galaxy_window.sql`.
+
+- `profiles.primary_cluster` is now written (`lib/cluster-assign.ts`, on each pick and on galaxy load), so mismatch #5 is resolved for the galaxy path. The migration still has to add the column. `Connection.cluster`/`User.cluster` can read it too.
+- Map `GalaxyWindow` to `GalaxyResponse`: `topMotivations: []` (NOT IN CONTRACT), `isMe` from `meId`, add `far`, and put `me` first in `nodes`. `hidden` and `sampled` pass through as-is.
+- Map `GalaxyMoreWindow` to `GalaxyMore.arrivals`: one `{ node, edges }` per node, edges touching that node.
+- Wire `?limit` only for demos; the real default is 200.
+
 ## Things that can't be done inside `lib/api.ts` (need a decision)
 
 - **Per-song "why" text.** Both onboarding pages save through `api.saveSongs()`, but it sends

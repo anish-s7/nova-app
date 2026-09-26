@@ -26,6 +26,7 @@ export function GalaxySvg({
   mode = "people",
   focusIds = null,
   threads = [],
+  hidden,
 }: GalaxyViewProps & { compact?: boolean }) {
   const [phase, setPhase] = useState<"dark" | "me" | "all">(initialPhase === "dark" ? "dark" : "all");
   const [focus, setFocus] = useState<string | null>(null);
@@ -103,6 +104,22 @@ export function GalaxySvg({
             );
           })}
       </g>
+      {mode === "people" && hidden
+        ? [...new Set(nodes.map((n) => n.cluster))].flatMap((cl) => {
+            const ps = nodes.filter((n) => n.cluster === cl && !n.isMe && points.get(n.userId)).map((n) => points.get(n.userId)!);
+            const count = Math.min(40, Math.round(Math.sqrt(hidden.byCluster[cl] ?? 0) * 2));
+            if (!ps.length || !count) return [];
+            const cx = ps.reduce((a, p) => a + p.x, 0) / ps.length;
+            const cy = ps.reduce((a, p) => a + p.y, 0) / ps.length;
+            const spread = Math.max(2.5, ps.reduce((a, p) => a + Math.hypot(p.x - cx, p.y - cy), 0) / ps.length) * 1.4;
+            // Golden-angle spiral: deterministic, evenly hazy, no RNG to shimmer.
+            return Array.from({ length: count }, (_, i) => {
+              const a = i * 2.399;
+              const d = Math.sqrt((i + 0.5) / count) * spread;
+              return <circle key={`dust-${cl}-${i}`} cx={cx + Math.cos(a) * d} cy={-(cy + Math.sin(a) * d)} r={0.16} fill={getCluster(cl).color} opacity={0.35} />;
+            });
+          })
+        : null}
       {mode === "people" && meId && points.get(meId)
         ? threads.map((t) => {
             const a = points.get(meId)!;
@@ -127,7 +144,7 @@ export function GalaxySvg({
             key={n.userId}
             transform={`translate(${p.x} ${-p.y})`}
             className={cn("transition-opacity duration-700", interactive && "cursor-pointer")}
-            opacity={visible ? (dimmed ? 0.15 : 1) : 0}
+            opacity={visible ? (dimmed ? 0.15 : n.far && !on ? 0.45 : 1) : 0}
             onClick={interactive ? () => onSelect?.(n.userId) : undefined}
           >
             <circle r={size * 2.6} fill={color} opacity={0.18} />
