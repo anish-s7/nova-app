@@ -1,4 +1,7 @@
-> Saved 2026-09-26. Status: **approved, not started** — runs after the pre-work tasks listed below. Work on branch `ai-portraits`; merge to `main` only on approval.
+> Saved 2026-09-26. Status: **done and merged to `main`** (2026-09-26, `89fee8a`). Migration
+> `20260927030000` applied; portraits generated for all 7 profiles with picks; RLS verified
+> owner-only; `/api/match` returns AI scores + threads (6.2s cold, 0.17s cached). Old match cards
+> without scores stay until deleted in the SQL Editor (cards are never regenerated).
 
 # AI portraits + whole-profile connection assessment (branch `ai-portraits`), plus docket ordering
 
