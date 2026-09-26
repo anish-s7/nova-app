@@ -1,4 +1,5 @@
-import { effectiveSongs, getSession } from "./session";
+import { effectiveSongs, getSession, setSession } from "./session";
+import type { Tag } from "./tags";
 import { ME_ID, WORLD, buildConnectionCard, buildContrastJson, wanderCandidates, conversations, edgeBetween, lookupUser, partyFor, partyFromWorld, scheduleReply } from "./mock-world";
 import type { ConnectionCardRow, ConfirmedMatchRow, Db, Message, MessageRow, Song, SongPickRow, SongRow, WanderRow } from "./types";
 
@@ -91,8 +92,26 @@ export const mockDb: Db = {
   },
 
   async listPicks(id) {
-    const songs = id === ME_ID ? effectiveSongs(getSession()) : (lookupUser(id)?.songs ?? []);
-    return songs.map((s) => pickRow(id, s));
+    if (id !== ME_ID) return (lookupUser(id)?.songs ?? []).map((s) => pickRow(id, s));
+    // "Me" lives in the session: songs plus how each one feels.
+    const s = getSession();
+    return effectiveSongs(s).map((song) => {
+      const f = s.feelings?.[song.id];
+      return { ...pickRow(id, song), ...(f ? { tags: f.tags, valence: f.valence, energy: f.energy } : {}) };
+    });
+  },
+
+  async updatePick(id, patch) {
+    const songId = id.slice(`${ME_ID}:`.length);
+    setSession((s) => ({ feelings: { ...s.feelings, [songId]: { tags: patch.tags as Tag[], valence: patch.valence, energy: patch.energy, placed: true } } }), true);
+    const song = effectiveSongs(getSession()).find((x) => x.id === songId);
+    if (!song) throw new Error("Pick not found");
+    return { ...pickRow(ME_ID, song), ...patch };
+  },
+
+  async deletePick(id) {
+    const songId = id.slice(`${ME_ID}:`.length);
+    setSession((s) => ({ songs: effectiveSongs(s).filter((x) => x.id !== songId) }), true);
   },
 
   async insertPick(pick) {

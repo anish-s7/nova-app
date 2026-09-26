@@ -460,7 +460,12 @@ export type Db = {
   getProfile(id: string): Promise<ProfileRow | null>;
   /** Picks for `id`, joined with their song. If `id` isn't the session's own user, private picks are already filtered out server-side. */
   listPicks(id: string): Promise<(SongPickRow & { song: SongRow })[]>;
-  insertPick(pick: PickInsert): Promise<{ song: SongRow; pick: SongPickRow }>;
+  /** Saves a pick. If the user already has this song, that pick is updated (newest feelings win) — never duplicated. */
+  insertPick(pick: PickInsert): Promise<{ song: SongRow; pick: SongPickRow; updated?: boolean }>;
+  /** Changes how one of the session user's songs feels. */
+  updatePick(id: string, patch: { tags: string[]; valence: number; energy: number }): Promise<SongPickRow>;
+  /** Removes one of the session user's songs. */
+  deletePick(id: string): Promise<void>;
   /** Already evidence-checked and card-bearing — see ConfirmedMatchRow. */
   getMatches(limit?: number): Promise<ConfirmedMatchRow[]>;
   /** Cached card for (me, otherProfileId), or null if none exists yet. */

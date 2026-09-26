@@ -91,6 +91,8 @@ export interface Database {
           reason_text: string | null;
           is_public: boolean;
           created_at: string;
+          /** Last time the pick's feelings changed (20260928000000_one_pick_per_song.sql). */
+          updated_at: string;
         };
         Insert: {
           profile_id: string;
@@ -101,6 +103,7 @@ export interface Database {
           embedding: number[];
           reason_text?: string | null;
           is_public?: boolean;
+          updated_at?: string;
         };
         Update: Partial<{
           tags: string[];
@@ -109,6 +112,7 @@ export interface Database {
           embedding: number[];
           reason_text: string | null;
           is_public: boolean;
+          updated_at: string;
         }>;
         Relationships: [];
       };
@@ -135,6 +139,8 @@ export interface Database {
           profile_id: string;
           portrait: Portrait;
           pick_count: number;
+          /** Newest song_picks.updated_at this portrait was generated from. Null = predates tracking. */
+          picks_updated_at: string | null;
           model: string;
           updated_at: string;
         };
@@ -142,12 +148,14 @@ export interface Database {
           profile_id: string;
           portrait: Portrait;
           pick_count: number;
+          picks_updated_at?: string | null;
           model: string;
           updated_at?: string;
         };
         Update: Partial<{
           portrait: Portrait;
           pick_count: number;
+          picks_updated_at: string | null;
           model: string;
           updated_at: string;
         }>;

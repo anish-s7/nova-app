@@ -54,7 +54,7 @@ import {
   worldUser,
   type Party,
 } from "./mock-world";
-import { getSession, setSession, type FailureKey } from "./session";
+import { getSession, setSession, type Feeling, type FailureKey } from "./session";
 import type {
   AnalysisResult,
   Connection,
@@ -295,10 +295,53 @@ export async function addSong(input: { title: string; artist: string; tags: Tag[
     reasonText: input.reason || undefined,
   });
   // A new song changes the portrait. Refresh it in the background; the add itself already succeeded.
+  refreshPortraitInBackground("adding a song");
+}
+
+/** Real mode: regenerate my portrait after my songs changed, without making the caller wait. */
+function refreshPortraitInBackground(after: string) {
+  if (!REAL_DATA) return;
   void real
     .generateAnalysis()
     .then((analysis) => setSession({ analysis, motivations: analysis.motivations }))
-    .catch((err) => console.error("Refreshing the portrait after adding a song failed:", err));
+    .catch((err) => console.error(`Refreshing the portrait after ${after} failed:`, err));
+}
+
+/** One of my saved songs, with how it feels to me. `pickId` is what edit/remove take. */
+export type MySong = { pickId: string; song: Song; feeling: Feeling };
+
+/** My songs as saved (real mode: my picks; mock: the session), with their current feelings. */
+export async function getMySongs(): Promise<MySong[]> {
+  let rows = await db.listPicks(ME_ID);
+  if (!REAL_DATA) {
+    // The mock "me" falls back to a persona playlist and holds the current onboarding run's songs;
+    // only songs that run actually saved count as yours.
+    const saved = new Set(getSession().savedSongIds ?? []);
+    rows = rows.filter((r) => saved.has(r.song_id));
+  }
+  return rows.map((r) => ({
+    pickId: r.id,
+    song: songFromRow(r.song),
+    feeling: { tags: r.tags as Tag[], valence: r.valence, energy: r.energy, placed: r.tags.length > 0 || r.valence !== 0 || r.energy !== 0 },
+  }));
+}
+
+/** Same song, however it was found (search result, Spotify import, saved pick). */
+export function sameSong(a: Pick<Song, "title" | "artist">, b: Pick<Song, "title" | "artist">) {
+  const norm = (s: string) => s.trim().toLowerCase();
+  return norm(a.title) === norm(b.title) && norm(a.artist) === norm(b.artist);
+}
+
+/** Changes how one of my songs feels. The pick is updated in place, never duplicated. */
+export async function updateSongFeeling(pickId: string, feeling: Pick<Feeling, "tags" | "valence" | "energy">) {
+  await db.updatePick(pickId, { tags: feeling.tags, valence: feeling.valence, energy: feeling.energy });
+  refreshPortraitInBackground("editing a song");
+}
+
+/** Removes one of my songs. */
+export async function removeSong(pickId: string) {
+  await db.deletePick(pickId);
+  refreshPortraitInBackground("removing a song");
 }
 
 /** NOT IN CONTRACT: motivations rows have no feedback/isPublic/note (lib/types.ts #4). */
