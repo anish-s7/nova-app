@@ -4,7 +4,9 @@ import type { GalaxyEdge, GalaxyNode } from "./types";
 import { topTwo } from "./why-mix";
 
 export type LayoutPoint = { id: string; x: number; y: number; z: number; cluster: string };
-export type Layout = { points: Map<string, LayoutPoint>; radius: number };
+export type DestinationPoint = { id: string; x: number; y: number; z: number; radius: number };
+/** `destinations`: distant community galaxies, home layout only. */
+export type Layout = { points: Map<string, LayoutPoint>; radius: number; destinations?: Map<string, DestinationPoint> };
 
 type N = SimNode & { cluster: string; ax: number; ay: number; az: number };
 type L = { source: string | N; target: string | N; similarity: number };
@@ -115,6 +117,62 @@ export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[]): Layout 
   const layout = { points, radius: TARGET_RADIUS };
   cache.set(key, layout);
   return layout;
+}
+
+const INNER_ORBIT = 5;
+const OUTER_ORBIT = 11;
+const NEARBY_RING = 15;
+const DESTINATION_RADIUS = 6;
+
+/** A star's fixed bearing around you. Per id, so moving to a closer orbit never swings anyone around. */
+function bearing(id: string) {
+  return ((hash(id) % 3600) / 3600) * Math.PI * 2;
+}
+
+/** Where a connected person sits: their bearing, at a radius set by how close the relationship is. */
+export function homeOrbitPoint(node: Pick<GalaxyNode, "userId" | "cluster" | "orbit">): LayoutPoint {
+  const a = bearing(node.userId);
+  const r = OUTER_ORBIT + (INNER_ORBIT - OUTER_ORBIT) * clamp01(node.orbit ?? 0);
+  // A slight tilt so the disc has depth when you turn it.
+  return { id: node.userId, cluster: node.cluster, x: Math.cos(a) * r, y: Math.sin(a) * r, z: Math.sin(a * 2) * 1.5 };
+}
+
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
+
+/**
+ * The home galaxy: you at the center, connected people on orbits around you, suggestions faint
+ * outside them, and community galaxies far off. Deterministic and cheap; no simulation.
+ */
+export function computeHomeLayout(nodes: GalaxyNode[], destinations: { id: string; distance: number }[] = []): Layout {
+  const dests = new Map<string, DestinationPoint>();
+  destinations.forEach((d, i) => {
+    // Evenly round you, starting overhead; the canvas is a phone, so the ring is taller than wide.
+    const a = Math.PI / 2 + (i / Math.max(1, destinations.length)) * Math.PI * 2 + 0.35;
+    const r = 42 + clamp01(d.distance) * 18;
+    dests.set(d.id, { id: d.id, x: Math.cos(a) * r * 0.7, y: Math.sin(a) * r, z: Math.sin(a * 3) * 6, radius: DESTINATION_RADIUS });
+  });
+
+  const points = new Map<string, LayoutPoint>();
+  for (const n of nodes) {
+    if (n.isMe) {
+      points.set(n.userId, { id: n.userId, cluster: n.cluster, x: 0, y: 0, z: 0 });
+    } else if (n.destinationId && dests.has(n.destinationId)) {
+      // A community member: scattered through that galaxy's disc.
+      const c = dests.get(n.destinationId)!;
+      const rand = seeded(hash(n.userId));
+      const a = rand() * Math.PI * 2;
+      const r = 1.2 + Math.sqrt(rand()) * (c.radius - 1.5);
+      points.set(n.userId, { id: n.userId, cluster: n.cluster, x: c.x + Math.cos(a) * r, y: c.y + Math.sin(a) * r, z: c.z + (rand() - 0.5) * 3 });
+    } else if (n.relationship === "nearby") {
+      const a = bearing(n.userId);
+      const r = NEARBY_RING + (hash(`${n.userId}~r`) % 100) / 25;
+      points.set(n.userId, { id: n.userId, cluster: n.cluster, x: Math.cos(a) * r, y: Math.sin(a) * r, z: Math.sin(a * 3) * 3 });
+    } else {
+      // Connected, and arriving stars with nowhere else to be, sit in orbit.
+      points.set(n.userId, homeOrbitPoint(n));
+    }
+  }
+  return { points, radius: NEARBY_RING + 4, destinations: dests };
 }
 
 /** New arrivals are placed next to their most similar neighbor without re-running the layout. */

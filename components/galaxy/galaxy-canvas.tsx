@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useReducedMotion, useWebGL } from "@/hooks/use-capabilities";
 import type { Arrival } from "@/hooks/use-galaxy-realtime";
-import { computeLayout, placeArrival, placeSongs } from "@/lib/galaxy-layout";
+import { computeHomeLayout, computeLayout, placeArrival, placeSongs } from "@/lib/galaxy-layout";
 import { songNodeId, type SongStar } from "@/lib/song-layer";
 import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
 import { GalaxySvg } from "./galaxy-svg";
@@ -38,10 +38,16 @@ type Props = Omit<GalaxyViewProps, "layout" | "extra"> & {
   focusSongIds?: string[] | null;
   /** "See connections": the selected song, threaded to these songs (strongest first). */
   connections?: { songId: string; score: number }[] | null;
+  /** "whys" (default): everyone arranged by why they listen. "home": you at the center, your connections in orbit. */
+  arrangement?: "whys" | "home";
 };
 
-export function GalaxyCanvas({ nodes, edges, arrivals = [], className, songs = [], focusSongIds = null, connections = null, ...rest }: Props) {
-  const layout = useMemo(() => computeLayout(nodes, edges), [nodes, edges]);
+export function GalaxyCanvas({ nodes, edges, arrivals = [], className, songs = [], focusSongIds = null, connections = null, arrangement = "whys", ...rest }: Props) {
+  const { destinations } = rest;
+  const layout = useMemo(
+    () => (arrangement === "home" ? computeHomeLayout(nodes, destinations) : computeLayout(nodes, edges)),
+    [arrangement, nodes, edges, destinations],
+  );
   const extra = useMemo(() => arrivals.map((a) => placeArrival(layout, a.node, a.edges)), [arrivals, layout]);
   const songPoints = useMemo(() => placeSongs(layout, songs.map((s) => ({ id: s.id, cluster: s.cluster, listenerIds: s.listeners.map((l) => l.id) })), extra), [layout, songs, extra]);
   const songNodes = useMemo(

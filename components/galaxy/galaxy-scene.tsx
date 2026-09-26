@@ -7,7 +7,8 @@ import { getCluster } from "@/lib/clusters";
 import { isSongNode } from "@/lib/song-layer";
 import { topTwo } from "@/lib/why-mix";
 import { BOND_AT } from "@/lib/thread";
-import type { LayoutPoint } from "@/lib/galaxy-layout";
+import { homeOrbitPoint, type LayoutPoint } from "@/lib/galaxy-layout";
+import type { GalaxyNode } from "@/lib/types";
 import type { GalaxyApi, GalaxyViewProps } from "./types";
 
 const BG = "#110f22";
@@ -127,6 +128,47 @@ function nebulaTexture() {
 
 const bridgeTo = new THREE.Color();
 
+/** Home galaxy: closer orbits burn brighter; suggestions are small. */
+function starSize(n: GalaxyNode) {
+  if (n.relationship === "nearby") return 1.5;
+  if (n.relationship === "arriving") return 2.6;
+  if (n.relationship === "connected") return 2.1 + 0.6 * (n.orbit ?? 0);
+  return 2.1;
+}
+
+/** A line of text that stays the same size on screen however far away it is. */
+function textSprite(text: string) {
+  const px = 44;
+  const c = document.createElement("canvas");
+  const g = c.getContext("2d")!;
+  const family = getComputedStyle(document.documentElement).getPropertyValue("--font-newsreader").trim() || "serif";
+  const font = `italic ${px}px ${family}`;
+  g.font = font;
+  c.width = Math.ceil(g.measureText(text).width) + 16;
+  c.height = Math.ceil(px * 1.4);
+  g.font = font;
+  g.fillStyle = "rgba(236, 234, 250, 0.92)";
+  g.textBaseline = "middle";
+  g.fillText(text, 8, c.height / 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthWrite: false, depthTest: false, sizeAttenuation: false, opacity: 0 }));
+  // sizeAttenuation off: scale is a fraction of the view height.
+  const h = 0.032;
+  sp.scale.set((h * c.width) / c.height, h, 1);
+  return sp;
+}
+
+/** A gentle arc from a to b, bowed sideways and toward the camera so it reads as a path, not a ruler line. */
+function arc(a: { x: number; y: number; z: number }, b: { x: number; y: number; z: number }, bow: number, segments: number) {
+  const va = new THREE.Vector3(a.x, a.y, a.z);
+  const vb = new THREE.Vector3(b.x, b.y, b.z);
+  const mid = va.clone().lerp(vb, 0.5);
+  const len = va.distanceTo(vb);
+  const perp = new THREE.Vector3(-(vb.y - va.y), vb.x - va.x, 0).normalize().multiplyScalar(len * bow);
+  return new THREE.QuadraticBezierCurve3(va, mid.add(perp).setZ(mid.z + len * bow * 0.7), vb).getPoints(segments);
+}
+
 export type ClusterCenter = { id: string; x: number; y: number; z: number; spread: number; extent: number; count: number };
 
 /** Where each "why" lives in the layout, and how far it spreads. Your own star is left out so it doesn't drag a cluster. */
@@ -184,6 +226,9 @@ function Scene({
   threads = [],
   fading,
   hidden,
+  destinations = [],
+  bridges = [],
+  onSelectDestination,
 }: GalaxyViewProps) {
   const { camera, gl, size, invalidate } = useThree();
   const perspective = camera as THREE.PerspectiveCamera;
@@ -201,11 +246,16 @@ function Scene({
   const births = useRef(new Map<string, number>());
   const known = useRef(new Set(layout.points.keys()));
 
+  // Community members live in distant galaxies; "home" framing leaves them out.
+  const memberIds = useMemo(() => new Set(nodes.filter((n) => n.destinationId).map((n) => n.userId)), [nodes]);
+  const homePoints = useMemo(() => [...layout.points.values()].filter((p) => !memberIds.has(p.id)), [layout, memberIds]);
+  const destPoints = useMemo(() => [...(layout.destinations?.values() ?? [])], [layout]);
+
   // The galaxy's own center (the layout is centered on you, not on the galaxy) and the sphere that holds it.
   const hub = useMemo(() => {
     const lo = { x: Infinity, y: Infinity, z: Infinity };
     const hi = { x: -Infinity, y: -Infinity, z: -Infinity };
-    for (const p of layout.points.values()) {
+    for (const p of homePoints) {
       lo.x = Math.min(lo.x, p.x);
       lo.y = Math.min(lo.y, p.y);
       lo.z = Math.min(lo.z, p.z);
@@ -216,20 +266,29 @@ function Scene({
     if (!Number.isFinite(lo.x)) return { x: 0, y: 0, z: 0, radius: layout.radius };
     const c = { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2, z: (lo.z + hi.z) / 2 };
     let radius = 1;
-    for (const p of layout.points.values()) radius = Math.max(radius, Math.hypot(p.x - c.x, p.y - c.y, p.z - c.z));
+    for (const p of homePoints) radius = Math.max(radius, Math.hypot(p.x - c.x, p.y - c.y, p.z - c.z));
     return { ...c, radius };
-  }, [layout]);
+  }, [homePoints, layout.radius]);
 
-  const overviewDist = useMemo(() => {
+  /** Camera distance that fits a sphere of this radius. */
+  const fitDist = (radius: number) => {
     const aspect = size.width / Math.max(1, size.height);
     const halfV = ((FOV / 2) * Math.PI) / 180;
     // Fit whichever axis is tighter; a wide, short canvas is limited by height, a portrait one by width.
     const halfH = Math.atan(Math.tan(halfV) * aspect);
     // Stars nearer the camera loom larger than the sphere they sit in, so height needs extra room.
-    return (hub.radius * (halfV < halfH ? 1.6 : 1.05)) / Math.tan(Math.min(halfV, halfH));
-  }, [hub.radius, size.width, size.height]);
+    return (radius * (halfV < halfH ? 1.6 : 1.05)) / Math.tan(Math.min(halfV, halfH));
+  };
+  const overviewDist = useMemo(() => fitDist(hub.radius), [hub.radius, size.width, size.height]); // eslint-disable-line react-hooks/exhaustive-deps -- fitDist reads size
+  // Zoomed all the way out: home and every community galaxy around it.
+  const universe = useMemo(() => {
+    if (!destPoints.length) return null;
+    let radius = hub.radius;
+    for (const d of destPoints) radius = Math.max(radius, Math.hypot(d.x - hub.x, d.y - hub.y, d.z - hub.z) + d.radius);
+    return { x: hub.x, y: hub.y, z: hub.z, dist: fitDist(radius * 0.92) };
+  }, [destPoints, hub, size.width, size.height]); // eslint-disable-line react-hooks/exhaustive-deps -- fitDist reads size
   const minDist = 7;
-  const maxDist = overviewDist * 1.1;
+  const maxDist = Math.max(overviewDist, universe?.dist ?? 0) * 1.1;
 
   const me = meId ? points.get(meId) : undefined;
   const cam = useRef<CamState>(
@@ -276,6 +335,9 @@ function Scene({
   );
 
   const ordered = useMemo(() => nodes.filter((n) => points.has(n.userId)), [nodes, points]);
+  // Stars that flew somewhere after the layout ran (flyIntoOrbit), until the layout catches up.
+  const moved = useRef(new Map<string, { x: number; y: number; z: number }>());
+  const posOf = (id: string) => moved.current.get(id) ?? points.get(id);
 
   // How lit each star should be: 1 lit, 0 ghosted, -1 gone. The song layer and the people layer take turns.
   const dimFor = (n: (typeof nodes)[number]) => {
@@ -286,6 +348,9 @@ function Scene({
       return !focusIds || focusIds.has(n.userId) || n.userId === selectedId ? 1 : 0;
     }
     if (n.isMe) return 1;
+    // Suggestions stay faint until you look at one; community members sit a step back from whoever you're meeting.
+    if (n.relationship === "nearby") return selectedId === n.userId ? 1 : 0.4;
+    if (n.destinationId && !n.relationship) return selectedId && selectedId !== n.userId ? 0.45 : 0.7;
     // A selected song lights the people who have it; everyone else steps back.
     if (mode === "songs") return focusIds?.has(n.userId) ? 1 : 0;
     // Ambient far stars stay faint until you tap one; they should be easy to ignore.
@@ -305,7 +370,11 @@ function Scene({
     const birth = new Float32Array(n);
     const c = new THREE.Color();
     ordered.forEach((node, i) => {
-      const p = points.get(node.userId)!;
+      const laid = points.get(node.userId)!;
+      const flown = moved.current.get(node.userId);
+      // Once the layout puts a flown star where it landed, the layout owns it again.
+      if (flown && Math.hypot(flown.x - laid.x, flown.y - laid.y, flown.z - laid.z) < 0.01) moved.current.delete(node.userId);
+      const p = moved.current.get(node.userId) ?? laid;
       pos.set([p.x, p.y, p.z], i * 3);
       c.set(getCluster(node.cluster).color);
       // A bridge song is drawn between its two whys: their colors, weighted by how many listeners each has.
@@ -314,7 +383,7 @@ function Scene({
         if (b) c.lerp(bridgeTo.set(getCluster(b.id).color), 1 - a.w);
       }
       col.set([c.r, c.g, c.b], i * 3);
-      sizeA[i] = node.isMe ? 3.4 : node.kind === "song" ? (1.5 + 0.3 * Math.min(6, node.weight ?? 1)) * (node.bridge ? 1.3 : 1) : node.far ? 1.6 : 2.1;
+      sizeA[i] = node.isMe ? 3.4 : node.kind === "song" ? (1.5 + 0.3 * Math.min(6, node.weight ?? 1)) * (node.bridge ? 1.3 : 1) : node.far ? 1.6 : starSize(node);
       isMe[i] = node.isMe ? 1 : 0;
       if (!known.current.has(node.userId) && !births.current.has(node.userId)) births.current.set(node.userId, now());
       birth[i] = births.current.get(node.userId) ?? -1;
@@ -526,6 +595,148 @@ function Scene({
     [threadGroup],
   );
 
+  // Community galaxies: a glow, a spiral of dust, and a name you can see from home.
+  const destColor = useMemo(() => new Map(destinations.map((d) => [d.id, d])), [destinations]);
+  const destGlows = useMemo(
+    () =>
+      destPoints.map((d) => {
+        const color = destColor.get(d.id)?.color ?? "#ffffff";
+        const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: nebulaMap, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.3 }));
+        glow.position.set(d.x, d.y, d.z);
+        glow.scale.setScalar(d.radius * 3.4);
+        const core = new THREE.Sprite(new THREE.SpriteMaterial({ map: nebulaMap, color: "#ffffff", transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.35 }));
+        core.position.set(d.x, d.y, d.z);
+        core.scale.setScalar(d.radius * 0.7);
+        return { id: d.id, glow, core };
+      }),
+    [destPoints, destColor, nebulaMap],
+  );
+  useEffect(
+    () => () =>
+      destGlows.forEach((g) => {
+        g.glow.material.dispose();
+        g.core.material.dispose();
+      }),
+    [destGlows],
+  );
+  const destDust = useMemo(() => {
+    const pos: number[] = [];
+    const col: number[] = [];
+    const c = new THREE.Color();
+    for (const d of destPoints) {
+      c.set(destColor.get(d.id)?.color ?? "#ffffff");
+      let a = 0;
+      for (let i = 0; i < d.id.length; i++) a = (Math.imul(a, 31) + d.id.charCodeAt(i)) | 0;
+      const rand = () => {
+        a = (a + 0x6d2b79f5) | 0;
+        let t = Math.imul(a ^ (a >>> 15), 1 | a);
+        t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
+      // Two loose spiral arms, so it reads as a galaxy of its own from far away.
+      const twist = rand() * Math.PI * 2;
+      for (let i = 0; i < 220; i++) {
+        const t = Math.sqrt(rand());
+        const arm = i % 2 ? Math.PI : 0;
+        const ang = twist + arm + t * 4.2 + (rand() - 0.5) * 0.9;
+        const r = t * d.radius * 1.25;
+        pos.push(d.x + Math.cos(ang) * r, d.y + Math.sin(ang) * r, d.z + (rand() - 0.5) * 1.6);
+        const k = 0.55 + rand() * 0.45;
+        col.push(c.r * k, c.g * k, c.b * k);
+      }
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(pos), 3));
+    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(col), 3));
+    return g;
+  }, [destPoints, destColor]);
+  const destDustMat = useMemo(
+    () => new THREE.PointsMaterial({ size: 0.55, map: nebulaMap, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.9 }),
+    [nebulaMap],
+  );
+  useEffect(() => () => destDust.dispose(), [destDust]);
+  useEffect(() => () => destDustMat.dispose(), [destDustMat]);
+  // Names, drawn as fixed-size text sprites. They only earn their place once you've pulled back far enough to see the other galaxies.
+  const destLabels = useMemo(
+    () =>
+      destPoints.map((d) => {
+        const sp = textSprite(destColor.get(d.id)?.name ?? "");
+        sp.position.set(d.x, d.y - d.radius * 1.3, d.z);
+        return sp;
+      }),
+    [destPoints, destColor],
+  );
+  useEffect(
+    () => () =>
+      destLabels.forEach((sp) => {
+        sp.material.map?.dispose();
+        sp.material.dispose();
+      }),
+    [destLabels],
+  );
+
+  // Bridges: a lasting line from someone at home to the community you found them in. New ones fade in.
+  const seenBridges = useRef(new Set<string>());
+  const bridgeLines = useMemo(() => {
+    const out: { key: string; line: THREE.Line; mat: THREE.ShaderMaterial; fresh: boolean }[] = [];
+    for (const b of bridges) {
+      const p = points.get(b.personId);
+      const d = layout.destinations?.get(b.destinationId);
+      if (!p || !d) continue;
+      const key = `${b.personId}>${b.destinationId}`;
+      const pts = arc(p, d, 0.1, 64);
+      const g = new THREE.BufferGeometry().setFromPoints(pts);
+      const ca = new THREE.Color(getCluster(p.cluster).color);
+      const cb = new THREE.Color(destColor.get(d.id)?.color ?? "#ffffff");
+      const col = new Float32Array(pts.length * 3);
+      const t = new Float32Array(pts.length);
+      pts.forEach((_, i) => {
+        const k = i / (pts.length - 1);
+        const c = ca.clone().lerp(cb, k);
+        col.set([c.r, c.g, c.b], i * 3);
+        t[i] = k;
+      });
+      g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+      g.setAttribute("aT", new THREE.BufferAttribute(t, 1));
+      const fresh = !seenBridges.current.has(key);
+      const mat = new THREE.ShaderMaterial({
+        vertexShader: bondVertex,
+        fragmentShader: bondFragment,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        uniforms: { uTime: { value: 0 }, uOpacity: { value: fresh ? 0 : 0.8 } },
+      });
+      out.push({ key, line: new THREE.Line(g, mat), mat, fresh });
+    }
+    return out;
+  }, [bridges, points, layout.destinations, destColor]);
+  useEffect(
+    () => () =>
+      bridgeLines.forEach((b) => {
+        b.line.geometry.dispose();
+        b.mat.dispose();
+      }),
+    [bridgeLines],
+  );
+
+  // The trail a star leaves while it flies home.
+  const TRAIL = 40;
+  const trail = useMemo(() => {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(new Float32Array(TRAIL * 3), 3));
+    g.setAttribute("color", new THREE.BufferAttribute(new Float32Array(TRAIL * 3), 3));
+    const mat = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false });
+    return new THREE.Line(g, mat);
+  }, []);
+  useEffect(
+    () => () => {
+      trail.geometry.dispose();
+      (trail.material as THREE.Material).dispose();
+    },
+    [trail],
+  );
+
   const stars = useMemo(() => {
     const g = new THREE.BufferGeometry();
     const pos = new Float32Array(1500 * 3);
@@ -610,6 +821,37 @@ function Scene({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- fadeUniform is stable in behavior
   }, [bond, bondMat]);
 
+  useEffect(() => {
+    for (const b of bridgeLines) {
+      if (!b.fresh) continue;
+      seenBridges.current.add(b.key);
+      fadeUniform(b.mat.uniforms.uOpacity, 0.8, 1600, `bridge:${b.key}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fadeUniform is stable in behavior
+  }, [bridgeLines]);
+
+  /** A journey rather than a pan: the camera rises out of where it is, crosses, and settles in. */
+  const travel = (to: CamMove, dur: number) => {
+    vel.current = { yaw: 0, pitch: 0 };
+    const from = { ...cam.current, yaw: wrapAngle(cam.current.yaw) };
+    const yaw = to.yaw === undefined ? from.yaw : from.yaw + wrapAngle(to.yaw - from.yaw);
+    const pitch = to.pitch ?? from.pitch;
+    const lift = to.lift ?? 0;
+    const span = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
+    const hop = Math.max(0, span * 0.9 - Math.min(from.dist, to.dist) * 0.3);
+    return tween("camera", dur, (e) => {
+      cam.current = {
+        x: lerp(from.x, to.x, e),
+        y: lerp(from.y, to.y, e),
+        z: lerp(from.z, to.z, e),
+        dist: lerp(from.dist, to.dist, e) + Math.sin(Math.PI * e) * hop,
+        yaw: lerp(from.yaw, yaw, e),
+        pitch: lerp(from.pitch, pitch, e),
+        lift: lerp(from.lift, lift, e),
+      };
+    });
+  };
+
   const api = useRef<GalaxyApi>(null!);
   api.current = {
     igniteMe: async (duration = 1800) => {
@@ -620,8 +862,10 @@ function Scene({
     },
     pullBackToOverview: async (duration = 2800) => {
       nodeMat.uniforms.uMe.value = 1;
+      // With community galaxies around, the overview is the whole universe, not just home.
+      const view = universe ?? { x: hub.x, y: hub.y, z: hub.z, dist: overviewDist };
       await Promise.all([
-        moveCamera({ x: hub.x, y: hub.y, z: hub.z, dist: overviewDist, yaw: 0, pitch: 0 }, duration),
+        moveCamera({ ...view, yaw: 0, pitch: 0 }, duration),
         fadeUniform(nodeMat.uniforms.uOthers, 1, duration * 0.85, "others"),
         fadeUniform(edgeMat.uniforms.uOpacity, 1, duration, "edges"),
       ]);
@@ -651,6 +895,49 @@ function Scene({
       const lift = (c.extent * 0.1) / (2 * dist * Math.tan(((FOV / 2) * Math.PI) / 180));
       await moveCamera({ x: c.x, y: c.y, z: c.z, dist, lift }, 1000);
     },
+    flyToDestination: async (id, opts) => {
+      const d = layout.destinations?.get(id);
+      if (!d) return;
+      await travel({ x: d.x, y: d.y, z: d.z, dist: fitDist(d.radius * 1.15), yaw: 0, pitch: 0, lift: opts?.lift ?? 0 }, opts?.duration ?? 2600);
+    },
+    returnHome: async (duration = 2400) => {
+      nodeMat.uniforms.uMe.value = 1;
+      await Promise.all([
+        travel({ x: hub.x, y: hub.y, z: hub.z, dist: overviewDist, yaw: 0, pitch: 0 }, duration),
+        fadeUniform(nodeMat.uniforms.uOthers, 1, duration * 0.7, "others"),
+        fadeUniform(edgeMat.uniforms.uOpacity, 1, duration, "edges"),
+      ]);
+    },
+    flyIntoOrbit: async (personId, duration = 2600) => {
+      const i = ordered.findIndex((n) => n.userId === personId);
+      const from = posOf(personId);
+      if (i < 0 || !from) return;
+      const to = homeOrbitPoint({ ...ordered[i], orbit: ordered[i].orbit ?? 0 });
+      const path = arc(from, to, 0.12, 120);
+      const at = (e: number) => path[Math.min(path.length - 1, Math.round(e * (path.length - 1)))];
+      const posAttr = nodeGeo.getAttribute("position") as THREE.BufferAttribute;
+      const tPos = trail.geometry.getAttribute("position") as THREE.BufferAttribute;
+      const tCol = trail.geometry.getAttribute("color") as THREE.BufferAttribute;
+      const color = new THREE.Color(getCluster(ordered[i].cluster).color);
+      const trailMat = trail.material as THREE.LineBasicMaterial;
+      trailMat.opacity = 1;
+      await tween(`orbit:${personId}`, duration, (e) => {
+        const p = at(e);
+        posAttr.setXYZ(i, p.x, p.y, p.z);
+        posAttr.needsUpdate = true;
+        moved.current.set(personId, { x: p.x, y: p.y, z: p.z });
+        // The tail covers the last stretch of the path, brightest at the star.
+        for (let k = 0; k < TRAIL; k++) {
+          const q = at(Math.max(0, e - (k / TRAIL) * 0.22));
+          tPos.setXYZ(k, q.x, q.y, q.z);
+          const f = 1 - k / TRAIL;
+          tCol.setXYZ(k, color.r * f, color.g * f, color.b * f);
+        }
+        tPos.needsUpdate = true;
+        tCol.needsUpdate = true;
+      });
+      await tween("trail", 700, (e) => (trailMat.opacity = 1 - e));
+    },
   };
 
   useEffect(() => {
@@ -662,6 +949,9 @@ function Scene({
       recenter: () => api.current.recenter(),
       flyToCluster: (c) => api.current.flyToCluster(c),
       flyToGroup: (ids) => api.current.flyToGroup(ids),
+      flyToDestination: (id, o) => api.current.flyToDestination(id, o),
+      returnHome: (d) => api.current.returnHome(d),
+      flyIntoOrbit: (id, d) => api.current.flyIntoOrbit(id, d),
     };
     onReady?.();
     return () => {
@@ -674,6 +964,8 @@ function Scene({
   modeRef.current = mode;
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
+  const onSelectDestinationRef = useRef(onSelectDestination);
+  onSelectDestinationRef.current = onSelectDestination;
 
   useEffect(() => {
     if (!interactive) return;
@@ -691,7 +983,8 @@ function Scene({
       const v = new THREE.Vector3();
       let best: string | null = null;
       let bestD = 40;
-      for (const [id, p] of points) {
+      for (const [id, laid] of points) {
+        const p = moved.current.get(id) ?? laid;
         if (id !== meId && nodeMat.uniforms.uOthers.value < 0.5) continue;
         // Only the layer you're looking at can be tapped.
         if (id !== meId && isSongNode(id) !== (modeRef.current === "songs")) continue;
@@ -701,6 +994,24 @@ function Scene({
         if (d < bestD) {
           bestD = d;
           best = id;
+        }
+      }
+      return best;
+    };
+
+    /** A community galaxy under the pointer: generous, since it's a big soft target. */
+    const pickDestination = (clientX: number, clientY: number) => {
+      const rect = el.getBoundingClientRect();
+      const v = new THREE.Vector3();
+      let best: string | null = null;
+      let bestD = 56;
+      for (const d of layout.destinations?.values() ?? []) {
+        v.set(d.x, d.y, d.z).project(camera);
+        if (v.z > 1) continue;
+        const dd = Math.hypot(((v.x + 1) / 2) * rect.width - (clientX - rect.left), ((1 - v.y) / 2) * rect.height - (clientY - rect.top));
+        if (dd < bestD) {
+          bestD = dd;
+          best = d.id;
         }
       }
       return best;
@@ -724,7 +1035,7 @@ function Scene({
         // Desktop hover: preview a star's name and show it's clickable.
         if (e.pointerType !== "mouse") return;
         const hit = pick(e.clientX, e.clientY);
-        el.style.cursor = hit ? "pointer" : "grab";
+        el.style.cursor = hit || (onSelectDestinationRef.current && pickDestination(e.clientX, e.clientY)) ? "pointer" : "grab";
         if (hit !== hovered.current) {
           hovered.current = hit;
           applyHighlightRef.current();
@@ -763,7 +1074,9 @@ function Scene({
         if (down && performance.now() - lastMove > 80) vel.current = { yaw: 0, pitch: 0 };
         if (down && down.moved < 8 && performance.now() - down.t < 450) {
           const hit = pick(e.clientX, e.clientY);
+          const dest = hit ? null : pickDestination(e.clientX, e.clientY);
           if (hit) api.current.flyTo(hit, { lift: hit === meId ? 0 : 0.1 }).then(() => onSelectRef.current?.(hit));
+          else if (dest && onSelectDestinationRef.current) onSelectDestinationRef.current(dest);
           else onSelectRef.current?.(null);
         }
         down = null;
@@ -796,7 +1109,7 @@ function Scene({
       el.removeEventListener("pointercancel", onUp);
       el.removeEventListener("wheel", onWheel);
     };
-  }, [interactive, gl, camera, points, meId, nodeMat, minDist, maxDist, invalidate]);
+  }, [interactive, gl, camera, points, meId, nodeMat, minDist, maxDist, invalidate, layout.destinations]);
 
   const offset = useMemo(() => new THREE.Vector3(), []);
   const euler = useMemo(() => new THREE.Euler(), []);
@@ -846,7 +1159,12 @@ function Scene({
     if (starGroup.current) {
       // The sky rides along with the pivot so it reads as infinitely far away.
       starGroup.current.position.set(c.x, c.y, c.z);
+      // Pulled far back, the sky shell grows so the camera never ends up outside it.
+      starGroup.current.scale.setScalar(Math.max(1, c.dist / 200));
     }
+    // Community names fade in as you pull back past home, and out as you arrive in one.
+    const far = clamp((c.dist - overviewDist * 1.2) / (overviewDist * 0.8), 0, 1);
+    for (const sp of destLabels) sp.material.opacity = far;
     bondMat.uniforms.uTime.value = time;
     const others = nodeMat.uniforms.uOthers.value;
     for (const { id, sprite } of nebulae) {
@@ -874,6 +1192,20 @@ function Scene({
       <lineSegments geometry={edgeGeo} material={edgeMat} />
       {bond ? <primitive object={bond} /> : null}
       <primitive object={threadGroup} />
+      {destGlows.map((g) => (
+        <group key={g.id}>
+          <primitive object={g.glow} />
+          <primitive object={g.core} />
+        </group>
+      ))}
+      <points geometry={destDust} material={destDustMat} />
+      {destLabels.map((sp) => (
+        <primitive key={sp.uuid} object={sp} />
+      ))}
+      {bridgeLines.map((b) => (
+        <primitive key={b.key} object={b.line} />
+      ))}
+      <primitive object={trail} />
       <points geometry={nodeGeo} material={nodeMat} />
     </>
   );
