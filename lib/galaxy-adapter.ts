@@ -21,6 +21,7 @@ function toNode(n: WindowNode, meId: string, alias = meId): GalaxyNode {
     topMotivations: [], // NOT IN CONTRACT: no motivations table (lib/types.ts #4)
     isMe: n.profileId === meId,
     ...(n.far ? { far: true } : {}),
+    ...(n.viewerSimilarity != null ? { youSimilarity: n.viewerSimilarity } : {}),
   };
 }
 
@@ -44,13 +45,16 @@ function topMatch(edges: WindowEdge[], meId: string): string | undefined {
 }
 
 /** `alias` replaces the viewer's own id in nodes and edges (lib/api.ts passes ME_ID); omit it to keep real ids. */
-export function galaxyFromWindow(w: GalaxyWindow, alias = w.meId): GalaxyResponse {
-  const me = w.nodes.find((n) => n.profileId === w.meId);
-  const others = w.nodes.filter((n) => n.profileId !== w.meId);
+export function galaxyFromWindow(w: GalaxyWindow, alias = w.viewerId ?? w.meId): GalaxyResponse {
+  // Hopped: the viewer stays `isMe` (the way back); the window's center is reported as centerId.
+  const viewer = w.viewerId ?? w.meId;
+  const me = w.nodes.find((n) => n.profileId === viewer);
+  const others = w.nodes.filter((n) => n.profileId !== viewer);
   return {
-    nodes: [...(me ? [toNode(me, w.meId, alias)] : []), ...others.map((n) => toNode(n, w.meId, alias))],
-    edges: w.edges.map((e) => toEdge(e, w.meId, alias)),
+    nodes: [...(me ? [toNode(me, viewer, alias)] : []), ...others.map((n) => toNode(n, viewer, alias))],
+    edges: w.edges.map((e) => toEdge(e, viewer, alias)),
     topMatchId: topMatch(w.edges, w.meId),
+    ...(w.viewerId ? { centerId: w.meId } : {}),
     status: "ready",
     sampled: w.sampled,
     hidden: w.hidden,
