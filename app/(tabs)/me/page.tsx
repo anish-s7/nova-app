@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { Check, ChevronDown, ChevronRight, Eye, EyeOff, ListMusic, Orbit } from "lucide-react";
@@ -14,9 +14,9 @@ import { ReasonSpectrum } from "@/components/reason-spectrum";
 import { ScreenHeader } from "@/components/screen-header";
 import { buttonVariants } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
-import { getConversations, getMe, REAL_DATA } from "@/lib/api";
+import { getConversations, getMe, getStoredAnalysis, REAL_DATA } from "@/lib/api";
 import { getCluster } from "@/lib/clusters";
-import { effectiveSongs, useHydrated, useSession } from "@/lib/session";
+import { effectiveSongs, setSession, useHydrated, useSession } from "@/lib/session";
 import type { InferredMotivation, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +30,12 @@ export default function MePage() {
   const { data: conversations } = useSWR(["conversations", session.version], getConversations);
   // Real mode: your songs are your saved picks (with covers), not the onboarding session copy.
   const mine = useSWR(REAL_DATA ? ["me", session.version] : null, getMe);
+  // Real mode, signed in somewhere new: this browser's session has no reading yet, but the stored portrait does.
+  const needsPortrait = REAL_DATA && hydrated && !session.analysis;
+  const stored = useSWR(needsPortrait ? ["portrait", session.version] : null, getStoredAnalysis);
+  useEffect(() => {
+    if (stored.data && !session.analysis) setSession({ analysis: stored.data, motivations: stored.data.motivations });
+  }, [stored.data, session.analysis]);
   if (!hydrated) return <main className="flex-1" />;
 
   const songs = REAL_DATA ? (mine.data?.songs ?? []) : effectiveSongs(session);

@@ -1,6 +1,7 @@
 "use client";
 
 import { ApiError } from "./api-error";
+import type { Portrait } from "./portrait";
 import type {
   ConfirmedMatchRow,
   ConnectionCardJson,
@@ -94,6 +95,19 @@ function songRow(s: NonNullable<ProfileResponse["picks"][number]["songs"]>): Son
 /** Full profile response, including the parts of the row Db.getProfile drops (primary_cluster). */
 export function fetchProfile(id: string) {
   return request<ProfileResponse>(profileUrl(id));
+}
+
+// --- portrait (real mode only; not part of the Db contract) --------------------
+
+/** POST /api/portrait: (re)generate my listening portrait. */
+export const generatePortrait = () => post<{ portrait: Portrait }>("/api/portrait");
+
+/** GET /api/portrait: my stored portrait, or null before the first one exists. */
+export async function getPortrait(): Promise<Portrait | null> {
+  const res = await fetch("/api/portrait", { credentials: "same-origin" });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to continue." : "Your portrait didn't load.");
+  return ((await res.json()) as { portrait: Portrait }).portrait;
 }
 
 export const httpDb: Db = {

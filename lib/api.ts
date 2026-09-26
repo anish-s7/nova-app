@@ -197,10 +197,31 @@ export async function searchSongs(q: string): Promise<Song[]> {
 }
 
 export async function analyzeMusic(input: { songs: Song[]; signals: ListeningSignal[] }): Promise<AnalysisResult> {
+  if (REAL_DATA) return analyzeSavedPicks();
   await delay(1400);
   maybeFail("analysis");
   const s = getSession();
   return infer({ userId: ME_ID, subject: { isMe: true }, songs: input.songs, signals: input.signals, bias: s.demo ? DEMO_BIAS : undefined });
+}
+
+/** Real mode only: my stored listening portrait (no Gemini call), or null before the first one. */
+export async function getStoredAnalysis(): Promise<AnalysisResult | null> {
+  return REAL_DATA ? real.getStoredAnalysis() : null;
+}
+
+/**
+ * Real mode: the portrait is read from saved picks, so wait for the feel step's save to finish
+ * (retrying it if it failed — saveSongs skips songs already saved), then ask Gemini for it.
+ * Also warms the match cache in the background so Connections is ready after the reveal.
+ */
+async function analyzeSavedPicks(): Promise<AnalysisResult> {
+  const status = getSession().saveStatus;
+  if (status === "error" || status === "idle") await saveSongs();
+  while (getSession().saveStatus === "saving") await delay(400);
+  if (getSession().saveStatus === "error") throw new ApiError(getSession().saveError ?? "We couldn't save your songs.");
+  const analysis = await real.generateAnalysis();
+  void db.getMatches(14).catch((err) => console.error("Warming matches after onboarding failed:", err));
+  return analysis;
 }
 
 /**
@@ -273,6 +294,11 @@ export async function addSong(input: { title: string; artist: string; tags: Tag[
     energy: input.energy,
     reasonText: input.reason || undefined,
   });
+  // A new song changes the portrait. Refresh it in the background; the add itself already succeeded.
+  void real
+    .generateAnalysis()
+    .then((analysis) => setSession({ analysis, motivations: analysis.motivations }))
+    .catch((err) => console.error("Refreshing the portrait after adding a song failed:", err));
 }
 
 /** NOT IN CONTRACT: motivations rows have no feedback/isPublic/note (lib/types.ts #4). */
