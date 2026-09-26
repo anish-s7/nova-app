@@ -216,6 +216,8 @@ export type Connection = {
   sharedMotivation: string;
   sharedSongs: number;
   sharedArtists: number;
+  /** Covers shown on the row: shared songs first, then their songs by shared artists (max 4). NOT IN CONTRACT: see MERGE_CHECKLIST.md. */
+  evidenceSongs: Song[];
 };
 
 export type Message =

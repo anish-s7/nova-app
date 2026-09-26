@@ -429,9 +429,19 @@ export async function getConnections(): Promise<Connection[]> {
         sharedMotivation: e.sharedMotivation,
         sharedSongs: e.sharedSongs,
         sharedArtists: e.sharedArtists,
+        evidenceSongs: evidenceSongs(me.songs, u.songs),
       },
     ];
   });
+}
+
+/** Their songs that overlap with mine: same song first, then same artist. */
+function evidenceSongs(mine: Song[], theirs: Song[], max = 4): Song[] {
+  const ids = new Set(mine.map((s) => s.id));
+  const artists = new Set(mine.map((s) => s.artist));
+  const same = theirs.filter((s) => ids.has(s.id));
+  const sameArtist = theirs.filter((s) => !ids.has(s.id) && artists.has(s.artist));
+  return [...same, ...sameArtist].slice(0, max);
 }
 
 export async function getConnectionCard(otherId: string): Promise<ConnectionCard> {
