@@ -62,13 +62,13 @@ present is the uniqueness/dedup key backend checks before inserting.
 | tags | text[] | 1-3 values from the fixed taxonomy in `lib/tags.ts` (not a DB table) |
 | valence | float, range -1..1 | this user's circular-slider placement for this song: sad/negative <-> happy/positive |
 | energy | float, range -1..1 | same slider, perpendicular axis: calm <-> intense |
-| embedding | vector(770), not null | **computed once at insert time**, never recomputed later: the song's 768-dim `songs.embedding` with this pick's `valence`/`energy` (scaled by `EMOTION_WEIGHT`, see `lib/emotion.ts`) appended as 2 more dims |
+| embedding | vector(770), not null | computed at insert time by `buildPickEmbedding` (`lib/matching/pickEmbedding.ts`): the song's 768-dim `songs.embedding` **scaled to unit length**, then this pick's `valence`/`energy` × `EMOTION_WEIGHT` (0.7, `lib/emotion.ts`). If the formula or weight changes, recompute every row with `scripts/recompute-pick-embeddings.ts` |
 | reason_text | text, nullable | optional bonus free text, never required by the UI |
 | is_public | boolean | default true — privacy control, hide from matching/cards shown to others |
 | created_at | timestamptz | default now() |
 
 Unlike v1, there is no aggregation step anywhere — `song_picks.embedding`
-is final the moment the row is inserted.
+is set when the row is inserted and only rewritten by `scripts/recompute-pick-embeddings.ts` when the formula changes.
 
 ### `connection_cards`
 | column | type | notes |

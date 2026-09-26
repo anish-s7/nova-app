@@ -12,7 +12,8 @@
 import { createServerClient } from "../lib/supabase/server";
 import { resolveSong } from "../lib/musicbrainz/client";
 import { generateSongContext } from "../lib/gemini/generateSongContext";
-import { EMOTION_WEIGHT, clampEmotionValue } from "../lib/emotion";
+import { clampEmotionValue } from "../lib/emotion";
+import { buildPickEmbedding } from "../lib/matching/pickEmbedding";
 import { parseVector } from "../lib/supabase/vector";
 import { refreshPrimaryCluster } from "../lib/matching/refreshPrimaryCluster";
 
@@ -283,7 +284,7 @@ async function main() {
       const profile = CLUSTER_PROFILE[song.cluster];
       const valence = clampEmotionValue(profile.valence);
       const energy = clampEmotionValue(profile.energy);
-      const pickEmbedding = [...songEmbedding, valence * EMOTION_WEIGHT, energy * EMOTION_WEIGHT];
+      const pickEmbedding = buildPickEmbedding(songEmbedding, valence, energy);
 
       const { error } = await supabase.from("song_picks").insert({
         profile_id: profileId,
