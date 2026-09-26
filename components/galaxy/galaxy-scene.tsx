@@ -145,7 +145,12 @@ export function clusterCenters(points: Map<string, LayoutPoint>, meId?: string):
   });
 }
 
-type CamState = { x: number; y: number; z: number; dist: number };
+/**
+ * An orbit: the camera sits `dist` from the pivot (x, y, z), turned by yaw and pitch around it.
+ * `lift` raises the pivot on screen by that fraction of the view height without moving it in the world.
+ */
+type CamState = { x: number; y: number; z: number; dist: number; yaw: number; pitch: number; lift: number };
+type CamMove = { x: number; y: number; z: number; dist: number; yaw?: number; pitch?: number; lift?: number };
 type Tween = { start: number; dur: number; group: string; update: (e: number) => void; resolve: () => void };
 
 const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -168,13 +173,13 @@ function placeLabel(el: HTMLElement | null, at: THREE.Vector3 | null, camera: TH
   el.style.transform = `translate(${((v.x + 1) / 2) * width}px, ${((1 - v.y) / 2) * height}px) translate(-50%, -50%)`;
 }
 
-/** Drag delta with resistance once the camera is past its bound, growing the further it goes. */
-function rubber(pos: number, delta: number, limit: number) {
-  const next = pos + delta;
-  const over = Math.abs(next) - limit;
-  if (over <= 0 || Math.sign(delta) !== Math.sign(next)) return delta;
-  return delta * Math.max(0.04, 0.4 / (1 + over * 0.5));
-}
+/** Keep pitch short of the poles so the view never flips over the top. */
+const PITCH_LIMIT = 1.3;
+/** Radians of turn per pixel dragged. */
+const ORBIT_SPEED = 0.006;
+/** Wrap an angle into (-π, π] so tweens take the short way round. */
+const wrapAngle = (a: number) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
+
 
 /** Cluster names: projected, nudged apart when they collide, and kept inside the frame. */
 function layoutClusterLabels(items: { el: HTMLElement | null; at: THREE.Vector3; opacity: number }[], width: number, height: number) {
@@ -245,34 +250,43 @@ function Scene({
   const births = useRef(new Map<string, number>());
   const known = useRef(new Set(layout.points.keys()));
 
+  // The galaxy's own center (the layout is centered on you, not on the galaxy) and the sphere that holds it.
+  const hub = useMemo(() => {
+    const lo = { x: Infinity, y: Infinity, z: Infinity };
+    const hi = { x: -Infinity, y: -Infinity, z: -Infinity };
+    for (const p of layout.points.values()) {
+      lo.x = Math.min(lo.x, p.x);
+      lo.y = Math.min(lo.y, p.y);
+      lo.z = Math.min(lo.z, p.z);
+      hi.x = Math.max(hi.x, p.x);
+      hi.y = Math.max(hi.y, p.y);
+      hi.z = Math.max(hi.z, p.z);
+    }
+    if (!Number.isFinite(lo.x)) return { x: 0, y: 0, z: 0, radius: layout.radius };
+    const c = { x: (lo.x + hi.x) / 2, y: (lo.y + hi.y) / 2, z: (lo.z + hi.z) / 2 };
+    let radius = 1;
+    for (const p of layout.points.values()) radius = Math.max(radius, Math.hypot(p.x - c.x, p.y - c.y, p.z - c.z));
+    return { ...c, radius };
+  }, [layout]);
+
   const overviewDist = useMemo(() => {
     const aspect = size.width / Math.max(1, size.height);
     const half = Math.atan(Math.tan(((FOV / 2) * Math.PI) / 180) * aspect);
-    return (layout.radius * 1.05) / Math.tan(half);
-  }, [layout.radius, size.width, size.height]);
+    return (hub.radius * 1.05) / Math.tan(half);
+  }, [hub.radius, size.width, size.height]);
   const minDist = 7;
   const maxDist = overviewDist * 1.1;
 
-  /**
-   * How far the camera may wander from the center at a given zoom. Zoomed out, the galaxy
-   * already fills the frame so there's little room to pan; zoomed in, you can reach any star.
-   */
-  const panBounds = (dist: number) => {
-    const halfH = dist * Math.tan(((FOV / 2) * Math.PI) / 180);
-    const halfW = halfH * (size.width / Math.max(1, size.height));
-    return { x: Math.max(0, layout.radius - halfW * 0.8) + 2, y: Math.max(0, layout.radius - halfH * 0.8) + 2 };
-  };
-
   const me = meId ? points.get(meId) : undefined;
   const cam = useRef<CamState>(
-    initialPhase === "dark" ? { x: me?.x ?? 0, y: me?.y ?? 0, z: me?.z ?? 0, dist: 7 } : { x: 0, y: 0, z: 0, dist: overviewDist },
+    initialPhase === "dark"
+      ? { x: me?.x ?? 0, y: me?.y ?? 0, z: me?.z ?? 0, dist: 7, yaw: 0, pitch: 0, lift: 0 }
+      : { x: hub.x, y: hub.y, z: hub.z, dist: overviewDist, yaw: 0, pitch: 0, lift: 0 },
   );
-  const tilt = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const tweens = useRef<Tween[]>([]);
   const dragging = useRef(false);
-  // Momentum after a flick, and whether the user (not a fly-to) last moved the camera.
-  const vel = useRef({ x: 0, y: 0 });
-  const userMoved = useRef(false);
+  // Spin left over after a flick, in radians per frame.
+  const vel = useRef({ yaw: 0, pitch: 0 });
 
   const nodeMat = useMemo(
     () =>
@@ -408,7 +422,7 @@ function Scene({
       centers.map((c) => {
         const m = new THREE.SpriteMaterial({ map: nebulaMap, color: getCluster(c.id).color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
         const sp = new THREE.Sprite(m);
-        sp.position.set(c.x, c.y, c.z - 2);
+        sp.position.set(c.x, c.y, c.z);
         sp.scale.setScalar(c.spread * 4.2 + 6);
         return { id: c.id, sprite: sp };
       }),
@@ -462,7 +476,14 @@ function Scene({
     const pos = new Float32Array(1500 * 3);
     let s = 7;
     const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
-    for (let i = 0; i < 1500; i++) pos.set([(r() - 0.5) * 420, (r() - 0.5) * 420, -60 - r() * 220], i * 3);
+    // A shell all the way round, so there's sky behind the galaxy from every angle.
+    for (let i = 0; i < 1500; i++) {
+      const u = r() * 2 - 1;
+      const th = r() * Math.PI * 2;
+      const rad = 260 + r() * 200;
+      const s2 = Math.sqrt(1 - u * u);
+      pos.set([Math.cos(th) * s2 * rad, u * rad, Math.sin(th) * s2 * rad], i * 3);
+    }
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     return g;
   }, []);
@@ -503,12 +524,23 @@ function Scene({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tween is stable in behavior
   }, [focusCluster, selectedId, nodeGeo, ordered]);
 
-  const moveCamera = (to: CamState, dur: number) => {
-    vel.current = { x: 0, y: 0 };
-    userMoved.current = false;
-    const from = { ...cam.current };
+  /** Tween the orbit. Leaving out yaw/pitch keeps the angle the user is looking from; lift defaults to none. */
+  const moveCamera = (to: CamMove, dur: number) => {
+    vel.current = { yaw: 0, pitch: 0 };
+    const from = { ...cam.current, yaw: wrapAngle(cam.current.yaw) };
+    const yaw = to.yaw === undefined ? from.yaw : from.yaw + wrapAngle(to.yaw - from.yaw);
+    const pitch = to.pitch ?? from.pitch;
+    const lift = to.lift ?? 0;
     return tween("camera", dur, (e) => {
-      cam.current = { x: lerp(from.x, to.x, e), y: lerp(from.y, to.y, e), z: lerp(from.z, to.z, e), dist: lerp(from.dist, to.dist, e) };
+      cam.current = {
+        x: lerp(from.x, to.x, e),
+        y: lerp(from.y, to.y, e),
+        z: lerp(from.z, to.z, e),
+        dist: lerp(from.dist, to.dist, e),
+        yaw: lerp(from.yaw, yaw, e),
+        pitch: lerp(from.pitch, pitch, e),
+        lift: lerp(from.lift, lift, e),
+      };
     });
   };
   const fadeUniform = (u: { value: number }, to: number, dur: number, group: string) => {
@@ -528,13 +560,13 @@ function Scene({
     igniteMe: async (duration = 1800) => {
       await Promise.all([
         fadeUniform(nodeMat.uniforms.uMe, 1, duration, "me"),
-        moveCamera({ x: me?.x ?? 0, y: me?.y ?? 0, z: me?.z ?? 0, dist: 11 }, duration * 1.2),
+        moveCamera({ x: me?.x ?? 0, y: me?.y ?? 0, z: me?.z ?? 0, dist: 11, yaw: 0, pitch: 0 }, duration * 1.2),
       ]);
     },
     pullBackToOverview: async (duration = 2800) => {
       nodeMat.uniforms.uMe.value = 1;
       await Promise.all([
-        moveCamera({ x: 0, y: 0, z: 0, dist: overviewDist }, duration),
+        moveCamera({ x: hub.x, y: hub.y, z: hub.z, dist: overviewDist, yaw: 0, pitch: 0 }, duration),
         fadeUniform(nodeMat.uniforms.uOthers, 1, duration * 0.85, "others"),
         fadeUniform(edgeMat.uniforms.uOpacity, 1, duration, "edges"),
       ]);
@@ -543,16 +575,17 @@ function Scene({
       const p = points.get(userId);
       if (!p) return;
       const dist = opts?.distance ?? Math.min(cam.current.dist, 18);
-      const lift = (opts?.lift ?? 0) * 2 * dist * Math.tan(((FOV / 2) * Math.PI) / 180);
-      await moveCamera({ x: p.x, y: p.y - lift, z: p.z, dist }, opts?.duration ?? 600);
+      // The tapped star becomes the new pivot; the angle you were looking from is kept.
+      await moveCamera({ x: p.x, y: p.y, z: p.z, dist, lift: opts?.lift ?? 0 }, opts?.duration ?? 600);
     },
-    recenter: () => moveCamera({ x: 0, y: 0, z: 0, dist: overviewDist }, 700),
+    recenter: () => moveCamera({ x: hub.x, y: hub.y, z: hub.z, dist: overviewDist, yaw: 0, pitch: 0 }, 700),
     flyToCluster: async (cluster) => {
       const c = cluster ? centers.find((k) => k.id === cluster) : undefined;
-      if (!c) return moveCamera({ x: 0, y: 0, z: 0, dist: overviewDist }, 900);
+      if (!c) return moveCamera({ x: hub.x, y: hub.y, z: hub.z, dist: overviewDist }, 900);
       // Fit the whole cluster with room for the UI above and below it.
-      const fit = (c.extent * 1.6) / Math.tan(((FOV / 2) * Math.PI) / 180);
-      await moveCamera({ x: c.x, y: c.y - c.extent * 0.1, z: c.z, dist: clamp(fit, 18, overviewDist * 0.9) }, 1000);
+      const dist = clamp((c.extent * 1.6) / Math.tan(((FOV / 2) * Math.PI) / 180), 18, overviewDist * 0.9);
+      const lift = (c.extent * 0.1) / (2 * dist * Math.tan(((FOV / 2) * Math.PI) / 180));
+      await moveCamera({ x: c.x, y: c.y, z: c.z, dist, lift }, 1000);
     },
   };
 
@@ -592,8 +625,6 @@ function Scene({
     let pinch = 0;
     let lastMove = 0;
 
-    const worldPerPixel = () => (2 * cam.current.dist * Math.tan(((FOV / 2) * Math.PI) / 180)) / el.clientHeight;
-
     const pick = (clientX: number, clientY: number) => {
       const rect = el.getBoundingClientRect();
       const px = clientX - rect.left;
@@ -623,7 +654,7 @@ function Scene({
         pinch = Math.hypot(a.x - b.x, a.y - b.y);
       }
       dragging.current = true;
-      vel.current = { x: 0, y: 0 };
+      vel.current = { yaw: 0, pitch: 0 };
       tweens.current = tweens.current.filter((t) => (t.group === "camera" ? (t.resolve(), false) : true));
     };
     const onMove = (e: PointerEvent) => {
@@ -646,24 +677,19 @@ function Scene({
         const [a, b] = [...pointers.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
         if (pinch) cam.current.dist = clamp((cam.current.dist * pinch) / d, minDist, maxDist);
-        userMoved.current = true;
         pinch = d;
         if (down) down.moved = 99;
       } else {
+        // Drag turns the galaxy around its pivot like a globe; it never slides off center.
         const dx = cur.x - prev.x;
         const dy = cur.y - prev.y;
         if (down) down.moved += Math.abs(dx) + Math.abs(dy);
-        const wpp = worldPerPixel();
-        const b = panBounds(cam.current.dist);
-        const mx = rubber(cam.current.x, -dx * wpp, b.x);
-        const my = rubber(cam.current.y, dy * wpp, b.y);
-        cam.current.x += mx;
-        cam.current.y += my;
-        vel.current = { x: vel.current.x * 0.5 + mx * 0.5, y: vel.current.y * 0.5 + my * 0.5 };
-        userMoved.current = true;
-        // A hint of parallax while dragging, not enough to swing the galaxy out of frame.
-        tilt.current.ty = clamp(tilt.current.ty - dx * 0.0025, -0.08, 0.08);
-        tilt.current.tx = clamp(tilt.current.tx + dy * 0.0025, -0.08, 0.08);
+        const dYaw = -dx * ORBIT_SPEED;
+        const dPitch = dy * ORBIT_SPEED;
+        const c = cam.current;
+        c.yaw += dYaw;
+        c.pitch = clamp(c.pitch + dPitch, -PITCH_LIMIT, PITCH_LIMIT);
+        vel.current = { yaw: vel.current.yaw * 0.5 + dYaw * 0.5, pitch: vel.current.pitch * 0.5 + dPitch * 0.5 };
       }
       invalidate();
     };
@@ -673,7 +699,7 @@ function Scene({
       if (pointers.size === 0) {
         dragging.current = false;
         // A slow release shouldn't coast.
-        if (down && performance.now() - lastMove > 80) vel.current = { x: 0, y: 0 };
+        if (down && performance.now() - lastMove > 80) vel.current = { yaw: 0, pitch: 0 };
         if (down && down.moved < 8 && performance.now() - down.t < 450) {
           const hit = pick(e.clientX, e.clientY);
           if (hit) api.current.flyTo(hit, { lift: hit === meId ? 0 : 0.1 }).then(() => onSelectRef.current?.(hit));
@@ -686,7 +712,6 @@ function Scene({
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       cam.current.dist = clamp(cam.current.dist * Math.exp(e.deltaY * 0.0012), minDist, maxDist);
-      userMoved.current = true;
       invalidate();
     };
 
@@ -710,8 +735,7 @@ function Scene({
       el.removeEventListener("pointercancel", onUp);
       el.removeEventListener("wheel", onWheel);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- panBounds derives from size and layout.radius
-  }, [interactive, gl, camera, points, meId, nodeMat, layout.radius, size.width, size.height, minDist, maxDist, invalidate]);
+  }, [interactive, gl, camera, points, meId, nodeMat, minDist, maxDist, invalidate]);
 
   // "You" appears once your star has ignited; checked per frame so no React state is involved.
   const labelsOn = useRef(initialPhase !== "dark");
@@ -735,46 +759,28 @@ function Scene({
       return true;
     });
 
-    // Coast after a flick, then ease back inside the bounds if the user dragged past them.
+    // Keep spinning briefly after a flick.
     const flying = tweens.current.some((t) => t.group === "camera");
     if (!dragging.current && !flying) {
       const c = cam.current;
       const v = vel.current;
-      if (Math.abs(v.x) + Math.abs(v.y) > 0.002) {
-        c.x += v.x;
-        c.y += v.y;
-        v.x *= 0.9;
-        v.y *= 0.9;
+      if (Math.abs(v.yaw) + Math.abs(v.pitch) > 0.0002) {
+        c.yaw += v.yaw;
+        c.pitch = clamp(c.pitch + v.pitch, -PITCH_LIMIT, PITCH_LIMIT);
+        v.yaw *= 0.92;
+        v.pitch *= 0.92;
         active = true;
       }
-      if (userMoved.current) {
-        const b = panBounds(c.dist);
-        const tx = clamp(c.x, -b.x, b.x);
-        const ty = clamp(c.y, -b.y, b.y);
-        if (Math.abs(tx - c.x) + Math.abs(ty - c.y) > 0.01) {
-          c.x += (tx - c.x) * 0.2;
-          c.y += (ty - c.y) * 0.2;
-          if (tx !== c.x) v.x *= 0.5;
-          if (ty !== c.y) v.y *= 0.5;
-          active = true;
-        }
-      }
     }
-
-    const tl = tilt.current;
-    if (!dragging.current) {
-      tl.tx *= 0.9;
-      tl.ty *= 0.9;
-    }
-    tl.x += (tl.tx - tl.x) * 0.12;
-    tl.y += (tl.ty - tl.y) * 0.12;
-    if (Math.abs(tl.x) + Math.abs(tl.y) + Math.abs(tl.tx) + Math.abs(tl.ty) > 0.0005) active = true;
 
     const c = cam.current;
-    euler.set(tl.x, tl.y, 0);
+    euler.set(-c.pitch, c.yaw, 0, "YXZ");
     offset.set(0, 0, c.dist).applyEuler(euler);
     camera.position.set(c.x + offset.x, c.y + offset.y, c.z + offset.z);
     camera.lookAt(c.x, c.y, c.z);
+    // Shift the frame rather than the pivot, so a lifted star still turns in place.
+    if (Math.abs(c.lift) > 1e-4) perspective.setViewOffset(size.width, size.height, 0, c.lift * size.height, size.width, size.height);
+    else if (perspective.view?.enabled) perspective.clearViewOffset();
 
     const time = now();
     if (!labelsOn.current && nodeMat.uniforms.uMe.value > 0.9) labelsOn.current = true;
@@ -783,7 +789,8 @@ function Scene({
     nodeMat.uniforms.uPixelRatio.value = gl.getPixelRatio();
 
     if (starGroup.current) {
-      starGroup.current.position.set(c.x * 0.7, c.y * 0.7, 0);
+      // The sky rides along with the pivot so it reads as infinitely far away.
+      starGroup.current.position.set(c.x, c.y, c.z);
       starGroup.current.rotation.z = time * 0.004;
     }
     bondMat.uniforms.uTime.value = time;

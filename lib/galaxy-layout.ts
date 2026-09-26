@@ -29,7 +29,8 @@ function hash(s: string) {
 function anchor(cluster: string) {
   const i = Math.max(0, CLUSTER_IDS.indexOf(cluster as (typeof CLUSTER_IDS)[number]));
   const a = (i / CLUSTER_IDS.length) * Math.PI * 2 - Math.PI / 2;
-  return { x: Math.cos(a) * 30, y: Math.sin(a) * 30 };
+  // Clusters sit at different depths so the galaxy has a body when you orbit it, not a flat disc.
+  return { x: Math.cos(a) * 30, y: Math.sin(a) * 30, z: Math.sin(a * 2 + 0.6) * 14 };
 }
 
 const cache = new Map<string, Layout>();
@@ -50,7 +51,7 @@ export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[]): Layout 
   const rand = seeded(hash(key));
   const simNodes: N[] = nodes.map((n) => {
     const a = anchor(n.cluster);
-    return { id: n.userId, cluster: n.cluster, x: a.x + (rand() - 0.5) * 16, y: a.y + (rand() - 0.5) * 16, z: (rand() - 0.5) * 10 };
+    return { id: n.userId, cluster: n.cluster, x: a.x + (rand() - 0.5) * 16, y: a.y + (rand() - 0.5) * 16, z: a.z + (rand() - 0.5) * 16 };
   });
   const ids = new Set(simNodes.map((n) => n.id));
   const links: L[] = edges
@@ -68,7 +69,7 @@ export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[]): Layout 
     .force("charge", forceManyBody<N>().strength(-22).distanceMax(45))
     .force("x", forceX<N>((d) => anchor(d.cluster).x).strength(0.05))
     .force("y", forceY<N>((d) => anchor(d.cluster).y).strength(0.05))
-    .force("z", forceZ<N>(0).strength(0.09))
+    .force("z", forceZ<N>((d) => anchor(d.cluster).z).strength(0.05))
     .stop()
     .tick(300);
 
