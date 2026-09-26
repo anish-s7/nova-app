@@ -2,8 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
 import { generateSongContext } from "@/lib/gemini/generateSongContext";
+import { findCover } from "@/lib/cover-art";
 import { resolveSong } from "@/lib/musicbrainz/client";
-import { EMOTION_WEIGHT, clampEmotionValue } from "@/lib/emotion";
+import { clampEmotionValue } from "@/lib/emotion";
+import { buildPickEmbedding } from "@/lib/matching/pickEmbedding";
 import { isValidTag } from "@/lib/tags";
 import { refreshPrimaryCluster } from "@/lib/matching/refreshPrimaryCluster";
 import { parseVector } from "@/lib/supabase/vector";
@@ -85,6 +87,10 @@ export async function POST(req: NextRequest) {
     // COMPLIANCE: only title/artist strings go to Gemini, never Spotify's
     // API response or anything MusicBrainz-derived beyond the plain name.
     const { contextSummary, embedding } = await generateSongContext(canonicalTitle, canonicalArtist);
+    // The client's art is only trusted when it's Spotify's CDN (the import). Anything else, like the
+    // mock catalog's local /covers/*.png paths, would be stored as a broken URL and skip the lookup.
+    const trustedArt = albumArtUrl && /^https:\/\/i\.scdn\.co\//.test(albumArtUrl) ? albumArtUrl : null;
+    const coverArt = trustedArt ?? (await findCover(canonicalTitle, canonicalArtist, resolution?.releaseIds));
 
     const { data: inserted, error: insertError } = await supabase
       .from("songs")
@@ -95,7 +101,7 @@ export async function POST(req: NextRequest) {
         fallback_key: resolution ? null : fallbackKey(title, artist),
         resolution_source: resolution ? "musicbrainz" : "gemini_fallback",
         spotify_track_id: spotifyTrackId ?? null,
-        album_art_url: albumArtUrl ?? null,
+        album_art_url: coverArt,
         context_summary: contextSummary,
         embedding,
       })
@@ -115,11 +121,7 @@ export async function POST(req: NextRequest) {
 
   const clampedValence = clampEmotionValue(valence ?? 0);
   const clampedEnergy = clampEmotionValue(energy ?? 0);
-  const pickEmbedding = [
-    ...parseVector(song.embedding),
-    clampedValence * EMOTION_WEIGHT,
-    clampedEnergy * EMOTION_WEIGHT,
-  ];
+  const pickEmbedding = buildPickEmbedding(parseVector(song.embedding), clampedValence, clampedEnergy);
 
   const { data: pick, error: pickError } = await supabase
     .from("song_picks")

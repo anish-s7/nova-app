@@ -1,5 +1,26 @@
 # Merge checklist: wiring the frontend to the real backend
 
+> **Update 2026-09-26 (Phase D, mostly done).** `lib/api.ts` now switches on `REAL_DATA`
+> (`lib/data-source.ts`): real whenever the `NEXT_PUBLIC_SUPABASE_*` keys are set, mock
+> otherwise or with `NEXT_PUBLIC_DATA_SOURCE=mock`. `lib/http-db.ts` is the real `Db`;
+> `lib/real-api.ts` builds the view shapes. In real mode "me" is the alias `ME_ID` at the
+> api boundary (the uuid never reaches components). Done: profile/picks (with cover art),
+> connections (real similarity, cluster, covers), cards (cache read, then generate),
+> wander, contrast cards, messages read/write (`GET /api/messages`, polled), the galaxy,
+> the song layer and cluster detail (`GET /api/galaxy/songs`). Still mock or empty in real
+> mode: motivations / "why I listen" (mismatch #4, #7 backburner), song swaps (sent as a
+> plain text message until a swap table exists), themes, per-side "where you differ",
+> simulated arrivals (off). Nothing below was re-numbered; read it as the original plan.
+>
+> **Update 2026-09-26 (AI portraits, `ai-portraits` merged).** Resolved since: onboarding's
+> tags/valence/energy (feel step, `2fb87c0`) and the galaxy "+" (`d9614b5`) send real values.
+> "Why I listen" is now real in real mode: `analyzeMusic` waits for the picks to save, then
+> `POST /api/portrait` returns a Gemini listening portrait mapped to `AnalysisResult`; the Me
+> page loads the stored one (`GET /api/portrait`). Connections are ordered and shown by the AI's
+> whole-profile `score` (0..100), not cosine similarity, and cards map `card_json.threads` into
+> 1–2 `sharedMotivations` with real songs on each side. Still open: `updateMotivation`
+> feedback isn't persisted (#4), other people's motivations stay empty on their profile.
+
 **Rewritten 2026-09-26 against `main` @ `26a33b3`.** The previous version of this file
 was written against `ba262ec`, before the backend's tag/slider/MusicBrainz redesign —
 `POST /api/songs`, a `motivations` table, and camelCase-only match results no longer

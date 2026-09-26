@@ -30,9 +30,12 @@ You'll need your Supabase **project ref**, the `xxxx` in `https://xxxx.supabase.
 4. Dashboard → **Authentication → Sign In / Providers → Email**: make sure it's enabled.
    - **Confirm email** on: new users must click a link before they can log in. The app
      shows "Check your email" and handles the link.
-   - **For a hackathon demo, consider turning it off.** Supabase's built-in email sender only
-     allows a few emails per hour. For real use, keep it on and add custom SMTP
-     (Authentication → Emails → SMTP Settings).
+   - **For a hackathon demo, consider turning it off.** Supabase's built-in email sender allows
+     **2 emails per hour for the whole project**, shared by every signup from every teammate.
+     Once it's used up, signups fail with "We can't send confirmation emails right now" until
+     the hour resets. For real use, keep it on and add custom SMTP
+     (Authentication → Emails → SMTP Settings). After that you can raise the limit under
+     Authentication → Rate Limits. The built-in sender's limit can't be raised.
 
 **Test:** `npm run dev`, go to http://localhost:3000, click **Continue**, create an account.
 You should land on onboarding, and a row should appear in the `profiles` table.

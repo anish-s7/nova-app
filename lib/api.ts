@@ -15,6 +15,11 @@
  */
 
 import { CLUSTER_IDS, getCluster } from "./clusters";
+import type { Tag } from "./tags";
+import { ApiError } from "./api-error";
+import { REAL_DATA } from "./data-source";
+import { httpDb } from "./http-db";
+import * as real from "./real-api";
 import { infer, primaryCluster } from "./inference";
 import { mockDb, resetMockDb } from "./mock-db";
 import { expandOrder, sampleGalaxy } from "./galaxy-sample";
@@ -23,6 +28,7 @@ import { buildSongLayer, type SongLayer } from "./song-layer";
 import { classifyMix, mixFromScores } from "./why-mix";
 import { buildClusterDetail, type ClusterDetail } from "./cluster-songs";
 import { listeningMoment } from "./texture";
+import { threadFrom } from "./thread";
 import { SONG_CATALOG, songById } from "./music-context";
 import {
   DEMO_BIAS,
@@ -75,20 +81,13 @@ import type {
 } from "./types";
 
 // ===========================================================================
-// SWAP POINT: the only line that decides mock vs real data.
-const db: Db = mockDb;
+// SWAP POINT: the only line that decides mock vs real data (see lib/data-source.ts).
+// Real mode: `db` is the route handlers, and every exported view function below that has a
+// real counterpart delegates to lib/real-api.ts first. The mock bodies stay for demo mode.
+const db: Db = REAL_DATA ? httpDb : mockDb;
 // ===========================================================================
 
-export { ME_ID };
-
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public code: "unavailable" | "failed" = "failed",
-  ) {
-    super(message);
-  }
-}
+export { ME_ID, ApiError, REAL_DATA };
 
 /** Mock-only latency so loading states are visible. */
 function delay(ms: number) {
@@ -245,31 +244,108 @@ function isSpotifySearchSong(value: unknown): value is Song {
 }
 
 export async function analyzeMusic(input: { songs: Song[]; signals: ListeningSignal[] }): Promise<AnalysisResult> {
+  if (REAL_DATA) return analyzeSavedPicks();
   await delay(1400);
   maybeFail("analysis");
   const s = getSession();
   return infer({ userId: ME_ID, subject: { isMe: true }, songs: input.songs, signals: input.signals, bias: s.demo ? DEMO_BIAS : undefined });
 }
 
+/** Real mode only: my stored listening portrait (no Gemini call), or null before the first one. */
+export async function getStoredAnalysis(): Promise<AnalysisResult | null> {
+  return REAL_DATA ? real.getStoredAnalysis() : null;
+}
+
 /**
- * Saves the user's songs. The session copy drives onboarding (reading/why screens); the
- * db inserts are what reach the backend. Tags/valence/energy aren't collected yet — the
- * onboarding "feel" step (lib/types.ts #3) replaces these placeholders.
+ * Real mode: the portrait is read from saved picks, so wait for the feel step's save to finish
+ * (retrying it if it failed — saveSongs skips songs already saved), then ask Gemini for it.
+ * Also warms the match cache in the background so Connections is ready after the reveal.
  */
-export async function saveSongs(input: { source: "spotify" | "manual"; songs: Song[]; signals: ListeningSignal[] }) {
-  setSession({ source: input.source, songs: input.songs, signals: input.signals, analysis: undefined, motivations: [] }, true);
-  // Sequential on purpose: POST /api/picks calls MusicBrainz, which is rate-limited to 1 req/s.
-  for (const s of input.songs) {
-    await db.insertPick({
-      title: s.title,
-      artist: s.artist,
-      spotifyTrackId: s.source === "spotify" ? (s.spotifyId ?? null) : null,
-      albumArtUrl: s.albumArtUrl ?? null,
-      tags: ["comfort"],
-      valence: 0,
-      energy: 0,
-    });
+async function analyzeSavedPicks(): Promise<AnalysisResult> {
+  const status = getSession().saveStatus;
+  if (status === "error" || status === "idle") await saveSongs();
+  while (getSession().saveStatus === "saving") await delay(400);
+  if (getSession().saveStatus === "error") throw new ApiError(getSession().saveError ?? "We couldn't save your songs.");
+  const analysis = await real.generateAnalysis();
+  void db.getMatches(14).catch((err) => console.error("Warming matches after onboarding failed:", err));
+  return analysis;
+}
+
+/**
+ * Onboarding step 1: the songs someone brought. Session only — nothing reaches the backend until
+ * they've described how each one feels (`/onboarding/feel`, then `saveSongs`). Manual picks are
+ * all described; a Spotify import's `describe` list is chosen on the feel screen.
+ */
+export function chooseSongs(input: { source: "spotify" | "manual"; songs: Song[]; signals: ListeningSignal[] }) {
+  setSession(
+    {
+      source: input.source,
+      songs: input.songs,
+      signals: input.signals,
+      analysis: undefined,
+      motivations: [],
+      describe: input.source === "manual" ? input.songs.map((s) => s.id) : undefined,
+      feelings: {},
+      saveStatus: "idle",
+      saveError: undefined,
+      savedSongIds: [],
+    },
+    true,
+  );
+}
+
+/**
+ * Onboarding step 2: saves each described song with its tags + mood circle position. Runs in
+ * the background while the reading screen plays; progress lives in `session.saveStatus`.
+ * Sequential on purpose: POST /api/picks calls MusicBrainz, which is rate-limited to 1 req/s.
+ * Safe to call again after an error — songs already saved are skipped, so no pick is duplicated.
+ */
+export async function saveSongs() {
+  const s = getSession();
+  const songs = s.songs.filter((song) => (s.describe ?? []).includes(song.id));
+  setSession({ saveStatus: "saving", saveError: undefined });
+  try {
+    for (const song of songs) {
+      if (getSession().savedSongIds?.includes(song.id)) continue;
+      const feeling = s.feelings?.[song.id];
+      if (!feeling || feeling.tags.length === 0) throw new ApiError(`"${song.title}" still needs at least one tag.`);
+      await db.insertPick({
+        title: song.title,
+        artist: song.artist,
+        spotifyTrackId: song.source === "spotify" ? (song.spotifyId ?? null) : null,
+        albumArtUrl: song.albumArtUrl ?? null,
+        tags: feeling.tags,
+        valence: feeling.valence,
+        energy: feeling.energy,
+      });
+      setSession((cur) => ({ savedSongIds: [...(cur.savedSongIds ?? []), song.id] }));
+    }
+    setSession({ saveStatus: "saved" });
+  } catch (e) {
+    setSession({ saveStatus: "error", saveError: e instanceof Error ? e.message : "We couldn't save your songs." });
   }
+}
+
+/**
+ * Adds one song from the galaxy's "+" sheet (real mode only). Same tag picker + mood circle as the
+ * onboarding feel step, so a song added here carries the same real signal into matching/clusters —
+ * no more placeholder tags/valence/energy. Slow: MusicBrainz, cover art and, for a new song, Gemini
+ * all run inside the request.
+ */
+export async function addSong(input: { title: string; artist: string; tags: Tag[]; valence: number; energy: number; reason?: string }) {
+  await db.insertPick({
+    title: input.title,
+    artist: input.artist,
+    tags: input.tags,
+    valence: input.valence,
+    energy: input.energy,
+    reasonText: input.reason || undefined,
+  });
+  // A new song changes the portrait. Refresh it in the background; the add itself already succeeded.
+  void real
+    .generateAnalysis()
+    .then((analysis) => setSession({ analysis, motivations: analysis.motivations }))
+    .catch((err) => console.error("Refreshing the portrait after adding a song failed:", err));
 }
 
 /** NOT IN CONTRACT: motivations rows have no feedback/isPublic/note (lib/types.ts #4). */
@@ -344,7 +420,7 @@ function mockWindow(limit?: number) {
  * (GET /api/galaxy) instead of the mock world. Needs a Supabase session and the
  * 20260927010000_galaxy_window migration. Default stays mock so the demo keeps working.
  */
-const GALAXY_HTTP = process.env.NEXT_PUBLIC_GALAXY_SOURCE === "http";
+const GALAXY_HTTP = REAL_DATA || process.env.NEXT_PUBLIC_GALAXY_SOURCE === "http";
 
 async function galaxyFetch<T>(path: string): Promise<T> {
   const res = await fetch(path, { credentials: "same-origin" });
@@ -352,13 +428,41 @@ async function galaxyFetch<T>(path: string): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+/** Mock hop: the star's nearest neighbors by the mock similarity, with you as the anchor. */
+function mockHop(centerId: string): GalaxyResponse {
+  const me = meParty();
+  const centerUser = worldUser(centerId);
+  if (!centerUser) throw new ApiError("That star isn't in your galaxy");
+  const center = partyFromWorld(centerUser);
+  const near = WORLD.filter((u) => u.id !== centerId)
+    .map(partyFromWorld)
+    .map((p) => ({ p, edge: edgeBetween(center, p) }))
+    .sort((a, b) => b.edge.similarity - a.edge.similarity)
+    .slice(0, 14);
+  const yours = (p: Party) => edgeBetween(me, p).similarity;
+  return {
+    nodes: [
+      { ...nodeFor(me, true), youSimilarity: 1 },
+      { ...nodeFor(center, false), youSimilarity: yours(center) },
+      ...near.map(({ p }) => ({ ...nodeFor(p, false), youSimilarity: yours(p) })),
+    ],
+    edges: near.map(({ edge }) => edge),
+    centerId,
+    status: "ready",
+  };
+}
+
 export async function getGalaxy(query: GalaxyQuery = {}): Promise<GalaxyResponse> {
   if (GALAXY_HTTP) {
-    const qs = query.limit ? `?limit=${query.limit}` : "";
-    return galaxyFromWindow(await galaxyFetch<GalaxyWindow>(`/api/galaxy${qs}`));
+    const qs = new URLSearchParams({ ...(query.limit ? { limit: String(query.limit) } : {}), ...(query.center ? { center: query.center } : {}) }).toString();
+    const galaxy = galaxyFromWindow(await galaxyFetch<GalaxyWindow>(`/api/galaxy${qs ? `?${qs}` : ""}`), ME_ID);
+    // Edges in a hopped window are the star's, not yours, so they say nothing about your similarity.
+    if (!query.center) real.rememberSimilarities(galaxy.edges);
+    return galaxy;
   }
   await delay(700);
   maybeFail("galaxy");
+  if (query.center) return mockHop(query.center);
   // Bounded window: only the sampled people are drawn or edged. At today's size this keeps everyone.
   const { me, everyone, sample } = mockWindow(query.limit);
   const keep = new Set(sample.ids);
@@ -387,14 +491,15 @@ export async function getGalaxy(query: GalaxyQuery = {}): Promise<GalaxyResponse
 }
 
 /** "More here": the next people in one cluster, ready to fade in as arrivals. `have` is how many extra this cluster already shows. */
-export async function getGalaxyMore(cluster: string, have: number, step = 40, limit?: number): Promise<GalaxyMore> {
+export async function getGalaxyMore(cluster: string, have: number, step = 40, limit?: number, center?: string): Promise<GalaxyMore> {
   if (GALAXY_HTTP) {
-    const qs = new URLSearchParams({ cluster, have: String(have), ...(limit ? { limit: String(limit) } : {}) });
+    const qs = new URLSearchParams({ cluster, have: String(have), ...(limit ? { limit: String(limit) } : {}), ...(center ? { center } : {}) });
     // Arrivals are never "me", so no meId is needed.
     return galaxyMoreFromWindow(await galaxyFetch<GalaxyMoreWindow>(`/api/galaxy/more?${qs}`), "");
   }
   await delay(350);
   maybeFail("galaxy");
+  if (center) return { arrivals: [], remaining: 0 }; // mock hops show the star's whole neighborhood already
   const { me, everyone, candidates, sample } = mockWindow(limit);
   const order = expandOrder(candidates, new Set(sample.ids), cluster);
   const byId = new Map(everyone.map((p) => [p.id, p]));
@@ -412,12 +517,14 @@ export async function getGalaxyMore(cluster: string, have: number, step = 40, li
 
 /** NOT IN CONTRACT: clusters aren't stored yet (lib/types.ts #5). Songs + listeners inside one "why". */
 export async function getClusterDetail(id: string): Promise<ClusterDetail> {
+  if (REAL_DATA) return real.getClusterDetail(id);
   await delay(250);
   return buildClusterDetail(getCluster(id).id);
 }
 
 /** NOT IN CONTRACT: song stars and themes come from per-pick clustering, which doesn't exist yet. */
 export async function getSongLayer(): Promise<SongLayer> {
+  if (REAL_DATA) return real.getSongLayer();
   await delay(150);
   return buildSongLayer(getSession().picks ?? []);
 }
@@ -441,6 +548,7 @@ export function getArrival(): { node: GalaxyNode; edges: GalaxyEdge[] } {
 // People and connection cards
 
 export async function getMe(): Promise<User & { cluster: string }> {
+  if (REAL_DATA) return real.getMe();
   await delay(150);
   const [profile, picks] = await Promise.all([db.getProfile(ME_ID), db.listPicks(ME_ID)]);
   if (!profile) throw new ApiError("We couldn't load your profile.");
@@ -449,6 +557,7 @@ export async function getMe(): Promise<User & { cluster: string }> {
 }
 
 export async function getUser(id: string): Promise<User & { cluster: string; edge: GalaxyEdge }> {
+  if (REAL_DATA) return real.getUser(id);
   await delay(350);
   const [profile, picks] = await Promise.all([db.getProfile(id), db.listPicks(id)]);
   const u = lookupUser(id); // NOT IN CONTRACT: motivations, cluster, edge
@@ -465,6 +574,7 @@ export async function getUser(id: string): Promise<User & { cluster: string; edg
 }
 
 export async function getConnections(): Promise<Connection[]> {
+  if (REAL_DATA) return real.getConnections();
   await delay(450);
   // Every match here already passed the AI evidence-check and carries its card (ConfirmedMatchRow).
   const rows = await db.getMatches(14);
@@ -497,6 +607,7 @@ function evidenceSongs(mine: Song[], theirs: Song[], max = 4): Song[] {
 }
 
 export async function getConnectionCard(otherId: string): Promise<ConnectionCard> {
+  if (REAL_DATA) return real.getConnectionCard(otherId);
   await delay(900);
   maybeFail("card");
   const row = await db.getConnectionCard(otherId);
@@ -510,6 +621,7 @@ export async function getConnectionCard(otherId: string): Promise<ConnectionCard
  * explicit tap, never on load. Real backend: POST /api/wander (Gemini judges each candidate).
  */
 export async function getWander(): Promise<WanderEntry[]> {
+  if (REAL_DATA) return real.getWander();
   await delay(1800); // stands in for the Gemini contrast check
   maybeFail("card");
   const rows = await db.wander();
@@ -520,6 +632,7 @@ export async function getWander(): Promise<WanderEntry[]> {
 }
 
 export async function getContrastCard(otherId: string): Promise<ContrastCard> {
+  if (REAL_DATA) return real.getContrastCard(otherId);
   await delay(300);
   const row = await db.getConnectionCard(otherId);
   if (!row) throw new ApiError("That person isn't in the galaxy anymore.");
@@ -536,6 +649,7 @@ function mockSwaps(otherId?: string): [string, Message][] {
 }
 
 export async function getConversations(): Promise<ConversationSummary[]> {
+  if (REAL_DATA) return real.getConversations();
   await delay(300);
   const rows = await db.listMessages(ME_ID);
   const threads = new Map<string, Message[]>();
@@ -548,13 +662,24 @@ export async function getConversations(): Promise<ConversationSummary[]> {
       const profile = await db.getProfile(userId);
       const u = lookupUser(userId); // NOT IN CONTRACT: cluster
       if (!profile || !u) return [];
-      return [{ userId, name: profile.display_name, cluster: u.primary, lastMessage: byTime(msgs).at(-1), threadSongs: msgs.filter((m) => m.kind === "swap").length }];
+      const ordered = byTime(msgs);
+      return [
+        {
+          userId,
+          name: profile.display_name,
+          cluster: u.primary,
+          lastMessage: ordered.at(-1),
+          threadSongs: msgs.filter((m) => m.kind === "swap").length,
+          turn: threadFrom(ordered, ME_ID).turn,
+        },
+      ];
     }),
   );
   return summaries.flat().sort((a, b) => (b.lastMessage?.sentAt ?? "").localeCompare(a.lastMessage?.sentAt ?? ""));
 }
 
 export async function getConversation(userId: string): Promise<Conversation> {
+  if (REAL_DATA) return real.getConversation(userId);
   await delay(200);
   const [profile, card, rows] = await Promise.all([db.getProfile(userId), db.getConnectionCard(userId), db.listMessages(ME_ID, userId)]);
   const u = lookupUser(userId); // NOT IN CONTRACT: cluster
@@ -569,12 +694,14 @@ export async function getConversation(userId: string): Promise<Conversation> {
 }
 
 export async function sendMessage(userId: string, text: string): Promise<Message> {
+  if (REAL_DATA) return real.sendMessage(userId, text);
   await delay(150);
   return messageFromRow(await db.insertMessage({ otherProfileId: userId, text }));
 }
 
 /** NOT IN CONTRACT: no song-swap table. */
 export async function sendSongSwap(userId: string, song: Song, reason: string, replyToSwapId?: string): Promise<Message> {
+  if (REAL_DATA) return real.sendSongSwap(userId, song, reason);
   await delay(300);
   const list = (conversations.get(userId) ?? []).map((m) =>
     m.kind === "swap" && m.swap.id === replyToSwapId ? { ...m, swap: { ...m.swap, status: "returned" as const } } : m,
@@ -592,10 +719,11 @@ export async function sendSongSwap(userId: string, song: Song, reason: string, r
   return msg;
 }
 
-/** Mock-only: resets seeded conversations and the realtime arrival (logo long-press). */
+/** Resets the mock world (seeded conversations, realtime arrival; logo long-press) and forgets who "me" is in real mode, so a new sign-in starts clean. */
 export function resetWorld() {
   resetMockWorld();
   resetMockDb();
+  real.resetRealWorld();
 }
 
 export function clusterColor(cluster: string) {

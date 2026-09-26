@@ -1,3 +1,5 @@
+import type { CardThread } from "./portrait";
+
 /*
  * Frontend view types vs db/contract.md (checked against main @ 26a33b3, which also
  * has the migration, lib/supabase/types.ts, and the running route handlers; all agree
@@ -165,6 +167,8 @@ export type GalaxyNode = {
   userId: string;
   name: string;
   avatarUrl?: string;
+  /** Hopped galaxies only: how similar this person is to the real viewer, when known. */
+  youSimilarity?: number;
   /** The strongest why: color, filters, short labels. Position uses `whys`. */
   cluster: string;
   /**
@@ -186,6 +190,15 @@ export type GalaxyNode = {
   weight?: number;
   /** An ambient far star: distant from you, but with a strong thread. Drawn dim; tapping explains. */
   far?: boolean;
+  /**
+   * Home galaxy only. "connected": a completed Song Handshake, in orbit around you. "nearby": a
+   * suggestion from matching, drawn faint outside your orbit. "arriving": mid-flight into orbit.
+   */
+  relationship?: "connected" | "nearby" | "arriving";
+  /** Connected: how close their orbit is, 0 (outer, newer or quieter) .. 1 (inner, frequent). */
+  orbit?: number;
+  /** A member of a distant community galaxy (GalaxyDestination.id): drawn there, not at home. */
+  destinationId?: string;
 };
 
 export type GalaxyEdge = {
@@ -203,7 +216,8 @@ export type GalaxyEdge = {
  * The galaxy is a bounded window onto your neighborhood, not everyone. `limit` caps the nodes
  * drawn (default lib/galaxy-sample.ts DEFAULT_BUDGET). More of one cluster comes from getGalaxyMore.
  */
-export type GalaxyQuery = { limit?: number };
+/** `center`: hop to another star's galaxy (a profile id already in your window). */
+export type GalaxyQuery = { limit?: number; center?: string };
 
 /** "More here": the next people in one cluster, as arrivals so they fade in without moving anyone. */
 export type GalaxyMore = {
@@ -216,6 +230,8 @@ export type GalaxyResponse = {
   nodes: GalaxyNode[];
   edges: GalaxyEdge[];
   topMatchId?: string;
+  /** Set only when the window is centered on another star (a hop); the viewer is then a dimmed anchor node with isMe. */
+  centerId?: string;
   status: "ready" | "processing";
   /** True when people were left out to stay within the budget. */
   sampled?: boolean;
@@ -292,6 +308,8 @@ export type ConversationSummary = {
   lastMessage?: Message;
   /** Songs traded in this thread. */
   threadSongs?: number;
+  /** Whose move it is in the Song Swap thread (see lib/thread.ts). Derived from the messages, not stored. */
+  turn?: "mine" | "theirs" | "even" | "open";
 };
 
 export type Conversation = {
@@ -384,6 +402,11 @@ export type ConnectionCardJson = {
   /** Absent means a regular match card. "contrast" cards come from Wander (same song, different feeling). */
   kind?: "match" | "contrast";
   shared_song?: { title: string; artist: string };
+  /** Whole-profile AI assessment, 0..100 (sets the match order). Absent on older cards. */
+  score?: number;
+  rationale?: string;
+  /** 1–2 specific shared threads, each anchored by a song on each side. Absent on older cards. */
+  threads?: CardThread[];
 };
 
 export type ConnectionCardRow = {
@@ -419,6 +442,14 @@ export type ConfirmedMatchRow = {
   profileId: string;
   displayName: string;
   card: ConnectionCardJson;
+  /** Real cosine similarity of the best pick pair (GET /api/match). Absent in the mock. */
+  similarity?: number;
+  /** The AI's whole-profile score (0..100) that orders matches. Absent in the mock and on older cards. */
+  score?: number | null;
+  /** Their primary cluster, if computed. */
+  cluster?: string | null;
+  /** Their public songs, so the list can show covers without a request per person. */
+  songs?: { id: string; title: string; artist: string; album_art_url: string | null }[];
 };
 
 /** One confirmed Wander result: the candidate plus the contrast card already cached for the pair. */

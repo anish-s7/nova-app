@@ -18,6 +18,8 @@ export interface WindowNode {
   cluster: string;
   /** Ambient far star: distant from you, but with a strong same-song thread. */
   far: boolean;
+  /** Hopped windows only: the real viewer's similarity to this person (absent if they're outside the viewer's window). */
+  viewerSimilarity?: number;
 }
 
 export interface WindowEdge {
@@ -27,7 +29,10 @@ export interface WindowEdge {
 }
 
 export interface GalaxyWindow {
+  /** Who the window is centered on: the viewer, or the star they hopped to. */
   meId: string;
+  /** Set only when hopped: the real viewer, drawn by the client as a dimmed anchor to return to. */
+  viewerId?: string;
   nodes: WindowNode[];
   edges: WindowEdge[];
   sampled: boolean;
@@ -119,7 +124,24 @@ function hiddenAfter(counts: Record<string, number>, drawn: Loaded[]) {
   return { total: Object.values(byCluster).reduce((a, b) => a + b, 0), byCluster };
 }
 
-export async function getGalaxyWindow(profileId: string, limit = DEFAULT_BUDGET): Promise<GalaxyWindow> {
+const simOf = (yours: Map<string, number> | undefined, id: string) => (yours?.has(id) ? { viewerSimilarity: yours.get(id) } : {});
+
+export class HopNotAllowedError extends Error {}
+
+/**
+ * A hop target must be someone already in the viewer's own window (near, fresh, or far), so reach
+ * grows one visible step at a time. The centered window is built with the same public-picks-only RPCs.
+ */
+async function assertHopAllowed(viewerId: string, centerId: string): Promise<Map<string, number>> {
+  const { candidates } = await loadCandidates(viewerId);
+  if (!candidates.some((c) => c.id === centerId)) throw new HopNotAllowedError("That star isn't in your galaxy");
+  return new Map(candidates.map((c) => [c.id, c.similarity]));
+}
+
+export async function getGalaxyWindow(viewerId: string, limit = DEFAULT_BUDGET, centerId?: string): Promise<GalaxyWindow> {
+  const hopped = !!centerId && centerId !== viewerId;
+  const yours = hopped ? await assertHopAllowed(viewerId, centerId) : undefined;
+  const profileId = hopped ? centerId : viewerId;
   const { candidates, counts } = await loadCandidates(profileId);
   const sample = sampleGalaxy(candidates, { budget: limit, seed: `${profileId}:${day()}` });
   const drawn = candidates.filter((c) => sample.ids.includes(c.id));
@@ -131,9 +153,21 @@ export async function getGalaxyWindow(profileId: string, limit = DEFAULT_BUDGET)
     .map((c) => ({ source: profileId, target: c.id, similarity: c.similarity }));
   edges.push(...knnEdges(drawn, 3, 0.85));
 
+  // Hopped: the center star and the viewer's anchor both need nodes (neither is in the center's own pool).
+  const extra: WindowNode[] = [];
+  if (hopped) {
+    const supabase = createServerClient();
+    const { data } = await supabase.from("profiles").select("id, display_name, primary_cluster").in("id", [profileId, viewerId]);
+    for (const id of [profileId, viewerId]) {
+      const row = data?.find((r) => r.id === id);
+      if (row && !drawn.some((c) => c.id === id)) extra.push({ profileId: id, displayName: row.display_name, cluster: row.primary_cluster ?? "unassigned", far: false });
+    }
+  }
+
   return {
     meId: profileId,
-    nodes: drawn.map((c) => ({ profileId: c.id, displayName: c.displayName, cluster: c.cluster, far: sample.slice.get(c.id) === "far" })),
+    ...(hopped ? { viewerId } : {}),
+    nodes: [...extra, ...drawn.map((c) => ({ profileId: c.id, displayName: c.displayName, cluster: c.cluster, far: sample.slice.get(c.id) === "far", ...simOf(yours, c.id) }))],
     edges,
     sampled: sample.sampled || hidden.total > 0,
     hidden,
@@ -141,7 +175,10 @@ export async function getGalaxyWindow(profileId: string, limit = DEFAULT_BUDGET)
 }
 
 /** "More here": the next `step` people in `cluster`, after the `have` already revealed. Ranks at most the pool, not the whole cluster. */
-export async function getGalaxyMoreWindow(profileId: string, cluster: string, have: number, step = 40, limit = DEFAULT_BUDGET): Promise<GalaxyMoreWindow> {
+export async function getGalaxyMoreWindow(viewerId: string, cluster: string, have: number, step = 40, limit = DEFAULT_BUDGET, centerId?: string): Promise<GalaxyMoreWindow> {
+  const hopped = !!centerId && centerId !== viewerId;
+  const yours = hopped ? await assertHopAllowed(viewerId, centerId) : undefined;
+  const profileId = hopped ? centerId : viewerId;
   const { candidates } = await loadCandidates(profileId);
   const sample = sampleGalaxy(candidates, { budget: limit, seed: `${profileId}:${day()}` });
   const order = expandOrder(candidates, new Set(sample.ids), cluster);
@@ -151,7 +188,7 @@ export async function getGalaxyMoreWindow(profileId: string, cluster: string, ha
   // Each new person threads to their two nearest people already on screen, so they fade in attached.
   const edges = knnEdges([...page, ...drawn], 2, 0.85).filter((e) => page.some((p) => p.id === e.source || p.id === e.target));
   return {
-    nodes: page.map((c) => ({ profileId: c.id, displayName: c.displayName, cluster: c.cluster, far: false })),
+    nodes: page.map((c) => ({ profileId: c.id, displayName: c.displayName, cluster: c.cluster, far: false, ...simOf(yours, c.id) })),
     edges,
     remaining: Math.max(0, order.length - have - page.length),
   };

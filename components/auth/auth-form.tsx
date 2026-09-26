@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
@@ -9,6 +9,7 @@ import { AppleIcon, GoogleIcon } from "@/components/auth/brand-icons";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { resetWorld } from "@/lib/api";
+import { listenForConfirmation } from "@/lib/auth-handoff";
 import { safeNextPath } from "@/lib/safe-next";
 import { resetSession } from "@/lib/session";
 import { createClient } from "@/lib/supabase/browser";
@@ -37,15 +38,23 @@ const fieldClass =
   "h-12 w-full rounded-2xl border border-white/10 bg-card/60 px-4 text-[15px] outline-none transition-colors placeholder:text-muted-foreground focus:border-primary/60";
 
 /** Supabase's messages are written for developers; these are for people. */
-function friendly(message: string) {
-  const m = message.toLowerCase();
+function friendly(error: { message: string; code?: string }) {
+  // Project-wide cap on emails from Supabase's built-in sender (2/hour on hosted projects),
+  // shared by every signup. Not something this user did. See AUTH_SETUP.md to lift it.
+  if (error.code === "over_email_send_rate_limit") {
+    console.warn("Supabase email rate limit hit. Turn off Confirm email or add custom SMTP (AUTH_SETUP.md, step 1).");
+    return "We can't send confirmation emails right now. Please try again later.";
+  }
+  // Same email or IP retried within a few seconds.
+  if (error.code === "over_request_rate_limit") return "One moment. Please wait a few seconds and try again.";
+  const m = error.message.toLowerCase();
   if (m.includes("invalid login credentials")) return "That email and password don't match an account.";
   if (m.includes("already registered")) return "An account with this email already exists. Try logging in.";
   if (m.includes("email not confirmed")) return "Confirm your email first. Check your inbox for the link.";
   if (m.includes("password should be")) return "Use a password with at least 6 characters.";
-  if (m.includes("rate limit")) return "Too many attempts. Wait a minute and try again.";
+  if (m.includes("for security purposes")) return "One moment. Please wait a few seconds and try again.";
   if (m.includes("provider is not enabled")) return "That sign-in option isn't set up yet.";
-  return message;
+  return error.message;
 }
 
 /** Asks Supabase which OAuth providers are switched on. Fails open so a network blip doesn't block sign-in. */
@@ -61,7 +70,7 @@ async function providerEnabled(provider: Provider) {
   }
 }
 
-export function AuthForm({ mode, next, initialError }: { mode: Mode; next?: string; initialError?: string }) {
+export function AuthForm({ mode, next, initialError, initialNotice }: { mode: Mode; next?: string; initialError?: string; initialNotice?: string }) {
   const router = useRouter();
   const copy = COPY[mode];
   const configured = isSupabaseConfigured();
@@ -73,7 +82,9 @@ export function AuthForm({ mode, next, initialError }: { mode: Mode; next?: stri
   const [password, setPassword] = useState("");
   const [pending, setPending] = useState<"email" | Provider | null>(null);
   const [error, setError] = useState(initialError ?? "");
-  const [notice, setNotice] = useState("");
+  const [notice, setNotice] = useState(initialNotice ?? "");
+  // Set while a signup waits on its confirmation email.
+  const [awaitingEmail, setAwaitingEmail] = useState(false);
 
   const callbackUrl = () => `${window.location.origin}/auth/callback?next=${encodeURIComponent(destination)}`;
 
@@ -87,6 +98,33 @@ export function AuthForm({ mode, next, initialError }: { mode: Mode; next?: stri
     router.refresh();
   };
 
+  // The confirmation link opens in a new tab. When that tab signs in, carry on here
+  // instead, so the person isn't left with two copies of the app open.
+  useEffect(() => {
+    if (!awaitingEmail) return;
+    let done = false;
+    const continueHere = () => {
+      if (done) return;
+      done = true;
+      finish();
+    };
+    const stop = listenForConfirmation(continueHere);
+    // Backstop if the message is missed (or BroadcastChannel is unavailable): the other tab's
+    // sign-in writes a shared cookie, so a local session check here picks it up.
+    const check = async () => {
+      const { data } = await createClient().auth.getSession();
+      if (data.session) continueHere();
+    };
+    const poll = setInterval(check, 2500);
+    window.addEventListener("focus", check);
+    return () => {
+      stop();
+      clearInterval(poll);
+      window.removeEventListener("focus", check);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- finish only reads stable values
+  }, [awaitingEmail]);
+
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setError("");
@@ -98,18 +136,21 @@ export function AuthForm({ mode, next, initialError }: { mode: Mode; next?: stri
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { display_name: name.trim() }, emailRedirectTo: callbackUrl() },
+        options: { data: { display_name: name.trim() }, emailRedirectTo: `${callbackUrl()}&via=email` },
       });
       setPending(null);
-      if (error) return setError(friendly(error.message));
+      if (error) return setError(friendly(error));
       // With email confirmation on, there's no session until they click the link.
-      if (!data.session) return setNotice(`Check ${email} for a link to confirm your account.`);
+      if (!data.session) {
+        setAwaitingEmail(true);
+        return setNotice(`Check ${email} for a link to confirm your account. Once you click it, this page will continue on its own.`);
+      }
       return finish();
     }
 
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     setPending(null);
-    if (error) return setError(friendly(error.message));
+    if (error) return setError(friendly(error));
     finish();
   };
 
@@ -125,7 +166,7 @@ export function AuthForm({ mode, next, initialError }: { mode: Mode; next?: stri
     // On success the browser is already navigating to the provider.
     if (error) {
       setPending(null);
-      setError(friendly(error.message));
+      setError(friendly(error));
     }
   };
 

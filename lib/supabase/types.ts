@@ -3,6 +3,7 @@
  * Replace with `supabase gen types typescript` output once the real
  * schema is applied — keep the shape in sync with db/contract.md until then.
  */
+import type { CardThread, Portrait } from "../portrait";
 
 export interface ConnectionCardJson {
   shared_why: string;
@@ -17,6 +18,12 @@ export interface ConnectionCardJson {
   kind?: "match" | "contrast";
   /** Contrast cards only: the one song both people picked. Plain strings, never a Spotify payload. */
   shared_song?: { title: string; artist: string };
+  /** Whole-profile assessment (lib/gemini/assessConnection.ts): 0..100, sets the match order. Absent on older cards. */
+  score?: number;
+  /** Why the AI judged this a connection, in a sentence. Not shown to users. */
+  rationale?: string;
+  /** 1–2 specific shared threads, each anchored by a song on each side. Absent on older cards. */
+  threads?: CardThread[];
 }
 
 export interface Database {
@@ -120,6 +127,29 @@ export interface Database {
         };
         Update: Partial<{
           card_json: ConnectionCardJson;
+        }>;
+        Relationships: [];
+      };
+      profile_portraits: {
+        Row: {
+          profile_id: string;
+          portrait: Portrait;
+          pick_count: number;
+          model: string;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          portrait: Portrait;
+          pick_count: number;
+          model: string;
+          updated_at?: string;
+        };
+        Update: Partial<{
+          portrait: Portrait;
+          pick_count: number;
+          model: string;
+          updated_at: string;
         }>;
         Relationships: [];
       };

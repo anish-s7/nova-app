@@ -1,29 +1,45 @@
+"use client";
+
+import { useRef } from "react";
 import Link from "next/link";
+import { ArrowDown } from "lucide-react";
+import { animate, spring } from "animejs";
 import { AlbumArt } from "@/components/album-art";
+import { useAnime } from "@/hooks/use-anime";
 import type { Thread } from "@/lib/thread";
 import { cn } from "@/lib/utils";
 
-const MAX_SHOWN = 6;
+const MAX_SHOWN = 5;
 
-/** Everything two people have passed each other, as a row of covers that gets longer as you trade. */
-export function ThreadStrip({ thread, name, userId }: { thread: Thread; name: string; userId: string }) {
+/**
+ * Everything two people have passed each other, as a slim bar pinned under the chat header:
+ * the covers traded so far and whose move it is. The "send one back" action lives on the
+ * swap card itself; this bar only points at it.
+ */
+export function ThreadStrip({ thread, name, userId, onJumpToPending }: { thread: Thread; name: string; userId: string; onJumpToPending?: () => void }) {
   const { entries, turn, last } = thread;
   const shown = entries.slice(-MAX_SHOWN);
   const hidden = entries.length - shown.length;
 
-  return (
-    <section aria-label={`Your thread with ${name}`} className="mb-4 border border-white/10 bg-card/40 p-3">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 className="font-serif text-base italic">Your thread</h2>
-        <p className="text-xs tabular-nums text-muted-foreground">{entries.length === 0 ? "no songs yet" : entries.length === 1 ? "1 song" : `${entries.length} songs`}</p>
-      </div>
+  // A swap completing while you watch: the last two covers lean into each other. Skips the first render.
+  const seen = useRef(entries.length);
+  const root = useAnime<HTMLElement>(() => {
+    const grew = entries.length > seen.current;
+    seen.current = entries.length;
+    if (!grew || turn !== "even" || shown.length < 2) return;
+    animate("[data-cover]:nth-last-child(2)", { translateX: [0, 6, 0], duration: 700, ease: spring({ bounce: 0.5, duration: 700 }) });
+    animate("[data-cover]:last-child", { translateX: [0, -6, 0], scale: [0.7, 1], duration: 700, ease: spring({ bounce: 0.5, duration: 700 }) });
+    animate("[data-both-ways]", { opacity: [0, 1], translateY: [4, 0], duration: 500, delay: 250, ease: "outQuart" });
+  }, [entries.length]);
 
+  return (
+    <section ref={root} aria-label={`Your thread with ${name}`} className="flex min-h-14 items-center gap-3 border-b border-white/[0.07] bg-background/95 px-4 py-2">
       {entries.length ? (
-        <ul className="mt-2.5 flex items-center" aria-label="Songs traded">
-          {hidden > 0 ? <li className="mr-2 text-xs tabular-nums text-muted-foreground">+{hidden}</li> : null}
-          {shown.map((e, i) => (
-            <li key={e.swapId} className={cn("-ml-2 first:ml-0", i === shown.length - 1 && "motion-safe:animate-in motion-safe:zoom-in-90 motion-safe:fade-in")}>
-              <AlbumArt song={e.song} size={40} className={cn("rounded-md ring-2", e.fromMe ? "ring-primary/70" : "ring-white/25")} />
+        <ul className="flex shrink-0 items-center" aria-label={`${entries.length} ${entries.length === 1 ? "song" : "songs"} traded`}>
+          {hidden > 0 ? <li className="mr-1.5 text-[11px] tabular-nums text-muted-foreground">+{hidden}</li> : null}
+          {shown.map((e) => (
+            <li key={e.swapId} data-cover className="-ml-2 first:ml-0">
+              <AlbumArt song={e.song} size={30} className={cn("rounded-[4px] ring-2", e.fromMe ? "ring-primary/70" : "ring-white/25")} />
               <span className="sr-only">
                 {e.song.title}, from {e.fromMe ? "you" : name}
               </span>
@@ -32,26 +48,30 @@ export function ThreadStrip({ thread, name, userId }: { thread: Thread; name: st
         </ul>
       ) : null}
 
-      <p className="mt-2.5 text-sm text-foreground/85">
+      <p className="min-w-0 flex-1 text-sm leading-snug">
         {turn === "mine" && last ? (
           <>
-            <span className="font-medium text-primary">Your turn.</span> {name} sent {last.song.title}.
+            <span className="font-medium text-primary">Your turn.</span> <span className="text-foreground/80">{name} sent {last.song.title}.</span>
           </>
         ) : turn === "theirs" && last ? (
-          <>Waiting on {name}. You sent {last.song.title}.</>
+          <span className="text-muted-foreground">Waiting on {name} to send one back.</span>
         ) : turn === "even" ? (
-          <>All caught up. Send {name} another whenever.</>
+          <span data-both-ways className="text-foreground/80">
+            Swapped both ways. <span className="text-muted-foreground">Send another whenever.</span>
+          </span>
         ) : (
-          <>Start it: send {name} the first song.</>
+          <span className="text-muted-foreground">Start your thread with a song.</span>
         )}
       </p>
 
-      {turn !== "theirs" ? (
-        <Link
-          href={turn === "mine" && last ? `/messages/${userId}/swap?replyTo=${last.swapId}` : `/messages/${userId}/swap`}
-          className="mt-2.5 inline-flex min-h-10 items-center border border-primary/50 px-4 text-sm font-medium text-primary hover:bg-primary/10"
-        >
-          {turn === "mine" ? "Send one back" : turn === "even" ? "Send another" : "Send a song"}
+      {turn === "mine" && onJumpToPending ? (
+        <button type="button" onClick={onJumpToPending} className="inline-flex min-h-9 shrink-0 items-center gap-1 px-2 text-xs font-medium text-primary hover:bg-white/5">
+          Jump to it
+          <ArrowDown className="size-3.5" aria-hidden />
+        </button>
+      ) : turn === "even" || turn === "open" ? (
+        <Link href={`/messages/${userId}/swap`} className="inline-flex min-h-9 shrink-0 items-center border border-primary/50 px-3 text-xs font-medium text-primary hover:bg-primary/10">
+          {turn === "open" ? "Send a song" : "Send another"}
         </Link>
       ) : null}
     </section>

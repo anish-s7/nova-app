@@ -1,34 +1,49 @@
 import { createServerClient } from "../supabase/server";
-import { evaluateAndGenerateCard, type PickForEvaluation } from "../gemini/evaluateAndGenerateCard";
+import { assessConnection } from "../gemini/assessConnection";
 import { alignCardEvidence } from "./alignCardEvidence";
+import { getPortraits, loadPublicPicks, upsertPortrait } from "./portraits";
 import type { ConnectionCardJson } from "../supabase/types";
+
+export interface MatchSong {
+  id: string;
+  title: string;
+  artist: string;
+  album_art_url: string | null;
+}
 
 export interface ConfirmedMatch {
   profileId: string;
   displayName: string;
   card: ConnectionCardJson;
+  /** The AI's whole-profile score (0..100), which sets the order. Null on cards from before assessments. */
+  score: number | null;
+  /** Cosine similarity of the best pick pair, straight from match_picks (the pre-filter). */
+  similarity: number;
+  /** The candidate's primary cluster, if computed. */
+  cluster: string | null;
+  /** The candidate's public songs, for covers and overlap counts. */
+  songs: MatchSong[];
 }
+
+/** New Gemini assessments per request; the rest wait for the next load (free tier is 15/min). */
+const MAX_NEW_ASSESSMENTS = 5;
+
+/**
+ * Pairs the AI already turned down, keyed by both pick counts so a new pick on either side earns a
+ * fresh look. In-memory only (rejections aren't stored), so a restart just re-asks.
+ */
+const rejected = new Set<string>();
 
 function orderedPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
 }
 
-type PickRow = {
-  id: string;
-  tags: string[];
-  valence: number;
-  energy: number;
-  reason_text: string | null;
-  songs: { title: string; artist: string } | null;
-};
-
 /**
- * Retrieves candidates via pgvector search over individual picks (not a
- * profile-level average — see CLAUDE.md), then runs each one through the
- * AI evidence-check (lib/gemini/evaluateAndGenerateCard.ts). Only
- * confirmed matches are returned; "insufficient evidence" candidates are
- * dropped here, never surfaced. Confirmed matches get cached into
- * connection_cards immediately so a later /api/cards read is free.
+ * Retrieves candidates via pgvector search over individual picks (a pre-filter only — see
+ * CLAUDE.md), then has the AI assess each candidate's whole profile against the requester's
+ * (lib/gemini/assessConnection.ts): both portraits and every public pick. Only confirmed matches
+ * are returned, ordered by the AI's score; "insufficient evidence" candidates are dropped. Confirmed
+ * matches are cached into connection_cards immediately and never regenerated.
  *
  * Requires the `match_picks` SQL function in Supabase — see db/contract.md.
  */
@@ -60,69 +75,100 @@ export async function findMatches(profileId: string, limit = 10): Promise<Confir
     return [];
   }
 
+  // Everything the UI needs beside the card, in batched reads.
+  const candidateIds = Array.from(new Set(candidates.map((c) => c.profile_id)));
   const pickIds = Array.from(new Set(candidates.flatMap((c) => [c.song_pick_id, c.target_pick_id])));
-
-  const { data: picks, error: picksError } = await supabase
-    .from("song_picks")
-    .select("id, tags, valence, energy, reason_text, songs(title, artist)")
-    .in("id", pickIds);
-
-  if (picksError) {
-    throw new Error(`findMatches failed to load picks: ${picksError.message}`);
+  const [{ data: clusterRows }, { data: songRows }, { data: cachedCards }, { data: hintRows }] = await Promise.all([
+    supabase.from("profiles").select("id, primary_cluster").in("id", candidateIds),
+    supabase.from("song_picks").select("profile_id, songs(id, title, artist, album_art_url)").in("profile_id", candidateIds).eq("is_public", true),
+    supabase.from("connection_cards").select("user_a, user_b, card_json").or(`user_a.eq.${profileId},user_b.eq.${profileId}`),
+    supabase.from("song_picks").select("id, songs(title)").in("id", pickIds),
+  ]);
+  const clusterOf = new Map((clusterRows ?? []).map((r) => [r.id, r.primary_cluster as string | null]));
+  const songsOf = new Map<string, MatchSong[]>();
+  for (const r of (songRows ?? []) as unknown as { profile_id: string; songs: MatchSong | null }[]) {
+    if (r.songs) songsOf.set(r.profile_id, [...(songsOf.get(r.profile_id) ?? []), r.songs]);
   }
+  const titleOfPick = new Map(((hintRows ?? []) as unknown as { id: string; songs: { title: string } | null }[]).map((r) => [r.id, r.songs?.title ?? null]));
+  // A card that already exists is never regenerated (CLAUDE.md), so loading Connections doesn't respend Gemini calls.
+  const cachedMatch = new Map<string, ConnectionCardJson>();
+  for (const c of cachedCards ?? []) {
+    const other = c.user_a === profileId ? c.user_b : c.user_a;
+    if (c.card_json.kind !== "contrast") cachedMatch.set(other, c.card_json);
+  }
+  const result = (id: string, displayName: string, card: ConnectionCardJson, similarity: number): ConfirmedMatch => ({
+    profileId: id,
+    displayName,
+    card,
+    score: typeof card.score === "number" ? card.score : null,
+    similarity,
+    cluster: clusterOf.get(id) ?? null,
+    songs: songsOf.get(id) ?? [],
+  });
 
-  const pickById = new Map((picks as unknown as PickRow[] | null ?? []).map((p) => [p.id, p]));
   const results: ConfirmedMatch[] = [];
-
+  const toAssess = [];
   for (const candidate of candidates) {
-    const targetPickRow = pickById.get(candidate.target_pick_id);
-    const candidatePickRow = pickById.get(candidate.song_pick_id);
-
-    if (!targetPickRow?.songs || !candidatePickRow?.songs) continue;
-
-    const targetPick: PickForEvaluation = {
-      displayName: targetProfile.display_name,
-      title: targetPickRow.songs.title,
-      artist: targetPickRow.songs.artist,
-      tags: targetPickRow.tags,
-      valence: targetPickRow.valence,
-      energy: targetPickRow.energy,
-      reasonText: targetPickRow.reason_text,
-    };
-
-    const candidatePick: PickForEvaluation = {
-      displayName: candidate.display_name,
-      title: candidatePickRow.songs.title,
-      artist: candidatePickRow.songs.artist,
-      tags: candidatePickRow.tags,
-      valence: candidatePickRow.valence,
-      energy: candidatePickRow.energy,
-      reasonText: candidatePickRow.reason_text,
-    };
-
-    const evaluation = await evaluateAndGenerateCard(targetPick, candidatePick);
-    if (evaluation.status !== "match") continue;
-
-    // evaluateAndGenerateCard always writes evidence.user_a for whichever
-    // pick was passed first (the target/requester here), not whichever id
-    // is smaller. Align it to the row's user_a/user_b ordering before it's
-    // stored or returned, so evidence.user_a always means "the row's
-    // user_a" consistently — see lib/matching/alignCardEvidence.ts.
-    const [userA, userB] = orderedPair(profileId, candidate.profile_id);
-    const alignedCard = alignCardEvidence(evaluation.card, profileId, candidate.profile_id);
-
-    await supabase.from("connection_cards").upsert({
-      user_a: userA,
-      user_b: userB,
-      card_json: alignedCard,
-    });
-
-    results.push({
-      profileId: candidate.profile_id,
-      displayName: candidate.display_name,
-      card: alignedCard,
-    });
+    const cached = cachedMatch.get(candidate.profile_id);
+    if (cached) results.push(result(candidate.profile_id, candidate.display_name, cached, candidate.similarity));
+    else toAssess.push(candidate);
   }
 
-  return results;
+  if (toAssess.length > 0) {
+    // The requester's own portrait is worth one call (it's reused for every pair); candidates' are
+    // used only if they already exist, so one person's load never pays for someone else's portrait.
+    try {
+      await upsertPortrait(supabase, profileId);
+    } catch (err) {
+      console.error("findMatches: couldn't refresh the requester's portrait, assessing without it:", err);
+    }
+    const ids = [profileId, ...toAssess.map((c) => c.profile_id)];
+    const [picksOf, portraitOf] = await Promise.all([loadPublicPicks(supabase, ids), getPortraits(supabase, ids)]);
+    const me = {
+      displayName: targetProfile.display_name,
+      portrait: portraitOf.get(profileId)?.portrait ?? null,
+      picks: picksOf.get(profileId) ?? [],
+    };
+
+    let assessed = 0;
+    for (const candidate of toAssess) {
+      if (assessed >= MAX_NEW_ASSESSMENTS) break;
+      const theirPicks = picksOf.get(candidate.profile_id) ?? [];
+      if (me.picks.length === 0 || theirPicks.length === 0) continue;
+      const rejectKey = `${orderedPair(profileId, candidate.profile_id).join(":")}:${me.picks.length}:${theirPicks.length}`;
+      if (rejected.has(rejectKey)) continue;
+
+      const songA = titleOfPick.get(candidate.target_pick_id);
+      const songB = titleOfPick.get(candidate.song_pick_id);
+      assessed++;
+      let assessment;
+      try {
+        assessment = await assessConnection(
+          me,
+          { displayName: candidate.display_name, portrait: portraitOf.get(candidate.profile_id)?.portrait ?? null, picks: theirPicks },
+          songA && songB ? { songA, songB } : undefined
+        );
+      } catch (err) {
+        console.error(`findMatches: assessment failed for ${candidate.profile_id}, skipping for now:`, err);
+        continue;
+      }
+      if (assessment.status !== "match") {
+        rejected.add(rejectKey);
+        continue;
+      }
+
+      // The AI writes A-side fields for the requester; align them to the row's user_a/user_b
+      // ordering before storing — see lib/matching/alignCardEvidence.ts.
+      const [userA, userB] = orderedPair(profileId, candidate.profile_id);
+      const alignedCard = alignCardEvidence(assessment.card, profileId, candidate.profile_id);
+      const { error: upsertError } = await supabase.from("connection_cards").upsert({ user_a: userA, user_b: userB, card_json: alignedCard });
+      if (upsertError) console.error(`findMatches: couldn't cache the card for ${candidate.profile_id}:`, upsertError.message);
+
+      results.push(result(candidate.profile_id, candidate.display_name, alignedCard, candidate.similarity));
+    }
+  }
+
+  // AI score first; older cards without one fall back to the pre-filter's similarity on the same scale.
+  const rank = (m: ConfirmedMatch) => m.score ?? m.similarity * 100;
+  return results.sort((x, y) => rank(y) - rank(x));
 }

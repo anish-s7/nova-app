@@ -13,7 +13,26 @@ export type GalaxyApi = {
   flyToCluster(cluster: string | null): Promise<void>;
   /** Frame a set of stars (a theme's songs); an empty set returns to the overview. */
   flyToGroup(ids: string[]): Promise<void>;
+  /** Travel to a distant community galaxy, arcing out and back in. */
+  flyToDestination(id: string, opts?: { duration?: number; lift?: number }): Promise<void>;
+  /** Travel back to your home galaxy and light everyone in it. */
+  returnHome(duration?: number): Promise<void>;
+  /** Fly a star from wherever it is now into its orbit around you, trailing light. */
+  flyIntoOrbit(personId: string, duration?: number): Promise<void>;
 };
+
+/** A distant community galaxy: a music scene, drawn far from home. */
+export type GalaxyDestination = {
+  id: string;
+  name: string;
+  /** Hex for three.js. */
+  color: string;
+  /** 0 close to your taste .. 1 far from it. Sets how far away it sits. */
+  distance: number;
+};
+
+/** A lasting line from someone in your galaxy to the community you found them in. */
+export type GalaxyBridge = { personId: string; destinationId: string };
 
 export type GalaxyViewProps = {
   nodes: GalaxyNode[];
@@ -40,4 +59,9 @@ export type GalaxyViewProps = {
   fading?: ReadonlyMap<string, number>;
   /** People who exist but aren't drawn, per cluster. Rendered as dust so a bounded view doesn't read as a small galaxy. */
   hidden?: { total: number; byCluster: Record<string, number> };
+  /** Distant community galaxies. Placed by the layout (`Layout.destinations`). */
+  destinations?: GalaxyDestination[];
+  bridges?: GalaxyBridge[];
+  /** Tapping a distant community galaxy. */
+  onSelectDestination?: (id: string) => void;
 };

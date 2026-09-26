@@ -12,21 +12,24 @@ import type { GalaxyMoreWindow, GalaxyWindow, WindowEdge, WindowNode } from "./m
 
 export type { GalaxyMoreWindow, GalaxyWindow };
 
-function toNode(n: WindowNode, meId: string): GalaxyNode {
+/** The signed-in user's real id is presented to the UI as `alias` (ME_ID), like the mock world does. */
+function toNode(n: WindowNode, meId: string, alias = meId): GalaxyNode {
   return {
-    userId: n.profileId,
+    userId: n.profileId === meId ? alias : n.profileId,
     name: n.displayName,
     cluster: n.cluster,
     topMotivations: [], // NOT IN CONTRACT: no motivations table (lib/types.ts #4)
     isMe: n.profileId === meId,
     ...(n.far ? { far: true } : {}),
+    ...(n.viewerSimilarity != null ? { youSimilarity: n.viewerSimilarity } : {}),
   };
 }
 
-function toEdge(e: WindowEdge): GalaxyEdge {
+function toEdge(e: WindowEdge, meId = "", alias = meId): GalaxyEdge {
+  const id = (x: string) => (x === meId ? alias : x);
   return {
-    source: e.source,
-    target: e.target,
+    source: id(e.source),
+    target: id(e.target),
     similarity: e.similarity,
     sharedMotivation: "", // NOT IN CONTRACT
     sharedSongs: 0, // NOT IN CONTRACT
@@ -42,24 +45,28 @@ function topMatch(edges: WindowEdge[], meId: string): string | undefined {
   return mine.source === meId ? mine.target : mine.source;
 }
 
-export function galaxyFromWindow(w: GalaxyWindow): GalaxyResponse {
-  const me = w.nodes.find((n) => n.profileId === w.meId);
-  const others = w.nodes.filter((n) => n.profileId !== w.meId);
+/** `alias` replaces the viewer's own id in nodes and edges (lib/api.ts passes ME_ID); omit it to keep real ids. */
+export function galaxyFromWindow(w: GalaxyWindow, alias = w.viewerId ?? w.meId): GalaxyResponse {
+  // Hopped: the viewer stays `isMe` (the way back); the window's center is reported as centerId.
+  const viewer = w.viewerId ?? w.meId;
+  const me = w.nodes.find((n) => n.profileId === viewer);
+  const others = w.nodes.filter((n) => n.profileId !== viewer);
   return {
-    nodes: [...(me ? [toNode(me, w.meId)] : []), ...others.map((n) => toNode(n, w.meId))],
-    edges: w.edges.map(toEdge),
+    nodes: [...(me ? [toNode(me, viewer, alias)] : []), ...others.map((n) => toNode(n, viewer, alias))],
+    edges: w.edges.map((e) => toEdge(e, viewer, alias)),
     topMatchId: topMatch(w.edges, w.meId),
+    ...(w.viewerId ? { centerId: w.meId } : {}),
     status: "ready",
     sampled: w.sampled,
     hidden: w.hidden,
   };
 }
 
-export function galaxyMoreFromWindow(w: GalaxyMoreWindow, meId: string): GalaxyMore {
+export function galaxyMoreFromWindow(w: GalaxyMoreWindow, meId: string, alias = meId): GalaxyMore {
   return {
     arrivals: w.nodes.map((n) => ({
-      node: toNode(n, meId),
-      edges: w.edges.filter((e) => e.source === n.profileId || e.target === n.profileId).map(toEdge),
+      node: toNode(n, meId, alias),
+      edges: w.edges.filter((e) => e.source === n.profileId || e.target === n.profileId).map((e) => toEdge(e, meId, alias)),
     })),
     remaining: w.remaining,
   };

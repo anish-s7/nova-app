@@ -3,9 +3,23 @@
 import { useSyncExternalStore } from "react";
 import { songById } from "./music-context";
 import type { SongPick } from "./song-layer";
+import type { Tag } from "./tags";
 import type { AnalysisResult, InferredMotivation, ListeningSignal, Song } from "./types";
 
 export type FailureKey = "spotify" | "analysis" | "galaxy" | "card";
+
+/** How one song feels to this person: what the backend matches on (POST /api/picks). */
+export type Feeling = {
+  tags: Tag[];
+  /** -1..1, sad ↔ happy. */
+  valence: number;
+  /** -1..1, calm ↔ intense. */
+  energy: number;
+  /** False until the person has actually touched the mood circle. */
+  placed: boolean;
+};
+
+export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
 export type SessionState = {
   demo: boolean;
@@ -20,6 +34,20 @@ export type SessionState = {
   reach?: string;
   /** Songs added from the galaxy after onboarding, with the reason typed for each. Kept out of `songs` so adding one grows the galaxy without re-laying it out. */
   picks?: SongPick[];
+
+  /** Per conversation, the sentAt of the newest message you've seen. Drives unread dots in Messages. */
+  readAt?: Record<string, string>;
+
+  /** Onboarding "feel" step: the song ids chosen to describe (all manual picks, or up to 5 from a Spotify import). */
+  describe?: string[];
+  /** Onboarding "feel" step: tags + mood circle position per song id. */
+  feelings?: Record<string, Feeling>;
+  /** Saving described songs to the backend, which runs while the reading screen plays. */
+  saveStatus?: SaveStatus;
+  saveError?: string;
+  /** Song ids already saved, so a retry after a partial failure never duplicates a pick. */
+  savedSongIds?: string[];
+
   /** Bumped whenever anything that affects the galaxy changes, used in SWR keys. */
   version: number;
 };
