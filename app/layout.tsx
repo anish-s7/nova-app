@@ -1,0 +1,34 @@
+import { Suspense } from "react";
+import type { Metadata, Viewport } from "next";
+import { Newsreader, Source_Sans_3 } from "next/font/google";
+import { PhoneFrame } from "@/components/phone-frame";
+import { SessionSync } from "@/components/session-sync";
+import "./globals.css";
+
+const sourceSans = Source_Sans_3({ variable: "--font-source-sans", subsets: ["latin"] });
+const newsreader = Newsreader({ variable: "--font-newsreader", subsets: ["latin"], style: ["normal", "italic"] });
+
+export const metadata: Metadata = {
+  title: "Song Galaxy: connected by why you listen",
+  description: "Two people. Zero songs in common. The same reason. Song Galaxy finds people who use music the way you do.",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#15142a",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
+  return (
+    <html lang="en" className={`${sourceSans.variable} ${newsreader.variable} antialiased`}>
+      <body>
+        <Suspense>
+          <SessionSync />
+        </Suspense>
+        <PhoneFrame>{children}</PhoneFrame>
+      </body>
+    </html>
+  );
+}
