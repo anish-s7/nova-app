@@ -9,8 +9,8 @@ as a side effect of an unrelated architecture or code change — update
 `db/contract.md` and the code instead, and leave this file alone unless
 someone specifically asks for a CLAUDE.md update.
 
-Last full update: 2026-09-26, after the onboarding feel step (`2fb87c0`) and Daniel's real-data
-wiring + galaxy hop (`6c36720`).
+Last full update: 2026-09-26, after the AI portraits + whole-profile connection assessment
+(`ai-portraits`, `89fee8a`), the matching-balance fix (`b5f84e3`) and the galaxy "+" fix (`d9614b5`).
 
 ## Team split
 - **Anish** — backend (routes, Supabase glue, Gemini/MusicBrainz pipeline, matching) and, since
@@ -33,7 +33,7 @@ wiring + galaxy hop (`6c36720`).
 | Auth | Supabase Auth (cookie sessions via `@supabase/ssr`), email/password live; Google/Apple scaffolded but disabled |
 | Messaging | Supabase `messages` table; the app polls `GET /api/messages` (Realtime publication is enabled but no client subscribes yet) |
 | Album art | Cover Art Archive → iTunes → Deezer (`lib/cover-art.ts`), looked up when a song enters the catalog |
-| LLM | Google Gemini API (`gemini-flash-lite-latest` for text, `gemini-embedding-001` at 768 dims for vectors) |
+| LLM | Google Gemini API: `gemini-flash-latest` → `gemini-flash-lite-latest` fallback for portraits and connection assessment (`GEMINI_JUDGMENT_MODELS`), `gemini-flash-lite-latest` for song context and contrast cards, `gemini-embedding-001` at 768 dims for vectors |
 | Song identity | MusicBrainz API (primary), Gemini (fallback only) — see below |
 | Music data (optional) | Spotify Web API — OAuth top-tracks import only, display purposes only |
 | Package manager | **npm only** (`package-lock.json`). Never commit `pnpm-lock.yaml` / `pnpm-workspace.yaml` |
@@ -45,7 +45,8 @@ app/api/                     Route handlers — the only thing the frontend call
   picks/                     POST: resolve song (MusicBrainz → Gemini), cover art, insert song_pick, refresh cluster
   match/                     GET: pgvector candidates → AI evidence-check → confirmed matches with cards
                              (cached pairs aren't re-sent to Gemini)
-  cards/[matchId]/           GET cached card / POST generate one for a specific pair
+  cards/[matchId]/           GET cached card / POST assess a specific pair (same AI assessment as /api/match)
+  portrait/                  GET my stored listening portrait (session client, owner-only RLS) / POST regenerate it
   profile/                   GET ?id=<uuid|me> profile + picks (private picks only for the owner) / POST display name
   messages/                  GET ?with=<profileId> (session client, RLS-scoped) / POST send
   galaxy/, galaxy/more/      GET bounded galaxy window / page one cluster; ?center=<id> hops (403 if not in your window)
@@ -80,8 +81,14 @@ lib/cover-art.ts             Album art lookup chain (Cover Art Archive → iTune
 lib/supabase/                server.ts (service role), serverAuth.ts (session), browser.ts (client),
                              proxy.ts (session refresh), config.ts (keys present?), vector.ts (parseVector)
 lib/musicbrainz/             Song identity resolution (title/artist → canonical mbid)
-lib/gemini/                  Song context + embedding, evidence-check/match cards, contrast cards
-lib/matching/                findMatches (match_picks), findWander (wander_picks), galaxyWindow,
+lib/portrait.ts              Portrait + CardThread types (the portrait JSON and match-card threads)
+lib/gemini/                  Song context + embedding, contrast cards, and the AI judgment calls:
+                             json.ts (generateJson: enforced-JSON schema + Flash → Flash-Lite fallback),
+                             generatePortrait.ts (listening portrait), assessConnection.ts (whole-profile
+                             match judgment + score + card). evaluateAndGenerateCard.ts is legacy
+                             (only scripts/test-gemini.ts and a shared type still use it)
+lib/matching/                findMatches (match_picks → assessConnection), portraits.ts (loadPublicPicks,
+                             getPortraits, upsertPortrait), findWander (wander_picks), galaxyWindow,
                              galaxySongs, refreshPrimaryCluster, alignCardEvidence, cosineSimilarity
 lib/cluster-assign.ts        Tags + valence/energy → one of five clusters (no LLM, no embeddings)
 lib/clusters.ts              The five cluster ids/labels/colors (CLUSTER_IDS)
@@ -93,6 +100,8 @@ supabase/seed.sql            Old fabricated-vector seed; superseded by scripts/s
 scripts/seed-real-data.ts    Seeds demo personas through the real MusicBrainz + Gemini pipeline
 scripts/test-gemini.ts       Standalone Gemini smoke test (no DB writes)
 scripts/backfill-cover-art.ts  Fills songs.album_art_url for catalog rows that predate cover-art lookup
+scripts/generate-portraits.ts  Backfills profile_portraits for every profile with public picks (--force redoes all)
+scripts/recompute-pick-embeddings.ts  Rewrites every song_picks.embedding after an EMOTION_WEIGHT/formula change
 scripts/build-sim-embeddings.ts  Regenerates lib/sim/song-vectors.json for /sim
 db/contract.md               Schema source of truth — read before touching any table or RPC
 MERGE_CHECKLIST.md           How the frontend gets wired to the real backend, method by method
@@ -114,16 +123,29 @@ song and reused by every user who picks it.
 **Matching is per-pick, not per-profile.** Each pick (one user + one song +
 their tags + their valence/energy) gets its own 770-dim vector: the song's
 768-dim embedding plus that pick's valence/energy (×`EMOTION_WEIGHT`)
-appended. Nothing is averaged into a profile-level vector — averaging would
+appended. The song embedding is L2-normalized first and `EMOTION_WEIGHT` is 0.7, so the
+song's meaning leads and mood is a deliberate minority share (the formula lives only in
+`buildPickEmbedding`, `lib/matching/pickEmbedding.ts`). Nothing is averaged into a profile-level vector — averaging would
 bury a strong specific match (e.g. one shared grief song) under someone's
 unrelated other picks. `match_picks` finds the best pick pair per candidate
 profile.
 
-**AI does real judgment, not just narration.** Candidates aren't shown as-is.
-Gemini reviews the two actual picks and either confirms a specific, citable
-shared thread (returning the full Connection Card) or returns "insufficient
-evidence" and the candidate is dropped. `GET /api/match` only ever returns
-confirmed matches, each with its card attached.
+**AI does real judgment, not just narration.** Two parts:
+- **Listening portrait** (`profile_portraits`, `lib/gemini/generatePortrait.ts`): Gemini reads
+  a person's public picks (title, artist, the song's context summary, their tags, mood, own
+  words) into a headline, 3 highlights, 2–4 motivations (each with a cluster, confidence and
+  evidence citing their real song titles), plus `seeks`/`tensions` used only server-side.
+  Shown back to its owner on the reading/why/Me screens; owner-only RLS. Regenerated by
+  `POST /api/portrait` when the pick count changes (onboarding, galaxy "+").
+- **Connection assessment** (`lib/gemini/assessConnection.ts`): pgvector `match_picks` is only
+  the **pre-filter** (and its best pair a hint). Gemini then reads both whole profiles — both
+  portraits and every public pick — and either confirms a match with a 0–100 `score`, a
+  `rationale`, and 1–2 `threads` each anchored by a real song on each side, or the candidate
+  is dropped (also dropped: score < 40, or no thread whose songs really exist). `GET /api/match`
+  orders by `score` and the UI shows it as the match %. At most 5 new assessments per request,
+  sequential; cached cards are reused; rejected pairs are remembered in memory until either
+  person's pick count changes. Cards are seen by both people, so they must never quote or
+  paraphrase anyone's portrait.
 
 **Clusters** (`profiles.primary_cluster`) are a grouping label for the galaxy,
 not a matching signal: `lib/cluster-assign.ts` votes across a profile's picks
@@ -225,49 +247,53 @@ building user profiles. Practical rule for this codebase:
   `20260926020000_grant_service_role_backend_privileges.sql`,
   `20260927000000_profile_name_from_oauth.sql` (signup no longer fails on names
   over 80 chars), `20260927010000_galaxy_window.sql` (`primary_cluster`,
-  `wander_picks`, `galaxy_pool`, `galaxy_cluster_counts`).
+  `wander_picks`, `galaxy_pool`, `galaxy_cluster_counts`),
+  `20260927020000_service_role_update_pick_embedding.sql` (lets the recompute script
+  rewrite `song_picks.embedding`), `20260927030000_profile_portraits.sql` (portraits table,
+  owner-only select, service-role write).
 - Seeded by `scripts/seed-real-data.ts`: Maya, Theo, Jordan, Amara, Noor, Sam
   (password `song-galaxy-demo`), 27 picks resolved through real MusicBrainz +
   Gemini, including a deliberate wander pair (Sam and Noor both picked
-  "Landslide", opposite feelings). Every persona has a `primary_cluster`.
-  Daniel also has a real account with no picks (shows as `unassigned`).
+  "Landslide", opposite feelings). Every persona has a `primary_cluster` and a portrait
+  (the seed now writes portraits too). Daniel, several James test accounts and Jason PG
+  have real accounts; only "James Armendariz5" has picks (and a portrait).
+- All 27 seeded pick embeddings were recomputed with the balanced formula (`b5f84e3`).
 - A MusicBrainz-throttled re-run of the seed once created 3 duplicate picks and
   3 duplicate catalog rows; they were deleted in the SQL Editor on 2026-09-26
   and clusters recomputed. The seed script is now idempotent (loose title match
   per persona, checked before any MusicBrainz/Gemini call).
-- Verification left behind real demo data: cached match cards for Maya's
-  matches, a contrast card for Sam/Noor, and one test message from Maya to Theo
-  ("verification: what song makes a quiet evening feel less lonely?"). **Delete that
-  message before a demo** (SQL Editor; the service role has no DELETE grant).
-- **Dashboard step**: Authentication → URL Configuration → Site URL
-  `http://localhost:3000`, and add `http://localhost:3000/**` to Redirect URLs (the
-  wildcard is needed because email-confirmation links add `?via=email&next=…`). Add the
-  Vercel URL the same way at deploy time.
+- Demo data: cached match cards for Maya's matches and a contrast card for Sam/Noor. The
+  verification messages were deleted (the `messages` table was empty afterwards). **Maya's
+  older match cards predate the assessment** (no score/threads) and are never regenerated;
+  to rebuild them with scores, run in the SQL Editor:
+  `delete from public.connection_cards where card_json->>'kind' is distinct from 'contrast';`
+- **Dashboard step (done for localhost)**: Site URL `http://localhost:3000`, Redirect URLs
+  include `http://localhost:3000/**` (the wildcard is needed because email-confirmation links
+  add `?via=email&next=…`). Add the Vercel URL the same way at deploy time.
 
 ### Backend
 Every route above is implemented against the v2 schema with session auth.
 Verified end to end on 2026-09-26 against the live DB, signed in through the
-real `@supabase/ssr` cookie flow: `GET /api/match` (4 AI-confirmed matches for
-Maya, each with a Gemini-written card), `GET /api/cards/:id` (cache hit),
+real `@supabase/ssr` cookie flow: `GET /api/match`, `GET /api/cards/:id` (cache hit),
 `POST /api/wander` (Sam → Noor on "Landslide", `kind: "contrast"`),
-`GET /api/galaxy` (bounded window + hidden counts), `POST /api/messages` (row
-written), `GET /api/profile`; signed-out calls return 401. RPCs `wander_picks`,
-`galaxy_pool`, `galaxy_cluster_counts` return correct rows; signup with a
+`GET /api/galaxy` (bounded window + hidden counts), `POST /api/messages` + two-way
+chat (Maya ↔ Theo), `GET /api/profile`, `POST /api/picks` with real tags/mood (stored
+vector = unit-length song part + mood × 0.7); signed-out calls return 401. RPCs
+`wander_picks`, `galaxy_pool`, `galaxy_cluster_counts` return correct rows; signup with a
 120-char name is truncated to 80 instead of failing.
 
-**Matching-quality issue found during verification — fix this next (see "Next up"):** in
-every pick vector the 768-dim song embedding has a norm of ~0.59 (truncated
-Gemini embeddings are not unit length) while the two emotion dims
-(valence/energy × `EMOTION_WEIGHT` = 5) have a norm of ~3.16. Cosine
-similarity is therefore ~95% driven by the slider position and barely by the
-song's meaning: picks with the same slider position score ~0.99 regardless of
-song, and opposite positions score ~-0.95. Likely fix: L2-normalize the song
-embedding before appending, lower `EMOTION_WEIGHT` so the emotion part is a
-deliberate minority share (e.g. ~0.3–0.4), then recompute every
-`song_picks.embedding` (a one-off script, since real users' picks now exist too).
-`/sim` also reads `EMOTION_WEIGHT`, so its numbers shift too. This is more urgent now:
-real-data mode is live, and `GET /api/match` returns `similarity` to the UI, so the
-skewed scores are user-visible.
+**Matching balance — fixed** (`b5f84e3`). The raw 768-dim song embedding had norm ~0.59 while
+the mood dims (× the old `EMOTION_WEIGHT` = 5) had ~3.16, so cosine was ~95% slider position.
+Now the song part is normalized and the weight is 0.7; every pick was recomputed
+(`scripts/recompute-pick-embeddings.ts`). Maya's candidates moved from ~0.99 to 0.63–0.69.
+
+**AI portraits + assessment — verified** (`ai-portraits`, merged 2026-09-26): portraits for all
+7 profiles with picks; RLS checked with a real login (signed out: denied; Maya sees only her
+own row; user updates denied); `findMatches` for Maya made 2 new AI-scored matches on a cold
+call (6.2s; James Armendariz5 and Noor, both score 85 — Noor at only 0.32 cosine, a pair the
+old math ranked last) and served everything from cache on the second (0.17s). The Flash → Lite
+fallback fired live (Flash was returning 503). **Not yet clicked through in a browser**:
+onboarding's reading/why screens showing the real portrait, and the Me page loading it.
 
 ### Frontend
 - **Real-data mode is live** (Daniel, `0a615ce`): whenever Supabase keys are set,
@@ -282,11 +308,15 @@ skewed scores are user-visible.
   and the reading screen waits for it, with a retry that skips songs already saved (no
   duplicate picks). In real mode these are real `POST /api/picks` writes with the user's
   own tags/valence/energy.
-- **Known gap**: the galaxy's "+" add-a-song (`addSong` in `lib/api.ts`,
-  `components/galaxy/add-song-sheet.tsx`) still sends placeholder `tags: ["comfort"]`,
-  `valence: 0`, `energy: 0` — it predates the feel step. It should reuse
-  `TagPicker` + `MoodCircle`.
-- The "why" page's motivation review is still mock inference (backburner #7).
+- **Real portrait in real mode**: `analyzeMusic` waits for `saveSongs`, then `POST /api/portrait`
+  (mapped to `AnalysisResult`, song titles → the user's real pick ids) and warms `/api/match` in
+  the background. The Me page loads the stored portrait (`GET /api/portrait`) when this browser's
+  session has none. Mock mode still uses `lib/inference.ts`.
+- **Connections** show the AI `score` as the match %, and cards map `card_json.threads` to 1–2
+  shared motivations with real songs on each side (older cards fall back to `shared_why`).
+- The galaxy "+" add-a-song uses `TagPicker` + `MoodCircle` (`d9614b5`) and refreshes the
+  portrait in the background after saving.
+- Motivation feedback (confirm/reject/private) on the why/Me screens is still session-only (#4).
 - Album art is now populated (Cover Art Archive → iTunes → Deezer, or a Spotify `i.scdn.co`
   URL passed in); `scripts/backfill-cover-art.ts` fills older catalog rows.
 
@@ -297,25 +327,30 @@ skewed scores are user-visible.
 - **Phase B — done and verified** (migrations applied, seed idempotent, RPCs and
   routes checked with real sessions).
 - **Phase C — done** (`2fb87c0`): the onboarding feel step (above).
-- **Phase D — done by Daniel** as real-data mode (`0a615ce`), including the planned
-  `GET /api/messages` read route and `GET /api/profile?id=me`. Not yet verified end to
-  end by the backend side.
+- **Phase D — done by Daniel** as real-data mode (`0a615ce`), verified end to end by the
+  backend side on 2026-09-26.
+- **Matching balance, galaxy "+", demo prep — done** (`b5f84e3`, `d9614b5`).
+- **AI portraits + whole-profile assessment — done and merged** (`docs/plans/ai-portraits.md`).
 
 ### Next up (in order)
-1. **Fix the matching balance** (issue above) and recompute every `song_picks.embedding`,
-   before more real picks accumulate.
-2. **Give the galaxy "+" add-a-song the tags + mood circle** instead of placeholders.
-3. **Verify real-data mode end to end**: sign up → onboarding feel step → rows in
-   `song_picks` with the chosen tags/valence/energy → galaxy; Maya ↔ Theo two-way chat in two
-   browsers; connections show real cards.
-4. **Demo prep**: delete the verification test message; confirm the Redirect URLs wildcard.
-5. Update `MERGE_CHECKLIST.md` to reflect what real-data mode resolved.
+1. **Clear Maya's pre-assessment match cards** (SQL above) so the demo shows scored cards with threads.
+2. **Click through the portrait in a browser**: new signup → feel → reading highlights → why
+   motivations from the real portrait → reveal → Connections scores; then the Me page on a
+   fresh browser (stored portrait).
+3. **Density**: more seed personas (backburner #5) so the assessment has more to choose from;
+   the seed writes portraits automatically.
+4. **Deployment** (backburner #2), including locking down the public seed password.
 
 ## Known gotchas (read before touching the relevant code)
 - **Gemini model names go stale fast.** `gemini-2.5-flash` was retired for new
   callers mid-hackathon (live 404). Use a `-latest` alias, never a pinned
   version, in `lib/gemini/client.ts`. Free tier is 15 requests/minute: space
   bursts out (the seed script paces at ~4.5s).
+- **`gemini-flash-latest` returns 503 (high demand) often.** The judgment calls go through
+  `generateJson` (`lib/gemini/json.ts`), which falls back to Flash-Lite on 429/500/503/404.
+  Use it for any new structured Gemini call instead of hand-parsing JSON.
+- **Portraits are private.** Another person's portrait is only ever an input to
+  `assessConnection`; never return it from a route or let card text quote it.
 - **`gemini-embedding-001` defaults to 3072 dimensions, not 768.** We request
   768 via `outputDimensionality: EMBEDDING_DIMENSIONS`. Changing that constant
   means changing the `vector(768)` / `vector(770)` columns too.
@@ -370,7 +405,9 @@ Roughly in priority order. None of these are in the active plan.
 6. **Database hygiene.** Add a `(profile_id, song_id)` unique constraint on
    `song_picks`; remove orphaned `bao-test-a/b@example.com` auth accounts and empty
    test profiles; consider a service-role DELETE grant or admin script for cleanup.
-7. **`why` page motivations.** The "Here's what I heard" review is still mock
+7. **`why` page motivation feedback.** The motivations are now real (the portrait), but
+   confirm/reject/private feedback is session-only and doesn't reach the portrait or
+   matching. Was: the "Here's what I heard" review is still mock
    inference: not persisted, not used for matching (`lib/types.ts` #4).
 8. **Remaining contract mismatches** (`lib/types.ts` header, `MERGE_CHECKLIST.md`):
    song id space vs catalog slugs (#1), richer card structure than `card_json`
@@ -415,6 +452,12 @@ With the Supabase keys set, the app requires sign-in and uses the **real** backe
 (onboarding writes real rows). To try UI on demo data with no sign-in:
 ```bash
 NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= npm run dev
+```
+
+Generate listening portraits for existing profiles (after migration `20260927030000`; paced,
+skips up-to-date ones; `--force` regenerates all):
+```bash
+node --env-file=.env.local node_modules/.bin/tsx scripts/generate-portraits.ts
 ```
 
 Seed demo personas through the real pipeline (safe to re-run):
