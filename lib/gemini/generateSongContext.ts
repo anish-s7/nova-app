@@ -1,4 +1,4 @@
-import { getGeminiClient, GEMINI_TEXT_MODEL, GEMINI_EMBEDDING_MODEL } from "./client";
+import { getGeminiClient, GEMINI_TEXT_MODEL, GEMINI_EMBEDDING_MODEL, EMBEDDING_DIMENSIONS } from "./client";
 
 const PROMPT = `Describe the mood and typical emotional/listening context of this song
 in one short sentence (think: what situation or feeling does it fit?).
@@ -33,6 +33,7 @@ export async function generateSongContext(title: string, artist: string): Promis
     ai.models.embedContent({
       model: GEMINI_EMBEDDING_MODEL,
       contents: songLabel,
+      config: { outputDimensionality: EMBEDDING_DIMENSIONS },
     }),
   ]);
 
