@@ -1,4 +1,9 @@
-import { getGeminiClient, GEMINI_TEXT_MODEL, GEMINI_EMBEDDING_MODEL, EMBEDDING_DIMENSIONS } from "./client";
+import {
+  getGeminiClient,
+  GEMINI_TEXT_MODEL,
+  GEMINI_EMBEDDING_MODEL,
+  EMBEDDING_DIMENSIONS,
+} from "./client";
 
 const PROMPT = `Describe the mood and typical emotional/listening context of this song
 in one short sentence (think: what situation or feeling does it fit?).
@@ -21,7 +26,10 @@ export interface SongContext {
  * prohibits feeding Spotify Content into any ML/AI model or "analyzing"
  * it for any purpose. See CLAUDE.md.
  */
-export async function generateSongContext(title: string, artist: string): Promise<SongContext> {
+export async function generateSongContext(
+  title: string,
+  artist: string,
+): Promise<SongContext> {
   const ai = getGeminiClient();
   const songLabel = `"${title}" by ${artist}`;
 
