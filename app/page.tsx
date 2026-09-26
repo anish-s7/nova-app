@@ -1,14 +1,49 @@
-export default function Home() {
+"use client";
+
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
+import { animate, splitText, stagger } from "animejs";
+import { HeroConstellation } from "@/components/hero-constellation";
+import { Logo } from "@/components/logo";
+import { buttonVariants } from "@/components/ui/button";
+import { useAnime } from "@/hooks/use-anime";
+import { useSession } from "@/lib/session";
+import { cn } from "@/lib/utils";
+
+export default function WelcomePage() {
+  const { demo } = useSession();
+  const intro = useAnime<HTMLDivElement>((el) => {
+    const { words } = splitText(el.querySelector("h1")!, { words: { wrap: "clip" } });
+    animate(el, { opacity: [0, 1], duration: 1 });
+    animate(words, { translateY: ["110%", "0%"], duration: 900, delay: stagger(45, { start: 250 }), ease: "outExpo" });
+    animate("[data-intro-rest]", { opacity: [0, 1], translateY: [12, 0], duration: 800, delay: stagger(140, { start: 900 }), ease: "outQuart" });
+  });
+
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-col items-center gap-4 text-center">
-        <h1 className="text-3xl font-semibold tracking-tight text-black dark:text-zinc-50">
-          🌌 Song Galaxy
+    <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <div className="flex items-center justify-between px-6 pt-5">
+        <Logo />
+        {demo ? <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-muted-foreground">Demo</span> : null}
+      </div>
+
+      <HeroConstellation />
+
+      <div ref={intro} className="flex flex-1 flex-col px-6 pb-8 pt-8 motion-safe:opacity-0">
+        <h1 className="text-balance text-[32px] font-semibold leading-[1.12] tracking-tight">
+          Two people. Zero songs in common.{" "}
+          <span className="font-serif font-normal italic text-primary">The same reason.</span>
         </h1>
-        <p className="max-w-md text-zinc-600 dark:text-zinc-400">
-          Connecting people through why they listen, not what they listen to.
+        <p data-intro-rest className="mt-4 text-pretty leading-relaxed text-muted-foreground">
+          Song Galaxy reads your music and finds people who use it the way you do, not people with the same playlist. You don&apos;t have to explain a thing.
         </p>
-      </main>
-    </div>
+
+        <div data-intro-rest className="mt-auto pt-10">
+          <Link href="/onboarding/music" className={cn(buttonVariants(), "btn-glow h-12 w-full rounded-full text-base")}>
+            Continue
+            <ArrowRight className="size-4" aria-hidden />
+          </Link>
+        </div>
+      </div>
+    </main>
   );
 }

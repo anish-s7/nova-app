@@ -1,0 +1,136 @@
+"use client";
+
+import { useId, useRef, useState, type CSSProperties } from "react";
+import { Check, RotateCcw, X } from "lucide-react";
+import { EvidenceLine } from "@/components/evidence-line";
+import { ThemeTag } from "@/components/theme-tag";
+import { Switch } from "@/components/ui/switch";
+import { updateMotivation } from "@/lib/api";
+import { burst } from "@/lib/burst";
+import { getCluster } from "@/lib/clusters";
+import type { InferredMotivation, Song } from "@/lib/types";
+import { cn } from "@/lib/utils";
+
+export function MotivationCard({ motivation: m, songs, className }: { motivation: InferredMotivation; songs: Song[]; className?: string }) {
+  const id = useId();
+  const [note, setNote] = useState(m.note ?? "");
+  const ref = useRef<HTMLElement>(null);
+  const tone = { "--tone": getCluster(m.cluster).color } as CSSProperties;
+
+  if (m.feedback === "rejected") {
+    return (
+      <article style={tone} className={cn("flex min-h-14 items-center gap-3 rounded-2xl border border-dashed border-white/10 px-4 py-2", className)}>
+        <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
+          <span className="line-through decoration-white/30">{m.label}</span> · not you, so we&apos;ll leave it out
+        </p>
+        <button
+          type="button"
+          onClick={() => updateMotivation(m.id, { feedback: "unreviewed" })}
+          className="-mr-2 inline-flex min-h-11 items-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground hover:bg-white/5 hover:text-foreground"
+        >
+          <RotateCcw className="size-3.5" aria-hidden />
+          Undo
+        </button>
+      </article>
+    );
+  }
+
+  const confirmed = m.feedback === "confirmed";
+
+  return (
+    <article
+      ref={ref}
+      style={tone}
+      aria-labelledby={`${id}-label`}
+      className={cn(
+        "surface relative rounded-3xl border bg-card/70 p-5 transition-colors",
+        confirmed ? "border-[color-mix(in_oklch,var(--tone)_40%,transparent)]" : "border-white/10",
+        className,
+      )}
+    >
+      <div className="flex items-center justify-between gap-3">
+        <ThemeTag cluster={m.cluster} size="sm" short />
+        <span className="text-xs tabular-nums text-muted-foreground">{Math.round(m.confidence * 100)}% sure</span>
+      </div>
+      <h3 id={`${id}-label`} className="mt-3 text-xl font-semibold leading-tight">
+        {m.label}
+      </h3>
+      <p className="mt-1.5 text-pretty font-serif text-[17px] italic leading-snug text-foreground/85">{m.description}</p>
+
+      <ul className="mt-4 flex flex-col gap-3 border-t border-white/5 pt-4" aria-label="Why we think so">
+        {m.evidence.slice(0, 3).map((e, i) => (
+          <EvidenceLine key={i} evidence={e} songs={songs} />
+        ))}
+      </ul>
+
+      {confirmed ? (
+        <div className="mt-5 flex flex-col gap-4 border-t border-white/5 pt-4">
+          <div className="flex items-center justify-between">
+            <p className="inline-flex items-center gap-1.5 text-sm font-medium text-[var(--tone)]">
+              <Check className="size-4" aria-hidden />
+              That&apos;s you
+            </p>
+            <button type="button" onClick={() => updateMotivation(m.id, { feedback: "unreviewed" })} className="min-h-11 px-2 text-sm text-muted-foreground hover:text-foreground">
+              Change
+            </button>
+          </div>
+
+          <div>
+            <label htmlFor={`${id}-note`} className="text-sm font-medium">
+              Add a note <span className="font-normal text-muted-foreground">(optional)</span>
+            </label>
+            <textarea
+              id={`${id}-note`}
+              rows={2}
+              maxLength={140}
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              onBlur={() => note !== (m.note ?? "") && updateMotivation(m.id, { note: note.trim() || undefined })}
+              placeholder="Say it in your own words, if you want to."
+              className="mt-1.5 w-full resize-none rounded-xl border border-white/10 bg-background/60 px-3 py-2.5 font-serif text-base italic outline-none placeholder:font-sans placeholder:not-italic placeholder:text-muted-foreground focus:border-[var(--tone)]"
+            />
+          </div>
+
+          <div className="flex items-start gap-3">
+            <div className="min-w-0 flex-1">
+              <label htmlFor={`${id}-public`} className="text-sm font-medium">
+                Can appear on Connection Cards
+              </label>
+              <p id={`${id}-public-help`} className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
+                People you match with see this reason and its songs. Your note stays private unless this is on.
+              </p>
+            </div>
+            <Switch id={`${id}-public`} aria-describedby={`${id}-public-help`} checked={m.isPublic} onCheckedChange={(v) => updateMotivation(m.id, { isPublic: v })} className="mt-0.5" />
+          </div>
+        </div>
+      ) : (
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          <button
+            type="button"
+            onClick={(e) => {
+              const host = ref.current;
+              if (host) {
+                const a = host.getBoundingClientRect();
+                const b = e.currentTarget.getBoundingClientRect();
+                burst(host, b.left - a.left + b.width / 2, b.top - a.top + b.height / 2, getCluster(m.cluster).color);
+              }
+              updateMotivation(m.id, { feedback: "confirmed" });
+            }}
+            className="inline-flex min-h-12 items-center justify-center gap-1.5 rounded-full bg-[color-mix(in_oklch,var(--tone)_20%,transparent)] font-medium text-[var(--tone)] transition-colors hover:bg-[color-mix(in_oklch,var(--tone)_28%,transparent)]"
+          >
+            <Check className="size-4" aria-hidden />
+            That&apos;s me
+          </button>
+          <button
+            type="button"
+            onClick={() => updateMotivation(m.id, { feedback: "rejected" })}
+            className="inline-flex min-h-12 items-center justify-center gap-1.5 rounded-full border border-white/10 font-medium text-muted-foreground transition-colors hover:border-white/20 hover:text-foreground"
+          >
+            <X className="size-4" aria-hidden />
+            Not quite
+          </button>
+        </div>
+      )}
+    </article>
+  );
+}
