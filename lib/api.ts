@@ -173,6 +173,24 @@ export async function analyzeMusic(input: { songs: Song[]; signals: ListeningSig
   return infer({ userId: ME_ID, subject: { isMe: true }, songs: input.songs, signals: input.signals, bias: s.demo ? DEMO_BIAS : undefined });
 }
 
+/**
+ * Saves the user's songs. The session copy drives onboarding (reading/why screens); the
+ * db insert is what reaches the backend. reason_text isn't collected yet (lib/types.ts #3).
+ */
+export async function saveSongs(input: { source: "spotify" | "manual"; songs: Song[]; signals: ListeningSignal[] }) {
+  setSession({ source: input.source, songs: input.songs, signals: input.signals, analysis: undefined, motivations: [] }, true);
+  await db.insertSongs(
+    input.songs.map((s) => ({
+      profile_id: ME_ID,
+      title: s.title,
+      artist: s.artist,
+      spotify_track_id: s.source === "spotify" ? (s.spotifyId ?? null) : null,
+      reason_text: "",
+      is_public: true,
+    })),
+  );
+}
+
 /** NOT IN CONTRACT: motivations rows have no feedback/isPublic/note (lib/types.ts #4). */
 export async function updateMotivation(id: string, patch: Partial<Pick<InferredMotivation, "feedback" | "isPublic" | "note">>) {
   await delay(120);

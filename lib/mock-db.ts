@@ -45,6 +45,11 @@ export const mockDb: Db = {
     return songs.map((s) => songRow(profileId, s));
   },
 
+  async insertSongs(rows) {
+    // The mock "me" reads songs from the session (written by api.saveSongs), so just echo rows.
+    return rows.map((r, i) => ({ ...r, id: `song-${Date.now()}-${i}`, created_at: new Date().toISOString() }));
+  },
+
   async matchProfiles(targetProfileId, matchCount = 10) {
     const target = partyFor(targetProfileId);
     if (!target) return [];

@@ -8,8 +8,7 @@ import { AlbumArt } from "@/components/album-art";
 import { ScreenHeader } from "@/components/screen-header";
 import { SpotifyIcon } from "@/components/spotify-icon";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { importSpotify } from "@/lib/api";
-import { setSession } from "@/lib/session";
+import { importSpotify, saveSongs } from "@/lib/api";
 import type { SpotifyImport } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -31,8 +30,8 @@ export default function BringYourMusicPage() {
     }
   };
 
-  const continueWithImport = (data: SpotifyImport) => {
-    setSession({ source: "spotify", songs: data.songs, signals: data.signals, analysis: undefined, motivations: [] }, true);
+  const continueWithImport = async (data: SpotifyImport) => {
+    await saveSongs({ source: "spotify", songs: data.songs, signals: data.signals });
     router.push("/onboarding/reading");
   };
 

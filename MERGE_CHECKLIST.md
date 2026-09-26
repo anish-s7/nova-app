@@ -17,7 +17,7 @@ How the seam is built:
 
 ---
 
-## Step 1: implement `Db` against main's routes (6 methods), then flip the swap line
+## Step 1: implement `Db` against main's routes (7 methods), then flip the swap line
 
 Add `const httpDb: Db = { ... }` in `lib/api.ts` and change `const db: Db = mockDb;` to `httpDb`.
 
@@ -25,12 +25,13 @@ Add `const httpDb: Db = { ... }` in `lib/api.ts` and change `const db: Db = mock
 |---|---|---|
 | `getProfile(id)` | `GET /api/profile?id=` → `{ profile }` | Response includes `songs(*)`, so drop that key. |
 | `listSongs(profileId)` | same route, `profile.songs` | The route uses the service-role key, so it returns private songs too. Filter `is_public` for other users. |
+| `insertSongs(rows)` | `POST /api/songs` once per row, body `{ profileId, title, artist, reasonText, spotifyTrackId, isPublic }` → `{ song }` | The route runs Gemini extraction + embedding inline, so 24 Spotify songs means 24 slow calls. Consider batching or `Promise.all`. Rejects empty `reasonText` (see below). |
 | `matchProfiles(target, n)` | `GET /api/match?profileId=&limit=` → `{ matches }` | Route returns **camelCase** `{profileId, displayName, similarity}`; map back to `MatchProfileRow`. |
 | `getConnectionCard(me, other)` | `GET /api/cards/:other?profileId=me` → `{ card \| null }`; if null, `POST` same URL with `{ profileId }` | Route returns only `card_json`. Build `user_a/user_b` with `pair()`. `id`/`created_at` aren't read by `cardFromRow`. **See #8 before trusting `evidence.user_a`.** |
 | `listMessages(me, other?)` | **No read route.** main's comment says reads go client-side via Supabase | RLS only grants `authenticated`, so this is blocked on auth. Either add `GET /api/messages` or a browser Supabase client after auth exists. |
 | `insertMessage(row)` | `POST /api/messages` `{ userA, userB, senderId, text }` → `{ message }` | Returns a `MessageRow` as-is. |
 
-After this step, profiles, songs, match list, card text, and text messages are real.
+After this step, song saves, profiles, songs, match list, card text, and text messages are real.
 
 ## Step 2: function bodies in `lib/api.ts` that change
 
@@ -53,10 +54,11 @@ Signatures stay the same in every case. "Enrichment" means the `NOT IN CONTRACT`
 
 ## Things that can't be done inside `lib/api.ts` (need a decision)
 
-- **Song picks never reach the seam.** `app/onboarding/pick/page.tsx` and `app/onboarding/music/page.tsx`
-  write songs straight into the mock session (`setSession`). A real `POST /api/songs` needs an
-  `api.saveSongs()` call from those pages, and it also needs a non-empty `reason_text` per song, which
-  onboarding doesn't collect (#3).
+- **Per-song "why" text.** Both onboarding pages save through `api.saveSongs()`, but it sends
+  `reason_text: ""` because onboarding never asks for one, and `POST /api/songs` rejects empty reasons (#3).
+  Either onboarding collects a reason per song (a UI change) or the backend accepts empty/synthesized ones.
+- **Save latency.** `saveSongs` is awaited before navigating to the reading screen, and the continue
+  buttons have no pending state. With real Gemini calls, that wait will be noticeable.
 - **`ME_ID`** is the string `"me"`. Callers import it from `lib/api.ts`, so only the re-export has to
   change, but its value must come from auth/session (#12).
 - **`hooks/use-galaxy-realtime.ts`** calls `getArrival()` synchronously on a timer. A real subscription

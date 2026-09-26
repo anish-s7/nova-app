@@ -8,9 +8,9 @@ import { ContextChip } from "@/components/context-chip";
 import { ScreenHeader } from "@/components/screen-header";
 import { SongTile } from "@/components/song-tile";
 import { Button } from "@/components/ui/button";
-import { searchSongs } from "@/lib/api";
+import { saveSongs, searchSongs } from "@/lib/api";
 import { CONTEXT_TAGS } from "@/lib/clusters";
-import { getSession, setSession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import type { ContextTag, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -48,17 +48,12 @@ export default function PickSongsPage() {
       return { ...p, tags: { ...p.tags, [songId]: cur.includes(tag) ? cur.filter((t) => t !== tag) : [...cur, tag] } };
     });
 
-  const finish = () => {
-    setSession(
-      {
-        source: "manual",
-        songs: picks.songs,
-        signals: picks.songs.map((s) => ({ songId: s.id, contextTags: picks.tags[s.id] ?? [] })),
-        analysis: undefined,
-        motivations: [],
-      },
-      true,
-    );
+  const finish = async () => {
+    await saveSongs({
+      source: "manual",
+      songs: picks.songs,
+      signals: picks.songs.map((s) => ({ songId: s.id, contextTags: picks.tags[s.id] ?? [] })),
+    });
     router.push("/onboarding/reading");
   };
 

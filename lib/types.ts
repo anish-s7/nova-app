@@ -204,6 +204,8 @@ export type SongRow = {
   created_at: string;
 };
 
+export type SongInsert = Pick<SongRow, "profile_id" | "title" | "artist" | "spotify_track_id" | "reason_text" | "is_public">;
+
 export type MotivationRow = {
   id: string;
   song_id: string;
@@ -255,6 +257,7 @@ export type MatchProfileRow = {
 export type Db = {
   getProfile(id: string): Promise<ProfileRow | null>;
   listSongs(profileId: string): Promise<SongRow[]>;
+  insertSongs(rows: SongInsert[]): Promise<SongRow[]>;
   matchProfiles(targetProfileId: string, matchCount?: number): Promise<MatchProfileRow[]>;
   /** Get-or-generate the cached card for the unordered pair. */
   getConnectionCard(profileId: string, otherProfileId: string): Promise<ConnectionCardRow | null>;
