@@ -16,5 +16,5 @@ export function getGeminiClient() {
 
 // Flash, not Pro — this is extraction/matching, not a task that needs
 // frontier reasoning, and it keeps hackathon API costs down.
-export const GEMINI_TEXT_MODEL = "gemini-2.5-flash";
+export const GEMINI_TEXT_MODEL = "gemini-3.8-flash";
 export const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
