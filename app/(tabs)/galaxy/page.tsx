@@ -75,7 +75,6 @@ export default function GalaxyPage() {
             selectedId={selectedId}
             onSelect={select}
             focusCluster={focusCluster}
-            onFocusCluster={focus}
           />
         </div>
       ) : (
