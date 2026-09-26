@@ -9,7 +9,7 @@ grant select, insert
   to service_role;
 
 grant select, insert
-  on table public.motivations
+  on table public.song_picks
   to service_role;
 
 grant select, insert, update
@@ -21,7 +21,7 @@ grant select, insert
   to service_role;
 
 grant execute
-  on function public.match_profiles(uuid, integer)
+  on function public.match_picks(uuid, integer)
   to service_role;
 
 commit;

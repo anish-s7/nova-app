@@ -4,21 +4,17 @@ Full product pitch is in `README.md`. This file is for anyone (or any
 Claude Code session) writing code in this repo — stack, conventions, and
 the rules that must not be broken.
 
+**This file is only edited when explicitly asked for.** Don't rewrite it
+as a side effect of an unrelated architecture or code change — update
+`db/contract.md` and the code instead, and leave this file alone unless
+someone specifically asks for a CLAUDE.md update.
+
 ## Team split
-- **Backend** (routes, Supabase glue, Gemini pipeline, matching logic)
+- **Backend** (routes, Supabase glue, Gemini/MusicBrainz pipeline, matching logic)
 - **Database** (Supabase schema, migrations, RLS — owns `db/contract.md`
   jointly with backend; backend defines the contract, DB implements it)
 - **Floating** (backend/frontend as needed)
 - **Frontend** (Galaxy visualization, forms, Connection Card UI)
-
-## This is NOT the Next.js you know
-This version of Next.js has breaking changes — APIs, conventions, and file
-structure may all differ from your training data. Read the relevant guide in
-`node_modules/next/dist/docs/` before writing any code. Heed deprecation
-notices.
-
-(`next dev` may also generate an `AGENTS.md` containing this same rule —
-verify at `node_modules/next/dist/server/lib/generate-agent-files.js`.)
 
 ## Tech stack
 | Layer | Technology |
@@ -28,24 +24,21 @@ verify at `node_modules/next/dist/server/lib/generate-agent-files.js`.)
 | Galaxy visualization | react-force-graph |
 | Backend | Next.js Route Handlers (`app/api/`) |
 | Database | Supabase (Postgres) + pgvector |
-| Auth | Supabase Auth (Spotify OAuth optional — top-tracks import only) |
+| Auth | Supabase Auth (real sessions — see "Auth" below), incl. optional Spotify OAuth |
 | Messaging | Supabase Realtime |
-| LLM + embeddings | Google Gemini API (`gemini-2.5-flash` for text, `gemini-embedding-001` for vectors) |
-| Song identity | MusicBrainz API — no auth, resolves free-text title+artist to canonical form |
-| Song features | Hugging Face mirror of `maharshipandya/spotify-tracks-dataset` — static, seeded once |
-| Lyric recovery | Kaggle "40k songs with audio features and lyrics" — static, low-confidence fallback only |
-| Music data (optional) | Spotify Web API — OAuth top-tracks import only; never used for search |
+| LLM | Google Gemini API (`gemini-2.5-flash` for text, `gemini-embedding-001` for vectors) |
+| Song identity | MusicBrainz API (primary), Gemini (fallback only) — see below |
+| Music data (optional) | Spotify Web API — OAuth top-tracks import only, display purposes only |
 | Hosting | Vercel |
 
 ## Directory map
 ```
 app/api/           Route handlers — the only thing frontend calls
-lib/supabase/       Server-side Supabase client + typed row shapes
-lib/gemini/         All Gemini calls (song context, embeddings, card generation, catalog fallback tagging)
-lib/matching/       pgvector query + per-pick candidate retrieval + LLM evidence check
-lib/musicbrainz/     Song search/lookup — resolves free-text title+artist into canonical { title, artist, mbid }
-lib/catalog/         Static datasets — feature seed script, pg_trgm match, lyric full-text recovery
-lib/spotify/        OAuth + top-tracks import only (optional; no search — see lib/musicbrainz/)
+lib/supabase/       Server-side Supabase clients (service-role + session-based) + typed row shapes
+lib/musicbrainz/     Song identity resolution (title/artist -> canonical mbid)
+lib/gemini/         Song mood fallback, embeddings, evidence-check + card generation
+lib/matching/       pgvector query over per-pick embeddings
+lib/spotify/        Optional OAuth + track fetch, display only — never used for identity/search
 lib/tags.ts         Fixed mood/context tag taxonomy
 lib/emotion.ts       Valence/energy constants + clamping
 db/contract.md      Source of truth for the DB schema — read this before touching any table
@@ -53,56 +46,42 @@ db/contract.md      Source of truth for the DB schema — read this before touch
 
 ## How matching works (current design)
 Users don't write essays. Per song they pick, they: tap 1-3 tags from a
-fixed list, and drag one point on a circular valence/energy slider
-(how positive and how energetic that song makes them feel). Each
-*individual pick* — one user's tags and slider position for one song —
-gets its own Gemini-generated context embedding, since the same song can
-carry a different tag/slider combination per person; a song is never
-reduced to one shared embedding across everyone who picked it. Matching
-is a pgvector nearest-neighbor search over individual picks, not an
-average of a whole profile, so one strong overlap between two specific
-picks is enough to surface a candidate rather than getting diluted by
-someone's other, unrelated songs. Candidates above a similarity floor go
-through an LLM evidence check before being shown: it must identify the
-specific shared thread, cite both sides' actual data, note a real
-difference, and return "insufficient evidence" when the overlap doesn't
-hold up — a candidate that fails this check is dropped, not shown as a
-weak match. See `db/contract.md` for exact table shapes — a `song_picks`
-table (one row per user per song) replaces any design that stores a
-single averaged profile-level vector.
+fixed list, and drag one point on a circular valence/energy slider (how
+positive and how energetic that song makes them feel).
 
-## Song data pipeline (identity + features)
-Resolving a song (manual entry or Spotify import) into something
-matchable runs through a fallback chain, in order:
+**Song identity**, before anything else: a typed title/artist is resolved
+via MusicBrainz into a canonical `{title, artist, mbid}`. If MusicBrainz
+can't confidently resolve it, Gemini is used as a fallback to guess
+identity/mood directly from the typed text. Either way, once a song is
+identified, it gets one shared mood/context embedding (from Gemini,
+`{title, artist}` only), generated once per unique song and reused by
+every user who picks it.
 
-- **MusicBrainz** resolves whatever text came in into a canonical
-  `{ title, artist, mbid }` with a confidence score. No auth, but respect
-  the 1 req/sec rate limit — batch-resolve with a delay, don't call it
-  per keystroke.
-- **Static dataset match** fuzzy-matches that canonical pair against
-  `song_catalog` (seeded from the Hugging Face dataset above) using
-  Postgres `pg_trgm` trigram similarity on `artist || ' ' || title`, not
-  exact string equality, to pull real audio features Spotify no longer
-  serves live.
-- **Lyric-based recovery** kicks in only if MusicBrainz's score is under
-  80 — the input may be a remembered lyric rather than a title. Full-text
-  search against `lyrics_corpus.lyrics` (seeded from the Kaggle lyrics
-  dataset above); a strong hit gets re-resolved through MusicBrainz as
-  normal, rather than skipping identity resolution.
-- **LLM fallback** only fires if all three above fail — a song too new,
-  too obscure, or too garbled to resolve any other way. Gemini gets the
-  plain `{ title, artist }` strings and guesses `{ genre, mood, energy }`,
-  stored with `source: 'llm_guess'` so nothing downstream needs to know
-  which source a row came from.
+**Matching is per-pick, not per-profile.** Each individual pick (one user
++ one song + their tags + their valence/energy) gets its own vector: the
+song's shared embedding plus that pick's tags/valence/energy appended.
+Nothing is averaged into a single profile-level vector — averaging would
+bury a strong specific match (e.g. one shared grief song) under someone's
+unrelated other picks. A candidate match is found via a pgvector
+nearest-neighbor search over picks, grouped by candidate profile.
 
-Song identification itself is never done via the LLM — it's a retrieval
-problem, solved by MusicBrainz and the lyric corpus. An LLM guessing exact
-song identity from a fragment is prone to confidently wrong answers, which
-would poison identity for everything downstream; the LLM only ever
-guesses approximate tags once identity is already resolved, or runs the
-evidence check described above. `song_catalog` is the taste/audio-feature
-signal, separate from `song_picks` (the meaning signal) — see
-`db/contract.md` for how the two combine.
+**AI does real judgment, not just narration.** Candidates that pgvector
+retrieves aren't shown as-is. Gemini reviews the two actual picks and
+either (a) confirms a specific, citable shared thread and returns the full
+Connection Card, or (b) returns "insufficient evidence," and that
+candidate is dropped rather than shown. This makes the AI an actual filter
+in the pipeline, not just a narrator of whatever the math found.
+
+See `db/contract.md` for exact table shapes (`songs`, `song_picks`, the
+`match_picks` RPC).
+
+## Auth
+Route handlers derive the acting user from the real Supabase session
+(`auth.uid()`), not a trusted `profileId` param. Use the session-based
+Supabase client for anything acting "as the current user" (creating a
+profile, adding a pick, sending a message); the service-role client is
+only for backend-only operations that legitimately span users (catalog
+lookups, the match RPC).
 
 ## Hard rule: Spotify data can never touch the LLM
 Spotify's Developer Policy prohibits (a) feeding Spotify Content into any
@@ -111,17 +90,13 @@ building user profiles. Practical rule for this codebase:
 
 - Spotify's Web API is used **only** to fetch track title/artist/album art
   for display and to power the optional top-tracks import.
-- Any Gemini call that touches a song (see `lib/gemini/generateSongContext.ts`)
-  may only receive plain `{ title, artist }` strings — never a raw Spotify
-  API response object, and never fields like audio features, genres, or
-  popularity.
+- Any Gemini call that touches a song may only receive plain
+  `{ title, artist }` strings — never a raw Spotify API response object,
+  and never fields like audio features, genres, or popularity.
+- MusicBrainz is not Spotify data and carries no such restriction.
 - If you're adding a new Gemini call near anything Spotify-related, check
   this rule first. When in doubt, don't pass the Spotify payload in — pass
   the plain strings you already extracted from it.
-- MusicBrainz and the static Hugging Face/lyric datasets are not Spotify
-  data and carry no such restriction — the LLM fallback above may use
-  them freely. The only thing that must never reach Gemini is a raw
-  Spotify API response, or any field derived from one.
 
 ## Working conventions
 - `db/contract.md` is the schema source of truth. Any PR that changes what
@@ -131,17 +106,39 @@ building user profiles. Practical rule for this codebase:
   worker) — this is a hackathon-scale decision, not a scalability one.
 - Connection Cards are cached in `connection_cards` — never regenerate one
   that already exists for a user pair.
-- Manual song entry resolves via MusicBrainz by default and must always
-  work without Spotify (dev-mode Spotify apps only work for allowlisted
-  testers, and top-tracks import is optional besides).
-- Matching never averages a single strong connection away into a
-  profile-level blob — see "How matching works" above. If you find
-  yourself computing one embedding per user instead of per pick, stop and
-  re-read that section.
+- Manual song entry must always work without Spotify (dev-mode Spotify apps
+  only work for allowlisted testers, and Spotify import is optional besides).
+- MusicBrainz's search API is rate-limited to 1 request/second — never call
+  it per keystroke; resolve on submit, not on every input change.
+
+## Implementation status / open TODOs
+- **MusicBrainz `User-Agent` is a placeholder.** `lib/musicbrainz/client.ts`
+  ships with a fake contact email in its `User-Agent` header. MusicBrainz
+  requires a real, descriptive one and may rate-limit or block requests
+  with a generic/fake one — **replace it before the demo.**
+- **The real Supabase migration hasn't been applied yet.** `db/contract.md`
+  is the target schema; no live database matches it yet, so none of this
+  has been tested end-to-end against a real Supabase project.
+- Implemented: auth (`lib/supabase/serverAuth.ts`, session-derived
+  `profileId` in `profile`/`messages`/`cards`/`picks` routes), the
+  MusicBrainz-primary identity resolution in `app/api/picks/route.ts`, and
+  the evidence-check step (`lib/gemini/evaluateAndGenerateCard.ts`) — both
+  `lib/matching/findMatches.ts` (pgvector retrieval path) and
+  `app/api/cards/[matchId]/route.ts` (direct-pair path) now call it and
+  only ever return/cache a `"match"` result, dropping
+  `"insufficient_evidence"` candidates.
+
+## Future work (not implemented)
+- **Continuous learning / outcome-based tuning.** Right now nothing in this
+  system learns from outcomes — Gemini calls are stateless. A future
+  version could log match outcomes (was a card shown, was a first message
+  actually sent) and use that data to tune `EMOTION_WEIGHT` or matching
+  thresholds over time. This is explicitly out of scope for now — don't
+  build logging or tuning infrastructure for this unless asked.
 
 ## Getting started
 ```bash
 npm install
-cp .env.local.example .env.local   # fill in Supabase + Gemini keys (Spotify optional — only needed for top-tracks import)
+cp .env.local.example .env.local   # fill in Supabase + Gemini keys (Spotify optional)
 npm run dev
 ```

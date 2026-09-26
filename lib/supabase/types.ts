@@ -1,197 +1,150 @@
-export type Json =
-  | string
-  | number
-  | boolean
-  | null
-  | { [key: string]: Json | undefined }
-  | Json[];
+/**
+ * Hand-written placeholder types mirroring db/contract.md.
+ * Replace with `supabase gen types typescript` output once the real
+ * schema is applied — keep the shape in sync with db/contract.md until then.
+ */
 
 export interface ConnectionCardJson {
   shared_why: string;
-  evidence: { user_a: string; user_b: string };
+  evidence: {
+    user_a: string;
+    user_b: string;
+  };
   difference: string;
   openers: string[];
   suggested_swap_prompt: string;
 }
 
-export type Database = {
+export interface Database {
   public: {
     Tables: {
       profiles: {
-        Row: { created_at: string; display_name: string; id: string };
-        Insert: { created_at?: string; display_name: string; id: string };
-        Update: { created_at?: string; display_name?: string; id?: string };
+        Row: {
+          id: string;
+          display_name: string;
+          created_at: string;
+        };
+        Insert: {
+          id: string;
+          display_name: string;
+        };
+        Update: Partial<{
+          display_name: string;
+        }>;
         Relationships: [];
       };
       songs: {
         Row: {
-          artist: string;
-          created_at: string;
           id: string;
-          is_public: boolean;
-          profile_id: string;
-          reason_text: string;
+          title: string;
+          artist: string;
+          mbid: string | null;
+          fallback_key: string | null;
+          resolution_source: "musicbrainz" | "gemini_fallback";
           spotify_track_id: string | null;
-          title: string;
-        };
-        Insert: {
-          artist: string;
-          created_at?: string;
-          id?: string;
-          is_public?: boolean;
-          profile_id: string;
-          reason_text: string;
-          spotify_track_id?: string | null;
-          title: string;
-        };
-        Update: {
-          artist?: string;
-          created_at?: string;
-          id?: string;
-          is_public?: boolean;
-          profile_id?: string;
-          reason_text?: string;
-          spotify_track_id?: string | null;
-          title?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "songs_profile_id_fkey";
-            columns: ["profile_id"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-        ];
-      };
-      motivations: {
-        Row: {
+          album_art_url: string | null;
+          context_summary: string | null;
+          embedding: number[] | null;
           created_at: string;
-          embedding: number[];
-          id: string;
-          label: string;
-          song_id: string;
         };
         Insert: {
-          created_at?: string;
-          embedding: number[];
-          id?: string;
-          label: string;
+          title: string;
+          artist: string;
+          mbid?: string | null;
+          fallback_key?: string | null;
+          resolution_source: "musicbrainz" | "gemini_fallback";
+          spotify_track_id?: string | null;
+          album_art_url?: string | null;
+          context_summary?: string | null;
+          embedding?: number[] | null;
+        };
+        Update: Partial<{
+          context_summary: string | null;
+          embedding: number[] | null;
+        }>;
+        Relationships: [];
+      };
+      song_picks: {
+        Row: {
+          id: string;
+          profile_id: string;
           song_id: string;
+          tags: string[];
+          valence: number;
+          energy: number;
+          embedding: number[];
+          reason_text: string | null;
+          is_public: boolean;
+          created_at: string;
         };
-        Update: {
-          created_at?: string;
-          embedding?: number[];
-          id?: string;
-          label?: string;
-          song_id?: string;
+        Insert: {
+          profile_id: string;
+          song_id: string;
+          tags: string[];
+          valence: number;
+          energy: number;
+          embedding: number[];
+          reason_text?: string | null;
+          is_public?: boolean;
         };
-        Relationships: [
-          {
-            foreignKeyName: "motivations_song_id_fkey";
-            columns: ["song_id"];
-            isOneToOne: false;
-            referencedRelation: "songs";
-            referencedColumns: ["id"];
-          },
-        ];
+        Update: Partial<{
+          tags: string[];
+          valence: number;
+          energy: number;
+          embedding: number[];
+          reason_text: string | null;
+          is_public: boolean;
+        }>;
+        Relationships: [];
       };
       connection_cards: {
         Row: {
-          card_json: ConnectionCardJson;
-          created_at: string;
           id: string;
           user_a: string;
           user_b: string;
+          card_json: ConnectionCardJson;
+          created_at: string;
         };
         Insert: {
-          card_json: ConnectionCardJson;
-          created_at?: string;
-          id?: string;
           user_a: string;
           user_b: string;
+          card_json: ConnectionCardJson;
         };
-        Update: {
-          card_json?: ConnectionCardJson;
-          created_at?: string;
-          id?: string;
-          user_a?: string;
-          user_b?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "connection_cards_user_a_fkey";
-            columns: ["user_a"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "connection_cards_user_b_fkey";
-            columns: ["user_b"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-        ];
+        Update: Partial<{
+          card_json: ConnectionCardJson;
+        }>;
+        Relationships: [];
       };
       messages: {
         Row: {
+          id: string;
+          user_a: string;
+          user_b: string;
+          sender_id: string;
           body: string;
           created_at: string;
-          id: string;
-          sender_id: string;
-          user_a: string;
-          user_b: string;
         };
         Insert: {
-          body: string;
-          created_at?: string;
-          id?: string;
-          sender_id: string;
           user_a: string;
           user_b: string;
+          sender_id: string;
+          body: string;
         };
-        Update: {
-          body?: string;
-          created_at?: string;
-          id?: string;
-          sender_id?: string;
-          user_a?: string;
-          user_b?: string;
-        };
-        Relationships: [
-          {
-            foreignKeyName: "messages_sender_id_fkey";
-            columns: ["sender_id"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "messages_user_a_fkey";
-            columns: ["user_a"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-          {
-            foreignKeyName: "messages_user_b_fkey";
-            columns: ["user_b"];
-            isOneToOne: false;
-            referencedRelation: "profiles";
-            referencedColumns: ["id"];
-          },
-        ];
+        Update: Partial<{
+          body: string;
+        }>;
+        Relationships: [];
       };
     };
     Views: Record<string, never>;
     Functions: {
-      match_profiles: {
-        Args: { match_count?: number; target_profile_id: string };
+      match_picks: {
+        Args: { target_profile_id: string; match_count?: number };
         Returns: {
-          display_name: string;
           profile_id: string;
+          display_name: string;
+          song_pick_id: string;
+          target_pick_id: string;
           similarity: number;
         }[];
       };
@@ -199,4 +152,4 @@ export type Database = {
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };
-};
+}

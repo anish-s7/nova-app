@@ -9,26 +9,44 @@ create table public.profiles (
   created_at timestamptz not null default now()
 );
 
+-- Shared catalog: one row per unique resolved song, not per user.
+-- Identity resolves via MusicBrainz first (mbid set, fallback_key null),
+-- Gemini as a fallback (fallback_key set, mbid null) — see CLAUDE.md.
 create table public.songs (
   id uuid primary key default gen_random_uuid(),
-  profile_id uuid not null references public.profiles(id) on delete cascade,
   title text not null check (length(btrim(title)) between 1 and 300),
   artist text not null check (length(btrim(artist)) between 1 and 300),
+  mbid text,
+  fallback_key text,
+  resolution_source text not null check (resolution_source in ('musicbrainz', 'gemini_fallback')),
   spotify_track_id text,
-  reason_text text not null check (length(reason_text) <= 2000),
-  is_public boolean not null default true,
+  album_art_url text,
+  context_summary text,
+  embedding extensions.vector(768),
   created_at timestamptz not null default now(),
+  constraint songs_identity_present check (mbid is not null or fallback_key is not null),
   constraint songs_spotify_track_id_not_blank
     check (spotify_track_id is null or length(btrim(spotify_track_id)) > 0)
 );
 
-create table public.motivations (
+create unique index songs_mbid_key on public.songs (mbid) where mbid is not null;
+create unique index songs_fallback_key_key on public.songs (fallback_key) where fallback_key is not null;
+
+-- One row per user per song pick. Each pick's embedding is computed once
+-- at insert time (catalog song embedding + this pick's weighted
+-- valence/energy) and never recomputed — matching is per-pick, not a
+-- profile-level average. See CLAUDE.md / db/contract.md.
+create table public.song_picks (
   id uuid primary key default gen_random_uuid(),
+  profile_id uuid not null references public.profiles(id) on delete cascade,
   song_id uuid not null references public.songs(id) on delete cascade,
-  label text not null check (length(btrim(label)) between 1 and 200),
-  embedding extensions.vector(768) not null,
-  created_at timestamptz not null default now(),
-  constraint motivations_song_label_key unique (song_id, label)
+  tags text[] not null check (coalesce(array_length(tags, 1), 0) between 1 and 3),
+  valence real not null check (valence between -1 and 1),
+  energy real not null check (energy between -1 and 1),
+  embedding extensions.vector(770) not null,
+  reason_text text check (reason_text is null or length(reason_text) <= 2000),
+  is_public boolean not null default true,
+  created_at timestamptz not null default now()
 );
 
 create table public.connection_cards (
@@ -62,18 +80,18 @@ create table public.messages (
   constraint messages_sender_is_participant check (sender_id in (user_a, user_b))
 );
 
-create index songs_profile_id_created_at_idx
-  on public.songs (profile_id, created_at desc);
+create index songs_embedding_hnsw_idx
+  on public.songs
+  using hnsw (embedding extensions.vector_cosine_ops);
 
-create index songs_profile_spotify_track_idx
-  on public.songs (profile_id, spotify_track_id)
-  where spotify_track_id is not null;
+create index song_picks_profile_id_created_at_idx
+  on public.song_picks (profile_id, created_at desc);
 
-create index motivations_song_id_idx
-  on public.motivations (song_id);
+create index song_picks_song_id_idx
+  on public.song_picks (song_id);
 
-create index motivations_embedding_hnsw_idx
-  on public.motivations
+create index song_picks_embedding_hnsw_idx
+  on public.song_picks
   using hnsw (embedding extensions.vector_cosine_ops);
 
 create index connection_cards_user_b_idx
@@ -112,13 +130,20 @@ create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
-create or replace function public.match_profiles(
+-- Per-pick candidate retrieval: for each candidate profile (other than the
+-- target), finds their single best-matching public pick against any of the
+-- target's picks. This is retrieval only — the backend's evidence-check
+-- (lib/gemini/evaluateAndGenerateCard.ts) decides whether the pair is
+-- actually shown, never this function. See CLAUDE.md / db/contract.md.
+create or replace function public.match_picks(
   target_profile_id uuid,
   match_count integer default 10
 )
 returns table (
   profile_id uuid,
   display_name text,
+  song_pick_id uuid,
+  target_pick_id uuid,
   similarity double precision
 )
 language sql
@@ -126,29 +151,35 @@ stable
 security invoker
 set search_path = public, extensions
 as $$
-  select
-    candidate_profile.id as profile_id,
-    candidate_profile.display_name,
-    max(1 - (candidate_motivation.embedding <=> target_motivation.embedding))::double precision as similarity
-  from public.motivations as target_motivation
-  join public.songs as target_song
-    on target_song.id = target_motivation.song_id
-  cross join public.motivations as candidate_motivation
-  join public.songs as candidate_song
-    on candidate_song.id = candidate_motivation.song_id
-  join public.profiles as candidate_profile
-    on candidate_profile.id = candidate_song.profile_id
-  where target_song.profile_id = target_profile_id
-    and candidate_song.profile_id <> target_profile_id
-    and candidate_song.is_public = true
-  group by candidate_profile.id, candidate_profile.display_name
-  order by similarity desc, candidate_profile.id
+  with pairwise as (
+    select
+      candidate_profile.id as profile_id,
+      candidate_profile.display_name,
+      candidate_pick.id as song_pick_id,
+      target_pick.id as target_pick_id,
+      (1 - (candidate_pick.embedding <=> target_pick.embedding))::double precision as similarity,
+      row_number() over (
+        partition by candidate_profile.id
+        order by candidate_pick.embedding <=> target_pick.embedding asc
+      ) as rn
+    from public.song_picks as target_pick
+    cross join public.song_picks as candidate_pick
+    join public.profiles as candidate_profile
+      on candidate_profile.id = candidate_pick.profile_id
+    where target_pick.profile_id = target_profile_id
+      and candidate_pick.profile_id <> target_profile_id
+      and candidate_pick.is_public = true
+  )
+  select profile_id, display_name, song_pick_id, target_pick_id, similarity
+  from pairwise
+  where rn = 1
+  order by similarity desc, profile_id
   limit greatest(0, least(coalesce(match_count, 10), 100));
 $$;
 
 alter table public.profiles enable row level security;
 alter table public.songs enable row level security;
-alter table public.motivations enable row level security;
+alter table public.song_picks enable row level security;
 alter table public.connection_cards enable row level security;
 alter table public.messages enable row level security;
 
@@ -168,78 +199,34 @@ create policy "Users can update their own profile"
   using (id = auth.uid())
   with check (id = auth.uid());
 
-create policy "Users can view public or owned songs"
+-- songs is a shared, de-duplicated catalog — every authenticated user can
+-- read it, but only the backend (service role) inserts/updates it, so no
+-- authenticated insert/update/delete policy is needed here.
+create policy "Authenticated users can view the song catalog"
   on public.songs for select
+  to authenticated
+  using (true);
+
+create policy "Users can view public or owned picks"
+  on public.song_picks for select
   to authenticated
   using (is_public or profile_id = auth.uid());
 
-create policy "Users can create their own songs"
-  on public.songs for insert
+create policy "Users can create their own picks"
+  on public.song_picks for insert
   to authenticated
   with check (profile_id = auth.uid());
 
-create policy "Users can update their own songs"
-  on public.songs for update
+create policy "Users can update their own picks"
+  on public.song_picks for update
   to authenticated
   using (profile_id = auth.uid())
   with check (profile_id = auth.uid());
 
-create policy "Users can delete their own songs"
-  on public.songs for delete
+create policy "Users can delete their own picks"
+  on public.song_picks for delete
   to authenticated
   using (profile_id = auth.uid());
-
-create policy "Users can view motivations for visible songs"
-  on public.motivations for select
-  to authenticated
-  using (
-    exists (
-      select 1
-      from public.songs
-      where songs.id = motivations.song_id
-        and (songs.is_public or songs.profile_id = auth.uid())
-    )
-  );
-
-create policy "Users can create motivations for their songs"
-  on public.motivations for insert
-  to authenticated
-  with check (
-    exists (
-      select 1 from public.songs
-      where songs.id = motivations.song_id
-        and songs.profile_id = auth.uid()
-    )
-  );
-
-create policy "Users can update motivations for their songs"
-  on public.motivations for update
-  to authenticated
-  using (
-    exists (
-      select 1 from public.songs
-      where songs.id = motivations.song_id
-        and songs.profile_id = auth.uid()
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.songs
-      where songs.id = motivations.song_id
-        and songs.profile_id = auth.uid()
-    )
-  );
-
-create policy "Users can delete motivations for their songs"
-  on public.motivations for delete
-  to authenticated
-  using (
-    exists (
-      select 1 from public.songs
-      where songs.id = motivations.song_id
-        and songs.profile_id = auth.uid()
-    )
-  );
 
 create policy "Participants can view connection cards"
   on public.connection_cards for select
@@ -286,7 +273,7 @@ create policy "Senders can delete their messages"
 
 revoke all on table public.profiles from anon, authenticated;
 revoke all on table public.songs from anon, authenticated;
-revoke all on table public.motivations from anon, authenticated;
+revoke all on table public.song_picks from anon, authenticated;
 revoke all on table public.connection_cards from anon, authenticated;
 revoke all on table public.messages from anon, authenticated;
 
@@ -294,10 +281,10 @@ grant select on table public.profiles to authenticated;
 grant insert (id, display_name), update (display_name)
   on table public.profiles to authenticated;
 
+grant select on table public.songs to authenticated;
+
 grant select, insert, update, delete
-  on table public.songs to authenticated;
-grant select, insert, update, delete
-  on table public.motivations to authenticated;
+  on table public.song_picks to authenticated;
 
 grant select, insert on table public.connection_cards to authenticated;
 grant update (card_json) on table public.connection_cards to authenticated;
@@ -305,8 +292,8 @@ grant update (card_json) on table public.connection_cards to authenticated;
 grant select, insert, delete on table public.messages to authenticated;
 grant update (body) on table public.messages to authenticated;
 
-revoke all on function public.match_profiles(uuid, integer) from public;
-grant execute on function public.match_profiles(uuid, integer) to authenticated, service_role;
+revoke all on function public.match_picks(uuid, integer) from public;
+grant execute on function public.match_picks(uuid, integer) to authenticated, service_role;
 
 alter table public.messages replica identity full;
 

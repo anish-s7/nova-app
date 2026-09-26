@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exchangeCodeForToken, getTopTracks } from "@/lib/spotify/client";
-import { createServerClient } from "@/lib/supabase/server";
 
 export async function GET(req: NextRequest) {
   const code = req.nextUrl.searchParams.get("code");
@@ -13,22 +12,12 @@ export async function GET(req: NextRequest) {
   const { access_token } = await exchangeCodeForToken(code);
   const topTracks = await getTopTracks(access_token, 5);
 
-  // Insert bare song rows only — reason_text is left empty for the user to
-  // fill in manually, since Spotify can't tell us *why* a song matters.
-  const supabase = createServerClient();
-  const { error } = await supabase.from("songs").insert(
-    topTracks.map((t) => ({
-      profile_id: profileId,
-      title: t.name,
-      artist: t.artist,
-      spotify_track_id: t.spotifyTrackId,
-      reason_text: "",
-    }))
+  // Don't insert into user_songs here — tags + valence/energy are required
+  // per song and only the user can provide those. Hand the track list to
+  // the frontend so it can walk the user through picking tags + the
+  // circular slider for each one, then POST each to /api/user-songs.
+  const encodedTracks = encodeURIComponent(JSON.stringify(topTracks));
+  return NextResponse.redirect(
+    new URL(`/onboarding?profileId=${profileId}&tracks=${encodedTracks}`, req.url)
   );
-
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
-  return NextResponse.redirect(new URL("/", req.url));
 }
