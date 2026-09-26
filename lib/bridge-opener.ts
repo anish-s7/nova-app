@@ -36,8 +36,10 @@ export function whySummary(counts: { id: ClusterId; count: number }[]) {
  * A first message a person can edit before sending: names the song and both reasons. A plain
  * template, so browsing the galaxy never costs an LLM call, and only plain title strings are used.
  */
-export function bridgeOpener({ title, mine, theirs }: { title: string; mine: ClusterId; theirs: ClusterId }) {
+export function bridgeOpener({ title, mine, theirs, iHaveIt }: { title: string; mine: ClusterId; theirs: ClusterId; iHaveIt: boolean }) {
+  const lead = iHaveIt ? `We both have "${title}".` : `I just found "${title}" in the galaxy.`;
+  const put = iHaveIt ? `I put it on ${MINE[mine]}` : `I'd put it on ${MINE[mine]}`;
   return mine === theirs
-    ? `We both have "${title}". I put it on ${MINE[mine]}. Is that what it is for you too?`
-    : `We both have "${title}". I put it on ${MINE[mine]}, and it looks like you have it ${THEIRS[theirs]}. What does it do for you?`;
+    ? `${lead} ${put}. Is that what it is for you too?`
+    : `${lead} ${put}, and it looks like you have it ${THEIRS[theirs]}. What does it do for you?`;
 }

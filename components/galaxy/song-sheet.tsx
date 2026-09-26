@@ -2,6 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { AlbumArt } from "@/components/album-art";
+import { bridgeOpener, whySummary } from "@/lib/bridge-opener";
 import { getCluster } from "@/lib/clusters";
 import { getTheme, THEME_THRESHOLD } from "@/lib/themes";
 import type { SongLayer, SongStar } from "@/lib/song-layer";
@@ -20,8 +21,9 @@ export function SongSheetContent({ star, layer, onAddYours }: { star: SongStar; 
           <p className="truncate text-sm text-muted-foreground">{star.song.artist}</p>
           <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <span className="size-1.5 rounded-full bg-[var(--tone)]" aria-hidden />
-            {cluster.short} · {star.listeners.length === 1 ? "1 person" : `${star.listeners.length} people`}
+            {star.isBridge ? whySummary(star.whyCounts) : `${cluster.short} · ${star.listeners.length === 1 ? "1 person" : `${star.listeners.length} people`}`}
           </p>
+          {star.isBridge ? <p className="mt-0.5 text-[11px] text-muted-foreground">A bridge: {star.listeners.length} people, more than one reason.</p> : null}
         </div>
       </div>
 
@@ -45,8 +47,26 @@ export function SongSheetContent({ star, layer, onAddYours }: { star: SongStar; 
         </ul>
       ) : null}
 
-      <div className="-mx-1 max-h-[34vh] overflow-y-auto px-1">
-        <ListenerList listeners={star.listeners} cluster={star.cluster} songId={star.id} />
+      <div className="-mx-1 flex max-h-[34vh] flex-col gap-4 overflow-y-auto px-1">
+        {(star.isBridge ? star.whyCounts.map((w) => w.id) : [star.cluster]).map((why) => {
+          const group = star.isBridge ? star.listeners.filter((l) => l.why === why) : star.listeners;
+          return (
+            <section key={why} aria-label={star.isBridge ? getCluster(why).short : undefined}>
+              {star.isBridge ? (
+                <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  <span className="size-1.5 rounded-full" style={{ background: getCluster(why).color }} aria-hidden />
+                  {getCluster(why).label}
+                </h3>
+              ) : null}
+              <ListenerList
+                listeners={group}
+                cluster={why}
+                songId={star.id}
+                opener={(l) => (l.why ? bridgeOpener({ title: star.song.title, mine: star.myWhy, theirs: l.why, iHaveIt: mine }) : undefined)}
+              />
+            </section>
+          );
+        })}
       </div>
 
       {mine ? null : (
