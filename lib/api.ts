@@ -174,8 +174,11 @@ function byTime(messages: Message[]) {
 
 // ---------------------------------------------------------------------------
 // Onboarding. NOT IN CONTRACT: Spotify import, catalog search and analysis aren't DB reads.
+// In real mode, search hits the real catalog (GET /api/songs/search) and the Spotify import reads
+// the connected account's top tracks; the mock keeps the 24-song demo catalog.
 
 export async function importSpotify(): Promise<SpotifyImport> {
+  if (REAL_DATA) return real.importSpotify();
   await delay(1600);
   maybeFail("spotify");
   const ids = [
@@ -190,6 +193,7 @@ export async function importSpotify(): Promise<SpotifyImport> {
 }
 
 export async function searchSongs(q: string): Promise<Song[]> {
+  if (REAL_DATA) return real.searchSongs(q);
   await delay(180);
   const needle = q.trim().toLowerCase();
   if (!needle) return SONG_CATALOG.slice(0, 12);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useDeferredValue, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Check, Plus, Search, X } from "lucide-react";
@@ -8,7 +8,8 @@ import { ContextChip } from "@/components/context-chip";
 import { ScreenHeader } from "@/components/screen-header";
 import { SongTile } from "@/components/song-tile";
 import { Button } from "@/components/ui/button";
-import { chooseSongs, searchSongs } from "@/lib/api";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { chooseSongs, REAL_DATA, searchSongs } from "@/lib/api";
 import { CONTEXT_TAGS } from "@/lib/clusters";
 import { getSession } from "@/lib/session";
 import type { ContextTag, Song } from "@/lib/types";
@@ -27,8 +28,10 @@ export default function PickSongsPage() {
   const router = useRouter();
   const [picks, setPicks] = useState(initialPicks);
   const [query, setQuery] = useState("");
-  const deferred = useDeferredValue(query);
-  const { data: results, isLoading } = useSWR(["songs", deferred], ([, q]) => searchSongs(q), { keepPreviousData: true });
+  // Real mode searches the whole catalog over the network, so wait for a pause in typing.
+  const deferred = useDebouncedValue(query, REAL_DATA ? 350 : 0).trim();
+  const { data: results, isLoading, error: searchError } = useSWR(["songs", deferred], ([, q]) => searchSongs(q), { keepPreviousData: true });
+  const searching = deferred.length >= (REAL_DATA ? 2 : 1);
 
   const count = picks.songs.length;
   const isPicked = (id: string) => picks.songs.some((s) => s.id === id);
@@ -123,7 +126,7 @@ export default function PickSongsPage() {
           </label>
 
           <ul className={cn("mt-2 flex flex-col transition-opacity", isLoading && "opacity-60")} aria-busy={isLoading}>
-            {(results ?? []).map((song) => {
+            {(searching || !REAL_DATA ? (results ?? []) : []).map((song) => {
               const picked = isPicked(song.id);
               const full = !picked && count >= MAX;
               return (
@@ -148,7 +151,13 @@ export default function PickSongsPage() {
                 </li>
               );
             })}
-            {results && results.length === 0 ? <li className="py-8 text-center text-sm text-muted-foreground">No songs match &ldquo;{deferred}&rdquo;.</li> : null}
+            {searchError ? (
+              <li className="py-8 text-center text-sm text-muted-foreground">{searchError instanceof Error ? searchError.message : "Search isn't responding right now."}</li>
+            ) : REAL_DATA && !searching ? (
+              <li className="py-8 text-center text-sm text-muted-foreground">Search for any song or artist you actually reach for.</li>
+            ) : results && results.length === 0 && searching && !isLoading ? (
+              <li className="py-8 text-center text-sm text-muted-foreground">No songs match &ldquo;{deferred}&rdquo;.</li>
+            ) : null}
           </ul>
         </section>
       </div>

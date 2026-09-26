@@ -34,19 +34,29 @@ export async function exchangeCodeForToken(code: string) {
     throw new Error(`Spotify token exchange failed: ${res.status}`);
   }
 
-  return res.json() as Promise<{ access_token: string; refresh_token: string }>;
+  return res.json() as Promise<{ access_token: string; refresh_token?: string; expires_in?: number }>;
 }
 
+/**
+ * Display-only track data (CLAUDE.md "Spotify data can never touch the LLM"): only `name` and
+ * `artist`, as plain strings, may ever reach Gemini; the art is for showing the cover.
+ */
 export interface SpotifyTopTrack {
   name: string;
   artist: string;
   spotifyTrackId: string;
+  albumArtUrl: string | null;
 }
 
-export async function getTopTracks(
-  accessToken: string,
-  limit = 5,
-): Promise<SpotifyTopTrack[]> {
+type SpotifyTrackItem = {
+  id: string;
+  name: string;
+  artists: { name: string }[];
+  album?: { images?: { url: string; width: number | null }[] };
+};
+
+/** The user's top tracks (Spotify's default ~6-month window). Needs the `user-top-read` scope. */
+export async function getTopTracks(accessToken: string, limit = 20): Promise<SpotifyTopTrack[]> {
   const res = await fetch(`${SPOTIFY_API_BASE}/me/top/tracks?limit=${limit}`, {
     headers: { Authorization: `Bearer ${accessToken}` },
   });
@@ -55,12 +65,16 @@ export async function getTopTracks(
     throw new Error(`Spotify top tracks fetch failed: ${res.status}`);
   }
 
-  const data = await res.json();
-  return data.items.map(
-    (item: { name: string; artists: { name: string }[]; id: string }) => ({
+  const data = (await res.json()) as { items?: SpotifyTrackItem[] };
+  return (data.items ?? []).map((item) => {
+    // Images come largest first; take the smallest one that's still at least 300px.
+    const images = item.album?.images ?? [];
+    const art = [...images].reverse().find((img) => (img.width ?? 0) >= 300) ?? images[0];
+    return {
       name: item.name,
       artist: item.artists[0]?.name ?? "Unknown",
       spotifyTrackId: item.id,
-    }),
-  );
+      albumArtUrl: art?.url ?? null,
+    };
+  });
 }

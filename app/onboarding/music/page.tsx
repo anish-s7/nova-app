@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertCircle, Check, ListMusic, Loader2 } from "lucide-react";
@@ -8,7 +8,7 @@ import { AlbumArt } from "@/components/album-art";
 import { ScreenHeader } from "@/components/screen-header";
 import { SpotifyIcon } from "@/components/spotify-icon";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { chooseSongs, importSpotify } from "@/lib/api";
+import { chooseSongs, importSpotify, REAL_DATA } from "@/lib/api";
 import type { SpotifyImport } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -21,7 +21,7 @@ export default function BringYourMusicPage() {
   const router = useRouter();
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
-  const connect = async () => {
+  const load = async () => {
     setStatus({ kind: "importing" });
     try {
       setStatus({ kind: "imported", data: await importSpotify() });
@@ -29,6 +29,37 @@ export default function BringYourMusicPage() {
       setStatus({ kind: "unavailable", message: e instanceof Error ? e.message : "Spotify isn't responding right now." });
     }
   };
+
+  // Real mode: Spotify's own sign-in first (/api/spotify/connect → Spotify → callback), which
+  // lands back here with ?spotify=<outcome>. Demo mode imports the mock library directly.
+  const connect = () => {
+    if (!REAL_DATA) return void load();
+    setStatus({ kind: "importing" });
+    // A full page load, not a client route: the connect route redirects off-site to Spotify.
+    window.location.href = new URL("/api/spotify/connect", window.location.origin).href;
+  };
+
+  // Back from Spotify: ?spotify=connected imports; anything else explains what happened.
+  const arrive = (outcome: string) => {
+    const message: Record<string, string> = {
+      denied: "Spotify wasn't connected. You can pick your songs instead.",
+      error: "Spotify didn't finish connecting. Try again, or pick your songs instead.",
+      unconfigured: "Spotify isn't set up on this server yet. Pick your songs instead.",
+      "wrong-host": "Spotify needs this app opened from its registered address. Try connecting again here.",
+    };
+    if (outcome === "connected") void load();
+    else setStatus({ kind: "unavailable", message: message[outcome] ?? message.error });
+  };
+
+  useEffect(() => {
+    if (!REAL_DATA) return;
+    const outcome = new URLSearchParams(window.location.search).get("spotify");
+    if (!outcome) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncs once from the OAuth return URL, which only exists in the browser
+    arrive(outcome);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, []);
 
   const continueWithImport = (data: SpotifyImport) => {
     chooseSongs({ source: "spotify", songs: data.songs, signals: data.signals });
@@ -45,7 +76,11 @@ export default function BringYourMusicPage() {
             <Check className="size-5" aria-hidden />
           </span>
           <h1 className="mt-4 text-2xl font-semibold tracking-tight">Imported {songs.length} songs</h1>
-          <p className="mt-2 text-pretty text-muted-foreground">Your recent listening, including when and how often you play things. We look at when and how often you play things, not just the titles.</p>
+          <p className="mt-2 text-pretty text-muted-foreground">
+            {REAL_DATA
+              ? "Your most-played songs on Spotify lately. Next, choose the ones that matter to you and say how each one feels."
+              : "Your recent listening, including when and how often you play things. We look at when and how often you play things, not just the titles."}
+          </p>
 
           <ul className="no-scrollbar -mx-6 mt-8 flex gap-3 overflow-x-auto px-6 pb-2" aria-label="Imported songs">
             {songs.map((s, i) => (

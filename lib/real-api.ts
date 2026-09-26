@@ -29,6 +29,7 @@ import type {
   MessageRow,
   Song,
   SongRow,
+  SpotifyImport,
   User,
   WanderEntry,
 } from "./types";
@@ -92,6 +93,41 @@ export function rememberSimilarities(edges: GalaxyEdge[]) {
     if (e.source === ME_ID) similarityOf.set(e.target, e.similarity);
     else if (e.target === ME_ID) similarityOf.set(e.source, e.similarity);
   }
+}
+
+// --- song search + Spotify import ------------------------------------------------
+
+type SearchSong = { id: string; title: string; artist: string; albumArtUrl: string | null };
+
+/** Real catalog search (GET /api/songs/search). Under 2 characters there's nothing to search. */
+export async function searchSongs(q: string): Promise<Song[]> {
+  if (q.trim().length < 2) return [];
+  const res = await fetch(`/api/songs/search?q=${encodeURIComponent(q.trim())}`, { credentials: "same-origin" });
+  if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to search." : "Song search isn't responding right now.");
+  const { songs } = (await res.json()) as { songs: SearchSong[] };
+  return songs.map((s) => ({ id: s.id, title: s.title, artist: s.artist, albumArtUrl: s.albumArtUrl ?? undefined, source: "manual" as const }));
+}
+
+type TopTrack = { name: string; artist: string; spotifyTrackId: string; albumArtUrl: string | null };
+
+/**
+ * The top tracks of the Spotify account just connected (the connect → callback round trip set a
+ * short-lived token cookie). Display + import only: nothing but title/artist ever reaches Gemini.
+ */
+export async function importSpotify(): Promise<SpotifyImport> {
+  const res = await fetch("/api/spotify/top-tracks", { credentials: "same-origin" });
+  const body = (await res.json().catch(() => null)) as { tracks?: TopTrack[]; error?: string } | null;
+  if (!res.ok || !body?.tracks) throw new ApiError(body?.error ?? "Spotify isn't responding right now.");
+  if (body.tracks.length === 0) throw new ApiError("Spotify doesn't have top tracks for this account yet. Pick your songs instead.");
+  const songs: Song[] = body.tracks.map((t) => ({
+    id: `spotify:${t.spotifyTrackId}`,
+    title: t.name,
+    artist: t.artist,
+    albumArtUrl: t.albumArtUrl ?? undefined,
+    spotifyId: t.spotifyTrackId,
+    source: "spotify",
+  }));
+  return { songs, signals: songs.map((s) => ({ songId: s.id, contextTags: [] })) };
 }
 
 // --- listening portrait ----------------------------------------------------------
