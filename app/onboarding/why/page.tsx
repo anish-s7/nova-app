@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, AudioLines } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { Logo } from "@/components/logo";
 import { MotivationCard } from "@/components/motivation-card";
@@ -19,7 +19,6 @@ export default function YourWhyPage() {
     return (
       <main className="flex flex-1 flex-col justify-center px-6">
         <EmptyState
-          icon={AudioLines}
           title="Nothing to read yet"
           body="Bring a few songs and we'll show you why you listen."
           action={

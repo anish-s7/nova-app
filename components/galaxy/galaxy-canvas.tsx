@@ -4,7 +4,8 @@ import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useReducedMotion, useWebGL } from "@/hooks/use-capabilities";
 import type { Arrival } from "@/hooks/use-galaxy-realtime";
-import { computeLayout, placeArrival } from "@/lib/galaxy-layout";
+import { computeLayout, placeArrival, placeSongs } from "@/lib/galaxy-layout";
+import { songNodeId, type SongStar } from "@/lib/song-layer";
 import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
 import { GalaxySvg } from "./galaxy-svg";
 import type { GalaxyViewProps } from "./types";
@@ -31,13 +32,55 @@ type Props = Omit<GalaxyViewProps, "layout" | "extra"> & {
   edges: GalaxyEdge[];
   arrivals?: Arrival[];
   className?: string;
+  /** The song layer. Placed after the people layout so adding one never moves anybody. */
+  songs?: SongStar[];
+  /** Song ids of the focused theme: lit, and joined into a constellation. */
+  focusSongIds?: string[] | null;
 };
 
-export function GalaxyCanvas({ nodes, edges, arrivals = [], className, ...rest }: Props) {
+export function GalaxyCanvas({ nodes, edges, arrivals = [], className, songs = [], focusSongIds = null, ...rest }: Props) {
   const layout = useMemo(() => computeLayout(nodes, edges), [nodes, edges]);
   const extra = useMemo(() => arrivals.map((a) => placeArrival(layout, a.node, a.edges)), [arrivals, layout]);
-  const allNodes = useMemo(() => [...nodes, ...arrivals.map((a) => a.node)], [nodes, arrivals]);
-  const allEdges = useMemo(() => [...edges, ...arrivals.flatMap((a) => a.edges)], [edges, arrivals]);
+  const songPoints = useMemo(() => placeSongs(layout, songs.map((s) => ({ id: s.id, cluster: s.cluster, listenerIds: s.listeners.map((l) => l.id) })), extra), [layout, songs, extra]);
+  const songNodes = useMemo(
+    () =>
+      songs.map((s) => ({
+        userId: songNodeId(s.id),
+        name: s.song.title,
+        cluster: s.cluster,
+        topMotivations: [],
+        isMe: false,
+        kind: "song" as const,
+        weight: s.weight,
+      })),
+    [songs],
+  );
+  const allNodes = useMemo(() => [...nodes, ...arrivals.map((a) => a.node), ...songNodes], [nodes, arrivals, songNodes]);
+
+  // A theme is a constellation: each of its songs is threaded to its two nearest siblings.
+  const focusIds = useMemo(() => (focusSongIds ? new Set(focusSongIds.map(songNodeId)) : null), [focusSongIds]);
+  const constellation = useMemo(() => {
+    if (!focusIds) return [];
+    const pts = songPoints.filter((p) => focusIds.has(p.id));
+    const seen = new Set<string>();
+    const out: GalaxyEdge[] = [];
+    for (const a of pts) {
+      [...pts]
+        .filter((b) => b.id !== a.id)
+        .sort((b1, b2) => Math.hypot(a.x - b1.x, a.y - b1.y, a.z - b1.z) - Math.hypot(a.x - b2.x, a.y - b2.y, a.z - b2.z))
+        .slice(0, 2)
+        .forEach((b) => {
+          const key = [a.id, b.id].sort().join("|");
+          if (seen.has(key)) return;
+          seen.add(key);
+          out.push({ source: a.id, target: b.id, similarity: 0.95, sharedMotivation: "", sharedSongs: 0, sharedArtists: 0 });
+        });
+    }
+    return out;
+  }, [focusIds, songPoints]);
+
+  const allEdges = useMemo(() => [...edges, ...arrivals.flatMap((a) => a.edges), ...constellation], [edges, arrivals, constellation]);
+  const allExtra = useMemo(() => [...extra, ...songPoints], [extra, songPoints]);
 
   const reduced = useReducedMotion();
   const webgl = useWebGL();
@@ -45,7 +88,7 @@ export function GalaxyCanvas({ nodes, edges, arrivals = [], className, ...rest }
 
   return (
     <div className={className ?? "absolute inset-0 starfield"}>
-      <View nodes={allNodes} edges={allEdges} layout={layout} extra={extra} {...rest} />
+      <View nodes={allNodes} edges={allEdges} layout={layout} extra={allExtra} focusIds={focusIds} {...rest} />
     </div>
   );
 }

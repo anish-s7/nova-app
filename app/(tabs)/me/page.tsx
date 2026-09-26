@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { AudioLines, ListMusic, Orbit } from "lucide-react";
+import { ListMusic, Orbit } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
 import { EmptyState } from "@/components/empty-state";
 import { MotivationCard } from "@/components/motivation-card";
@@ -25,9 +25,8 @@ export default function MePage() {
       <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-8">
         {!session.analysis ? (
           <EmptyState
-            icon={AudioLines}
-            title="Nothing here yet"
-            body="Bring a few songs and we'll show you why you listen."
+            title="We don't know you yet"
+            body="Bring a few songs and we'll show you why you listen, and who else listens the same way."
             action={
               <Link href="/onboarding/music" className={cn(buttonVariants(), "h-11 rounded-full px-6")}>
                 Bring your music

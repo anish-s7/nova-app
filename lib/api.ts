@@ -17,6 +17,8 @@
 import { getCluster } from "./clusters";
 import { infer, primaryCluster } from "./inference";
 import { mockDb } from "./mock-db";
+import { buildSongLayer, type SongLayer } from "./song-layer";
+import { buildClusterDetail, type ClusterDetail } from "./cluster-songs";
 import { listeningMoment } from "./texture";
 import { SONG_CATALOG, songById } from "./music-context";
 import {
@@ -254,6 +256,18 @@ export async function getGalaxy(): Promise<GalaxyResponse> {
     topMatchId,
     status: "ready",
   };
+}
+
+/** NOT IN CONTRACT: clusters aren't stored yet (lib/types.ts #5). Songs + listeners inside one "why". */
+export async function getClusterDetail(id: string): Promise<ClusterDetail> {
+  await delay(250);
+  return buildClusterDetail(getCluster(id).id);
+}
+
+/** NOT IN CONTRACT: song stars and themes come from per-pick clustering, which doesn't exist yet. */
+export async function getSongLayer(): Promise<SongLayer> {
+  await delay(150);
+  return buildSongLayer(getSession().picks ?? []);
 }
 
 /**

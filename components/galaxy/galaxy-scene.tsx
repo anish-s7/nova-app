@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { getCluster } from "@/lib/clusters";
+import { isSongNode } from "@/lib/song-layer";
 import type { LayoutPoint } from "@/lib/galaxy-layout";
 import type { GalaxyApi, GalaxyViewProps } from "./types";
 
@@ -31,13 +32,16 @@ const nodeVertex = /* glsl */ `
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     float birth = aBirth < 0.0 ? 1.0 : smoothstep(0.0, 1.8, uTime - aBirth);
     float vis = mix(uOthers, uMe, aIsMe) * birth;
-    float dim = mix(0.14, 1.0, aDim);
+    float lit = clamp(aDim, 0.0, 1.0);
+    // aDim below zero removes the star entirely (the song layer while you're looking at people).
+    float show = clamp(aDim + 1.0, 0.0, 1.0);
+    float dim = mix(0.14, 1.0, lit);
     float hl = clamp(aHighlight, 0.0, 1.0);
-    float size = aSize * (1.0 + hl * 0.4) * (0.3 + 0.7 * birth) * mix(0.7, 1.0, aDim);
-    gl_PointSize = max(size * uScale / -mv.z, 7.0 * vis) * uPixelRatio;
+    float size = aSize * (1.0 + hl * 0.4) * (0.3 + 0.7 * birth) * mix(0.7, 1.0, lit) * show;
+    gl_PointSize = max(size * uScale / -mv.z, 7.0 * vis * show) * uPixelRatio;
     gl_Position = projectionMatrix * mv;
     vColor = color;
-    vAlpha = vis * dim * (0.75 + hl * 0.25 + aIsMe * 0.25);
+    vAlpha = vis * dim * show * (0.75 + hl * 0.25 + aIsMe * 0.25);
     vRing = step(0.99, aHighlight) * vis;
   }
 `;
@@ -125,7 +129,7 @@ export type ClusterCenter = { id: string; x: number; y: number; z: number; sprea
 export function clusterCenters(points: Map<string, LayoutPoint>, meId?: string): ClusterCenter[] {
   const groups = new Map<string, LayoutPoint[]>();
   for (const p of points.values()) {
-    if (p.id === meId) continue;
+    if (p.id === meId || isSongNode(p.id)) continue;
     const list = groups.get(p.cluster) ?? [];
     list.push(p);
     groups.set(p.cluster, list);
@@ -171,6 +175,8 @@ function Scene({
   interactive = true,
   onReady,
   focusCluster = null,
+  mode = "people",
+  focusIds = null,
 }: GalaxyViewProps) {
   const { camera, gl, size, invalidate } = useThree();
   const perspective = camera as THREE.PerspectiveCamera;
@@ -261,6 +267,19 @@ function Scene({
 
   const ordered = useMemo(() => nodes.filter((n) => points.has(n.userId)), [nodes, points]);
 
+  // How lit each star should be: 1 lit, 0 ghosted, -1 gone. The song layer and the people layer take turns.
+  const dimFor = (n: (typeof nodes)[number]) => {
+    if (n.kind === "song") {
+      if (mode !== "songs") return -1;
+      return !focusIds || focusIds.has(n.userId) || n.userId === selectedId ? 1 : 0;
+    }
+    if (n.isMe) return 1;
+    if (mode === "songs") return 0;
+    return !focusCluster || n.cluster === focusCluster || n.userId === selectedId ? 1 : 0;
+  };
+  const dimForRef = useRef(dimFor);
+  dimForRef.current = dimFor;
+
   const nodeGeo = useMemo(() => {
     const g = new THREE.BufferGeometry();
     const n = ordered.length;
@@ -275,7 +294,7 @@ function Scene({
       pos.set([p.x, p.y, p.z], i * 3);
       c.set(getCluster(node.cluster).color);
       col.set([c.r, c.g, c.b], i * 3);
-      sizeA[i] = node.isMe ? 3.4 : 2.1;
+      sizeA[i] = node.isMe ? 3.4 : node.kind === "song" ? 1.5 + 0.3 * Math.min(6, node.weight ?? 1) : 2.1;
       isMe[i] = node.isMe ? 1 : 0;
       if (!known.current.has(node.userId) && !births.current.has(node.userId)) births.current.set(node.userId, now());
       birth[i] = births.current.get(node.userId) ?? -1;
@@ -286,7 +305,7 @@ function Scene({
     g.setAttribute("aIsMe", new THREE.BufferAttribute(isMe, 1));
     g.setAttribute("aBirth", new THREE.BufferAttribute(birth, 1));
     g.setAttribute("aHighlight", new THREE.BufferAttribute(new Float32Array(n), 1));
-    g.setAttribute("aDim", new THREE.BufferAttribute(new Float32Array(n).fill(1), 1));
+    g.setAttribute("aDim", new THREE.BufferAttribute(Float32Array.from(ordered, (node) => dimForRef.current(node)), 1));
     g.setAttribute("aPhase", new THREE.BufferAttribute(Float32Array.from({ length: n }, (_, i) => i * 2.399), 1));
     return g;
   }, [ordered, points]);
@@ -330,19 +349,23 @@ function Scene({
   useEffect(() => {
     applyHighlightRef.current();
     const alpha = edgeGeo.getAttribute("aAlpha") as THREE.BufferAttribute;
-    const inFocus = (id: string) => !focusCluster || clusterOf.get(id) === focusCluster;
+    const inFocus = (id: string) => (focusIds ? focusIds.has(id) : !focusCluster || clusterOf.get(id) === focusCluster);
     visibleEdges.forEach((e, i) => {
       const base = 0.04 + ((e.similarity - EDGE_MIN) / (1 - EDGE_MIN)) * 0.24;
       const mine = e.source === meId || e.target === meId;
       const touched = selectedId && (e.source === selectedId || e.target === selectedId);
       let a = touched ? 0.7 : selectedId ? base * 0.35 : mine ? base * 1.6 : base;
-      if (!touched && focusCluster) a *= inFocus(e.source) && inFocus(e.target) ? 1.8 : 0.15;
+      if (!touched && (focusCluster || focusIds)) a *= inFocus(e.source) && inFocus(e.target) ? 1.8 : 0.15;
+      // Each layer only draws its own threads; the other one fades back.
+      const songEdge = isSongNode(e.source) && isSongNode(e.target);
+      if (mode === "songs") a *= songEdge ? 1.6 : 0.08;
+      else if (songEdge) a = 0;
       alpha.setX(i * 2, a);
       alpha.setX(i * 2 + 1, a);
     });
     alpha.needsUpdate = true;
     invalidate();
-  }, [selectedId, focusCluster, nodeGeo, edgeGeo, ordered, visibleEdges, clusterOf, meId, invalidate]);
+  }, [selectedId, focusCluster, focusIds, mode, nodeGeo, edgeGeo, ordered, visibleEdges, clusterOf, meId, invalidate]);
 
   // Nebulae: one soft cloud per cluster so the map reads before any star is tapped.
   const nebulaMap = useMemo(() => nebulaTexture(), []);
@@ -352,7 +375,9 @@ function Scene({
         const m = new THREE.SpriteMaterial({ map: nebulaMap, color: getCluster(c.id).color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0 });
         const sp = new THREE.Sprite(m);
         sp.position.set(c.x, c.y, c.z);
-        sp.scale.setScalar(c.spread * 4.2 + 6);
+        // Clusters swell as more people bring songs to them: the biggest cloud reads ~40% larger than the smallest.
+        const growth = 0.8 + 0.45 * (c.count / Math.max(1, ...centers.map((k) => k.count)));
+        sp.scale.setScalar((c.spread * 4.2 + 6) * growth);
         return { id: c.id, sprite: sp };
       }),
     [centers, nebulaMap],
@@ -374,7 +399,7 @@ function Scene({
   );
   const bond = useMemo(() => {
     const a = meId ? points.get(meId) : undefined;
-    const b = selectedId && selectedId !== meId ? points.get(selectedId) : undefined;
+    const b = selectedId && selectedId !== meId && !isSongNode(selectedId) ? points.get(selectedId) : undefined;
     if (!a || !b) return null;
     const va = new THREE.Vector3(a.x, a.y, a.z);
     const vb = new THREE.Vector3(b.x, b.y, b.z);
@@ -445,13 +470,13 @@ function Scene({
   useEffect(() => {
     const attr = nodeGeo.getAttribute("aDim") as THREE.BufferAttribute;
     const from = Array.from(attr.array as Float32Array);
-    const to = ordered.map((n) => (!focusCluster || n.cluster === focusCluster || n.isMe || n.userId === selectedId ? 1 : 0));
+    const to = ordered.map((n) => dimForRef.current(n));
     tween("dim", 600, (e) => {
       to.forEach((v, i) => attr.setX(i, lerp(from[i] ?? 1, v, e)));
       attr.needsUpdate = true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tween is stable in behavior
-  }, [focusCluster, selectedId, nodeGeo, ordered]);
+  }, [focusCluster, focusIds, mode, selectedId, nodeGeo, ordered]);
 
   /** Tween the orbit. Leaving out yaw/pitch keeps the angle the user is looking from; lift defaults to none. */
   const moveCamera = (to: CamMove, dur: number) => {
@@ -508,6 +533,15 @@ function Scene({
       await moveCamera({ x: p.x, y: p.y, z: p.z, dist, lift: opts?.lift ?? 0 }, opts?.duration ?? 600);
     },
     recenter: () => moveCamera({ x: hub.x, y: hub.y, z: hub.z, dist: overviewDist, yaw: 0, pitch: 0 }, 700),
+    flyToGroup: async (ids) => {
+      const ps = ids.map((id) => points.get(id)).filter((p): p is LayoutPoint => !!p);
+      if (!ps.length) return moveCamera({ x: hub.x, y: hub.y, z: hub.z, dist: overviewDist }, 900);
+      const c = { x: ps.reduce((a, p) => a + p.x, 0) / ps.length, y: ps.reduce((a, p) => a + p.y, 0) / ps.length, z: ps.reduce((a, p) => a + p.z, 0) / ps.length };
+      const extent = Math.max(4, ...ps.map((p) => Math.hypot(p.x - c.x, p.y - c.y, p.z - c.z)));
+      const dist = clamp((extent * 1.7) / Math.tan(((FOV / 2) * Math.PI) / 180), 16, overviewDist * 0.95);
+      const lift = (extent * 0.1) / (2 * dist * Math.tan(((FOV / 2) * Math.PI) / 180));
+      await moveCamera({ ...c, dist, lift }, 1000);
+    },
     flyToCluster: async (cluster) => {
       const c = cluster ? centers.find((k) => k.id === cluster) : undefined;
       if (!c) return moveCamera({ x: hub.x, y: hub.y, z: hub.z, dist: overviewDist }, 900);
@@ -526,6 +560,7 @@ function Scene({
       flyTo: (id, o) => api.current.flyTo(id, o),
       recenter: () => api.current.recenter(),
       flyToCluster: (c) => api.current.flyToCluster(c),
+      flyToGroup: (ids) => api.current.flyToGroup(ids),
     };
     onReady?.();
     return () => {
@@ -534,6 +569,8 @@ function Scene({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- register once
   }, []);
 
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
   const onSelectRef = useRef(onSelect);
   onSelectRef.current = onSelect;
 
@@ -555,6 +592,8 @@ function Scene({
       let bestD = 40;
       for (const [id, p] of points) {
         if (id !== meId && nodeMat.uniforms.uOthers.value < 0.5) continue;
+        // Only the layer you're looking at can be tapped.
+        if (id !== meId && isSongNode(id) !== (modeRef.current === "songs")) continue;
         v.set(p.x, p.y, p.z).project(camera);
         if (v.z > 1) continue;
         const d = Math.hypot(((v.x + 1) / 2) * rect.width - px, ((1 - v.y) / 2) * rect.height - py);
@@ -710,7 +749,7 @@ function Scene({
     bondMat.uniforms.uTime.value = time;
     const others = nodeMat.uniforms.uOthers.value;
     for (const { id, sprite } of nebulae) {
-      const focus = !focusCluster ? 1 : id === focusCluster ? 1.5 : 0.25;
+      const focus = (!focusCluster ? 1 : id === focusCluster ? 1.5 : 0.25) * (mode === "songs" ? 0.3 : 1);
       sprite.material.opacity = 0.07 * others * focus;
     }
     // New arrivals fade in; nothing else moves on its own.

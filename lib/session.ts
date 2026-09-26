@@ -2,6 +2,7 @@
 
 import { useSyncExternalStore } from "react";
 import { songById } from "./music-context";
+import type { SongPick } from "./song-layer";
 import type { AnalysisResult, InferredMotivation, ListeningSignal, Song } from "./types";
 
 export type FailureKey = "spotify" | "analysis" | "galaxy" | "card";
@@ -17,6 +18,8 @@ export type SessionState = {
   revealSeen: boolean;
   /** Optional answer to "what do you reach for when you can't decide what to play?" */
   reach?: string;
+  /** Songs added from the galaxy after onboarding, with the reason typed for each. Kept out of `songs` so adding one grows the galaxy without re-laying it out. */
+  picks?: SongPick[];
   /** Bumped whenever anything that affects the galaxy changes, used in SWR keys. */
   version: number;
 };
@@ -70,6 +73,10 @@ export function setSession(update: Partial<SessionState> | ((s: SessionState) =>
   state = { ...state, ...patch, version: bump ? state.version + 1 : state.version };
   persist();
   listeners.forEach((l) => l());
+}
+
+export function addPick(pick: SongPick) {
+  setSession((s) => ({ picks: [...(s.picks ?? []).filter((p) => p.songId !== pick.songId), pick] }));
 }
 
 export function resetSession() {

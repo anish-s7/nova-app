@@ -42,3 +42,10 @@ export function listeningMoment(userId: string, songs: Song[], cluster: ClusterI
     when: pick(WHEN, 7),
   };
 }
+
+/** A person's own words for why one specific song matters, deterministic per (user, song). */
+export function reasonFor(userId: string, songId: string, cluster: ClusterId) {
+  const h = hash(userId + songId);
+  const list = MOMENTS[cluster];
+  return { text: list[h % list.length], daysAgo: 1 + ((h >>> 5) % 34) };
+}

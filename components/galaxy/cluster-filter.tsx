@@ -47,6 +47,7 @@ export function ClusterFilter({ nodes, value, onChange, className }: { nodes: Ga
           >
             <span className="size-1.5 rounded-full bg-[var(--tone)]" aria-hidden />
             {c.short}
+            <span className="tabular-nums text-muted-foreground">{counts.get(id)}</span>
           </button>
         );
       })}

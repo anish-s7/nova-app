@@ -122,6 +122,10 @@ export type GalaxyNode = {
   cluster: string;
   topMotivations: string[];
   isMe: boolean;
+  /** "song" stars are the song layer (lib/song-layer.ts); everything else is a person. */
+  kind?: "song";
+  /** Song stars: how many people share it. */
+  weight?: number;
 };
 
 export type GalaxyEdge = {

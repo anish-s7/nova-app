@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import useSWR from "swr";
-import { MessageCircle } from "lucide-react";
 import { animate, stagger } from "animejs";
 import { EmptyState } from "@/components/empty-state";
 import { ScreenHeader } from "@/components/screen-header";
@@ -44,9 +43,8 @@ export default function MessagesPage() {
           </ul>
         ) : data.length === 0 ? (
           <EmptyState
-            icon={MessageCircle}
-            title="No conversations yet"
-            body="Open a Connection Card and send a Song Swap. It's easier than starting from nothing."
+            title="It's quiet in here"
+            body="Nobody's said hello yet. A song is an easier first message than 'hey'. Open a Connection Card and send one."
             action={
               <Link href="/connections" className={cn(buttonVariants(), "h-11 rounded-full px-6")}>
                 See connections

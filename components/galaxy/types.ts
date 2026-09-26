@@ -11,6 +11,8 @@ export type GalaxyApi = {
   recenter(): Promise<void>;
   /** Frame one cluster's neighborhood; null returns to the overview. */
   flyToCluster(cluster: string | null): Promise<void>;
+  /** Frame a set of stars (a theme's songs); an empty set returns to the overview. */
+  flyToGroup(ids: string[]): Promise<void>;
 };
 
 export type GalaxyViewProps = {
@@ -28,4 +30,8 @@ export type GalaxyViewProps = {
   onReady?: () => void;
   /** Dims every other cluster so one "why" stands out. */
   focusCluster?: string | null;
+  /** "people" shows the people layer; "songs" shows the song layer and ghosts everyone else. */
+  mode?: "people" | "songs";
+  /** Song-layer focus: only these node ids stay lit. */
+  focusIds?: ReadonlySet<string> | null;
 };

@@ -22,6 +22,8 @@ export function GalaxySvg({
   onReady,
   compact = false,
   focusCluster = null,
+  mode = "people",
+  focusIds = null,
 }: GalaxyViewProps & { compact?: boolean }) {
   const [phase, setPhase] = useState<"dark" | "me" | "all">(initialPhase === "dark" ? "dark" : "all");
   const [focus, setFocus] = useState<string | null>(null);
@@ -49,6 +51,7 @@ export function GalaxySvg({
       },
       recenter: async () => setFocus(null),
       flyToCluster: async () => setFocus(null),
+      flyToGroup: async () => setFocus(null),
     };
     onReady?.();
     return () => {
@@ -102,10 +105,12 @@ export function GalaxySvg({
         const p = points.get(n.userId);
         if (!p) return null;
         const color = getCluster(n.cluster).color;
-        const visible = n.isMe ? phase !== "dark" : phase === "all";
-        const dimmed = !!focusCluster && n.cluster !== focusCluster && !n.isMe;
+        const song = n.kind === "song";
+        // The song layer and the people layer take turns; the other one is ghosted or hidden.
+        const visible = n.isMe ? phase !== "dark" : phase === "all" && (!song || mode === "songs");
+        const dimmed = song ? !!focusIds && !focusIds.has(n.userId) : !n.isMe && (mode === "songs" || (!!focusCluster && n.cluster !== focusCluster));
         const on = n.userId === highlight;
-        const size = n.isMe ? 1.3 : on ? 1.1 : 0.75;
+        const size = n.isMe ? 1.3 : on ? 1.1 : song ? 0.5 + 0.1 * Math.min(6, n.weight ?? 1) : 0.75;
         return (
           <g
             key={n.userId}
@@ -123,7 +128,7 @@ export function GalaxySvg({
                 You
               </text>
             ) : null}
-            {on && !n.isMe ? (
+            {(on || (song && !dimmed && mode === "songs" && (n.weight ?? 1) >= 5)) && !n.isMe ? (
               <text y={2.8} textAnchor="middle" className="fill-foreground text-[1.5px] font-semibold">
                 {n.name}
               </text>

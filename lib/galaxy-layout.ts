@@ -101,3 +101,38 @@ export function placeArrival(layout: Layout, node: GalaxyNode, edges: GalaxyEdge
   const a = (hash(node.userId) % 360) * (Math.PI / 180);
   return { id: node.userId, cluster: node.cluster, x: base.x + Math.cos(a) * 2.6, y: base.y + Math.sin(a) * 2.6, z: base.z + 0.5 };
 }
+
+/**
+ * Song stars sit at the middle of the people who share them, nudged outward so they float
+ * around the people layer instead of hiding inside it. A song shared across two "whys" lands
+ * between them, which is what makes the bridges visible.
+ */
+export function placeSongs(layout: Layout, stars: { id: string; cluster: string; listenerIds: string[] }[], extra: LayoutPoint[] = []): LayoutPoint[] {
+  const people = new Map(layout.points);
+  for (const p of extra) people.set(p.id, p);
+  const all = [...people.values()];
+  const mean = {
+    x: all.reduce((a, p) => a + p.x, 0) / Math.max(1, all.length),
+    y: all.reduce((a, p) => a + p.y, 0) / Math.max(1, all.length),
+    z: all.reduce((a, p) => a + p.z, 0) / Math.max(1, all.length),
+  };
+  return stars.map((s) => {
+    const ps = s.listenerIds.map((id) => people.get(id)).filter((p): p is LayoutPoint => !!p);
+    const c = ps.length
+      ? { x: ps.reduce((a, p) => a + p.x, 0) / ps.length, y: ps.reduce((a, p) => a + p.y, 0) / ps.length, z: ps.reduce((a, p) => a + p.z, 0) / ps.length }
+      : mean;
+    const dx = c.x - mean.x;
+    const dy = c.y - mean.y;
+    const dz = c.z - mean.z;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    const rand = seeded(hash(s.id));
+    const push = 2.2;
+    return {
+      id: `song:${s.id}`,
+      cluster: s.cluster,
+      x: c.x + (dx / len) * push + (rand() - 0.5) * 4,
+      y: c.y + (dy / len) * push + (rand() - 0.5) * 4,
+      z: c.z + (dz / len) * push + (rand() - 0.5) * 4,
+    };
+  });
+}
