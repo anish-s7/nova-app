@@ -4,6 +4,7 @@ import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
 import { evaluateAndGenerateCard, type PickForEvaluation } from "@/lib/gemini/evaluateAndGenerateCard";
 import { cosineSimilarity } from "@/lib/matching/cosineSimilarity";
 import { alignCardEvidence } from "@/lib/matching/alignCardEvidence";
+import { parseVector } from "@/lib/supabase/vector";
 
 // matchId is the other user's profile id; the current user comes from the
 // real session.
@@ -90,7 +91,7 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ ma
   let bestPair: { a: PickRow; b: PickRow; similarity: number } | null = null;
   for (const a of rowsA) {
     for (const b of rowsB) {
-      const similarity = cosineSimilarity(a.embedding, b.embedding);
+      const similarity = cosineSimilarity(parseVector(a.embedding), parseVector(b.embedding));
       if (!bestPair || similarity > bestPair.similarity) {
         bestPair = { a, b, similarity };
       }

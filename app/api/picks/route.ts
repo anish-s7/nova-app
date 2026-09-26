@@ -7,6 +7,7 @@ import { EMOTION_WEIGHT, clampEmotionValue } from "@/lib/emotion";
 import { isValidTag } from "@/lib/tags";
 import { refreshPrimaryCluster } from "@/lib/matching/refreshPrimaryCluster";
 import { createSessionClient } from "@/lib/supabase/serverAuth";
+import { parseVector } from "@/lib/supabase/vector";
 
 function fallbackKey(title: string, artist: string) {
   return `${title.trim().toLowerCase()}::${artist.trim().toLowerCase()}`;
@@ -116,7 +117,7 @@ export async function POST(req: NextRequest) {
   const clampedValence = clampEmotionValue(valence ?? 0);
   const clampedEnergy = clampEmotionValue(energy ?? 0);
   const pickEmbedding = [
-    ...song.embedding,
+    ...parseVector(song.embedding),
     clampedValence * EMOTION_WEIGHT,
     clampedEnergy * EMOTION_WEIGHT,
   ];

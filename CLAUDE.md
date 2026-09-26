@@ -27,7 +27,7 @@ someone specifically asks for a CLAUDE.md update.
 | Database | Supabase (Postgres) + pgvector |
 | Auth | Supabase Auth (real sessions — see "Auth" below), incl. optional Spotify OAuth |
 | Messaging | Supabase Realtime |
-| LLM | Google Gemini API (`gemini-2.5-flash` for text, `gemini-embedding-001` for vectors) |
+| LLM | Google Gemini API (`gemini-flash-lite-latest` for text, `gemini-embedding-001` for vectors) |
 | Song identity | MusicBrainz API (primary), Gemini (fallback only) — see below |
 | Music data (optional) | Spotify Web API — OAuth top-tracks import only, display purposes only |
 | Hosting | Vercel |
@@ -124,21 +124,50 @@ building user profiles. Practical rule for this codebase:
   it per keystroke; resolve on submit, not on every input change.
 
 ## Implementation status / open TODOs
-- **MusicBrainz `User-Agent` is a placeholder.** `lib/musicbrainz/client.ts`
-  ships with a fake contact email in its `User-Agent` header. MusicBrainz
-  requires a real, descriptive one and may rate-limit or block requests
-  with a generic/fake one — **replace it before the demo.**
-- **The real Supabase migration hasn't been applied yet.** `db/contract.md`
-  is the target schema; no live database matches it yet, so none of this
-  has been tested end-to-end against a real Supabase project.
+- **The v2 schema is live and seeded with real data** (as of 2026-09-26).
+  `supabase/migrations/*.sql` has been applied to the real project, and
+  `scripts/seed-real-data.ts` has run successfully end to end — 7 real
+  profiles, 26 real catalog songs (resolved via real MusicBrainz + Gemini,
+  not fabricated vectors), 26 real picks. This is the first real
+  confirmation the backend actually works, not just that it typechecks.
 - Implemented: auth (`lib/supabase/serverAuth.ts`, session-derived
-  `profileId` in `profile`/`messages`/`cards`/`picks` routes), the
+  `profileId` in `profile`/`messages`/`cards`/`picks`/`match` routes), the
   MusicBrainz-primary identity resolution in `app/api/picks/route.ts`, and
   the evidence-check step (`lib/gemini/evaluateAndGenerateCard.ts`) — both
   `lib/matching/findMatches.ts` (pgvector retrieval path) and
   `app/api/cards/[matchId]/route.ts` (direct-pair path) now call it and
   only ever return/cache a `"match"` result, dropping
   `"insufficient_evidence"` candidates.
+- **Frontend is still not wired to any of this.** `lib/api.ts`'s
+  `const db: Db = mockDb` hasn't been flipped yet — see
+  `MERGE_CHECKLIST.md`. The two real blockers there (no auth session in the
+  app, and onboarding not collecting tags/valence/energy) are unrelated to
+  and unaffected by the backend now being proven to work.
+
+## Known gotchas (found seeding real data on 2026-09-26 — read before touching Gemini/vector code)
+- **Gemini model names go stale fast.** `gemini-2.5-flash` was retired for
+  new callers mid-hackathon (live 404 from the real API). Always use a
+  `-latest` alias (`gemini-flash-latest`, `gemini-flash-lite-latest`), never
+  a pinned dated/versioned model name, in `lib/gemini/client.ts`.
+- **`gemini-embedding-001` defaults to 3072 dimensions, not 768.** Every
+  doc/schema in this repo assumed 768 without ever verifying it against a
+  live call. `lib/gemini/generateSongContext.ts` now requests 768
+  explicitly via `config: { outputDimensionality: EMBEDDING_DIMENSIONS }`.
+  If you ever change `EMBEDDING_DIMENSIONS` in `lib/gemini/client.ts`, the
+  `vector(768)`/`vector(770)` column widths in the migration have to change
+  too — they're not derived from each other.
+- **Postgres returns `vector` columns as a string, not a parsed array.**
+  `song.embedding` from any `.select()` comes back as `"[0.1,0.2,...]"`
+  (text), even though `.insert({ embedding: [...] })` correctly accepts a
+  real `number[]`. Spreading a read-back embedding directly (`[...song
+  .embedding, ...]`) silently corrupts it into one entry per character.
+  Always run a read-back embedding through `parseVector()` in
+  `lib/supabase/vector.ts` before doing array math on it.
+- **MusicBrainz's contact email lives in `MUSICBRAINZ_CONTACT_EMAIL`
+  (env var), not a source literal** — this repo is public, and a
+  placeholder/fake email in the `User-Agent` got connections reset
+  mid-run (likely their abuse detection). Use a throwaway/alias address,
+  not a personal one, since it's a real address MusicBrainz could contact.
 
 ## Demo simulation (`/sim`)
 A client-side, randomized live simulation exists so the product can be demoed without real users:
@@ -168,6 +197,12 @@ It is a demo, not the production system, and it is labelled "Simulated" on scree
 ## Getting started
 ```bash
 npm install
-cp .env.local.example .env.local   # fill in Supabase + Gemini keys (Spotify optional)
+cp .env.local.example .env.local   # fill in Supabase + Gemini + MusicBrainz contact email (Spotify optional)
 npm run dev
+```
+
+To seed real demo data (a handful of `lib/mock-world.ts` personas run
+through the real MusicBrainz + Gemini pipeline, not fabricated vectors):
+```bash
+node --env-file=.env.local node_modules/.bin/tsx scripts/seed-real-data.ts
 ```
