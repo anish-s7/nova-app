@@ -74,4 +74,7 @@ and connect them based on shared emotional meaning.
 
 ## Team
 
-_TODO_
+Anish
+Daniel
+James
+An
