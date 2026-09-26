@@ -44,7 +44,33 @@ and connect them based on shared emotional meaning.
 
 ## Tech Stack
 
-_TODO_
+| Layer | Technology | Purpose |
+|---|---|---|
+| **Framework** | [Next.js](https://nextjs.org/) (App Router) | Full-stack framework for both frontend and backend |
+| **Styling** | [Tailwind CSS](https://tailwindcss.com/) | UI styling |
+| **Backend** | Next.js Route Handlers | API endpoints for matching, card generation, and Spotify auth |
+| **Database** | [Supabase](https://supabase.com/) (PostgreSQL) | User profiles, songs, reasons, connections, and messages |
+| **Vector Search** | [pgvector](https://github.com/pgvector/pgvector) | Similarity search over embeddings of users' listening motivations |
+| **Authentication** | Supabase Auth | User accounts and Spotify OAuth |
+| **Real-time Messaging** | Supabase Realtime | Live chat between connected users |
+| **AI / LLM** | [Google Gemini API](https://ai.google.dev/) | Interprets listening reasons, generates Connection Cards and conversation openers |
+| **Embeddings** | Gemini Embeddings | Converts listening motivations into vectors for matching |
+| **Music Data** | [Spotify Web API](https://developer.spotify.com/documentation/web-api) | Imports users' top tracks, album art, and song metadata |
+| **Hosting** | [Vercel](https://vercel.com/) | Deployment and serverless functions |
+
+### Architecture Overview
+
+1. **Profile creation:** Users add their top 5 songs (manually or via Spotify) and
+   write a short reason for each.
+2. **Motivation extraction:** Gemini turns each free-text reason into structured
+   listening motivations (e.g., "company during loneliness," "pre-game hype").
+3. **Embedding and storage:** Motivations are embedded with Gemini and stored
+   in Supabase using pgvector.
+4. **Matching:** A nearest-neighbor search finds users with similar motivations,
+   and those matches become the connections in the Galaxy.
+5. **Connection Cards:** When a user opens a connection, Gemini generates a card
+   from both profiles, covering shared reasons, one key difference, and
+   conversation openers. Cards are cached in
 
 ## Team
 
