@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, type RefObject } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Html } from "@react-three/drei";
 import * as THREE from "three";
 import { getCluster } from "@/lib/clusters";
 import type { LayoutPoint } from "@/lib/galaxy-layout";
@@ -81,7 +80,34 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-function Scene({ nodes, edges, layout, extra, selectedId, onSelect, apiRef, initialPhase = "explore", interactive = true, onReady }: GalaxyViewProps) {
+/** Pins a DOM label under a world-space point. Plain DOM instead of drei's <Html>, whose nested React root crashes on unmount under React 19. */
+function placeLabel(el: HTMLSpanElement | null, at: THREE.Vector3 | null, camera: THREE.Camera, width: number, height: number, text?: string) {
+  if (!el) return;
+  if (text !== undefined && el.textContent !== text) el.textContent = text;
+  if (!at) {
+    el.style.opacity = "0";
+    return;
+  }
+  const v = at.project(camera);
+  const hidden = v.z > 1;
+  el.style.opacity = hidden ? "0" : "1";
+  el.style.transform = `translate(${((v.x + 1) / 2) * width}px, ${((1 - v.y) / 2) * height}px) translate(-50%, -50%)`;
+}
+
+function Scene({
+  nodes,
+  edges,
+  layout,
+  extra,
+  selectedId,
+  onSelect,
+  apiRef,
+  initialPhase = "explore",
+  interactive = true,
+  onReady,
+  meLabelRef,
+  selectedLabelRef,
+}: GalaxyViewProps & { meLabelRef: RefObject<HTMLSpanElement | null>; selectedLabelRef: RefObject<HTMLSpanElement | null> }) {
   const { camera, gl, size, invalidate } = useThree();
   const perspective = camera as THREE.PerspectiveCamera;
 
@@ -410,6 +436,11 @@ function Scene({ nodes, edges, layout, extra, selectedId, onSelect, apiRef, init
     };
   }, [interactive, gl, camera, points, meId, nodeMat, layout.radius, minDist, maxDist, invalidate]);
 
+  // "You" appears once your star has ignited; checked per frame so no React state is involved.
+  const labelsOn = useRef(initialPhase !== "dark");
+  const labelPos = useMemo(() => new THREE.Vector3(), []);
+  useEffect(() => invalidate(), [selectedId, invalidate]);
+
   const offset = useMemo(() => new THREE.Vector3(), []);
   const euler = useMemo(() => new THREE.Euler(), []);
 
@@ -443,6 +474,7 @@ function Scene({ nodes, edges, layout, extra, selectedId, onSelect, apiRef, init
     camera.lookAt(c.x, c.y, c.z);
 
     const time = now();
+    if (!labelsOn.current && nodeMat.uniforms.uMe.value > 0.9) labelsOn.current = true;
     nodeMat.uniforms.uTime.value = time;
     nodeMat.uniforms.uScale.value = size.height / (2 * Math.tan(((perspective.fov / 2) * Math.PI) / 180));
     nodeMat.uniforms.uPixelRatio.value = gl.getPixelRatio();
@@ -451,17 +483,20 @@ function Scene({ nodes, edges, layout, extra, selectedId, onSelect, apiRef, init
       starGroup.current.position.set(c.x * 0.7, c.y * 0.7, 0);
       starGroup.current.rotation.z = time * 0.004;
     }
+    const meLabel = labelsOn.current && me ? labelPos.set(me.x, me.y - 1.6, me.z) : null;
+    placeLabel(meLabelRef.current, meLabel, camera, size.width, size.height);
+    const sel = selectedId && selectedId !== meId ? points.get(selectedId) : undefined;
+    placeLabel(
+      selectedLabelRef.current,
+      sel ? labelPos.set(sel.x, sel.y - 1.4, sel.z) : null,
+      camera,
+      size.width,
+      size.height,
+      sel ? (nameById.get(selectedId!) ?? "") : undefined,
+    );
+
     if (active) invalidate();
   });
-
-  const [labelsOn, setLabelsOn] = useState(initialPhase !== "dark");
-  useEffect(() => {
-    if (labelsOn) return;
-    const id = setInterval(() => nodeMat.uniforms.uMe.value > 0.9 && setLabelsOn(true), 200);
-    return () => clearInterval(id);
-  }, [labelsOn, nodeMat]);
-
-  const selected = selectedId ? points.get(selectedId) : undefined;
 
   return (
     <>
@@ -473,22 +508,15 @@ function Scene({ nodes, edges, layout, extra, selectedId, onSelect, apiRef, init
       </group>
       <lineSegments geometry={edgeGeo} material={edgeMat} />
       <points geometry={nodeGeo} material={nodeMat} />
-      {labelsOn && me ? (
-        <Html position={[me.x, me.y - 1.6, me.z]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
-          <span className="whitespace-nowrap text-xs font-semibold tracking-wide text-primary">You</span>
-        </Html>
-      ) : null}
-      {selected && selectedId !== meId ? (
-        <Html position={[selected.x, selected.y - 1.4, selected.z]} center zIndexRange={[10, 0]} style={{ pointerEvents: "none" }}>
-          <span className="whitespace-nowrap text-xs font-semibold text-foreground">{nameById.get(selectedId!)}</span>
-        </Html>
-      ) : null}
     </>
   );
 }
 
 export default function GalaxyScene(props: GalaxyViewProps) {
+  const meLabelRef = useRef<HTMLSpanElement>(null);
+  const selectedLabelRef = useRef<HTMLSpanElement>(null);
   return (
+    <>
     <Canvas
       dpr={[1, 1.5]}
       frameloop="demand"
@@ -497,7 +525,14 @@ export default function GalaxyScene(props: GalaxyViewProps) {
       className="!absolute inset-0"
       aria-hidden
     >
-      <Scene {...props} />
+      <Scene {...props} meLabelRef={meLabelRef} selectedLabelRef={selectedLabelRef} />
     </Canvas>
+      <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+        <span ref={meLabelRef} className="absolute left-0 top-0 whitespace-nowrap text-xs font-semibold tracking-wide text-primary opacity-0 transition-opacity duration-300">
+          You
+        </span>
+        <span ref={selectedLabelRef} className="absolute left-0 top-0 whitespace-nowrap text-xs font-semibold text-foreground opacity-0 transition-opacity duration-300" />
+      </div>
+    </>
   );
 }

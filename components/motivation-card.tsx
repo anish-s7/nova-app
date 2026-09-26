@@ -1,11 +1,12 @@
 "use client";
 
-import { useId, useState, type CSSProperties } from "react";
+import { useId, useRef, useState, type CSSProperties } from "react";
 import { Check, RotateCcw, X } from "lucide-react";
 import { EvidenceLine } from "@/components/evidence-line";
 import { ThemeTag } from "@/components/theme-tag";
 import { Switch } from "@/components/ui/switch";
 import { updateMotivation } from "@/lib/api";
+import { burst } from "@/lib/burst";
 import { getCluster } from "@/lib/clusters";
 import type { InferredMotivation, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -13,6 +14,7 @@ import { cn } from "@/lib/utils";
 export function MotivationCard({ motivation: m, songs, className }: { motivation: InferredMotivation; songs: Song[]; className?: string }) {
   const id = useId();
   const [note, setNote] = useState(m.note ?? "");
+  const ref = useRef<HTMLElement>(null);
   const tone = { "--tone": getCluster(m.cluster).color } as CSSProperties;
 
   if (m.feedback === "rejected") {
@@ -37,10 +39,11 @@ export function MotivationCard({ motivation: m, songs, className }: { motivation
 
   return (
     <article
+      ref={ref}
       style={tone}
       aria-labelledby={`${id}-label`}
       className={cn(
-        "rounded-3xl border bg-card/70 p-5 transition-colors",
+        "surface relative rounded-3xl border bg-card/70 p-5 transition-colors",
         confirmed ? "border-[color-mix(in_oklch,var(--tone)_40%,transparent)]" : "border-white/10",
         className,
       )}
@@ -104,7 +107,15 @@ export function MotivationCard({ motivation: m, songs, className }: { motivation
         <div className="mt-5 grid grid-cols-2 gap-2">
           <button
             type="button"
-            onClick={() => updateMotivation(m.id, { feedback: "confirmed" })}
+            onClick={(e) => {
+              const host = ref.current;
+              if (host) {
+                const a = host.getBoundingClientRect();
+                const b = e.currentTarget.getBoundingClientRect();
+                burst(host, b.left - a.left + b.width / 2, b.top - a.top + b.height / 2, getCluster(m.cluster).color);
+              }
+              updateMotivation(m.id, { feedback: "confirmed" });
+            }}
             className="inline-flex min-h-12 items-center justify-center gap-1.5 rounded-full bg-[color-mix(in_oklch,var(--tone)_20%,transparent)] font-medium text-[var(--tone)] transition-colors hover:bg-[color-mix(in_oklch,var(--tone)_28%,transparent)]"
           >
             <Check className="size-4" aria-hidden />

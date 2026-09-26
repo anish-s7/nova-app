@@ -5,6 +5,7 @@ import { AudioLines, ListMusic, Orbit } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
 import { EmptyState } from "@/components/empty-state";
 import { MotivationCard } from "@/components/motivation-card";
+import { ReasonSpectrum } from "@/components/reason-spectrum";
 import { ScreenHeader } from "@/components/screen-header";
 import { buttonVariants } from "@/components/ui/button";
 import { effectiveSongs, useHydrated, useSession } from "@/lib/session";
@@ -35,6 +36,15 @@ export default function MePage() {
         ) : (
           <>
             <p className="mt-2 text-balance font-serif text-2xl italic leading-snug">{session.analysis.headline}</p>
+
+            {session.motivations.some((m) => m.feedback !== "rejected") ? (
+            <section className="surface mt-6 rounded-3xl border border-white/10 bg-card/50 p-5" aria-labelledby="mix-heading">
+              <h2 id="mix-heading" className="mb-3 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+                Your listening mix
+              </h2>
+              <ReasonSpectrum motivations={session.motivations} />
+            </section>
+            ) : null}
 
             <section className="mt-6" aria-labelledby="reasons-heading">
               <h2 id="reasons-heading" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">

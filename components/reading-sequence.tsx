@@ -3,10 +3,12 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
+import { animate, splitText, stagger } from "animejs";
 import { AlbumArt } from "@/components/album-art";
 import { DemoSteps } from "@/components/demo-steps";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
+import { useAnime } from "@/hooks/use-anime";
 import { usePacer } from "@/hooks/use-pacer";
 import { analyzeMusic } from "@/lib/api";
 import { effectiveSongs, setSession, useSession } from "@/lib/session";
@@ -31,6 +33,21 @@ export function ReadingSequence() {
   const [step, setStep] = useState(-1);
   const highlights = data?.highlights.slice(0, 3) ?? [];
   const converging = data ? step >= highlights.length : false;
+
+  // Sonar rings: the app "listening" while it reads.
+  const sonar = useAnime<HTMLDivElement>(() => {
+    animate("[data-ring]", { scale: [0.3, 2.4], opacity: [0.45, 0], duration: 3200, delay: stagger(1060), loop: true, ease: "outSine" });
+  });
+  // Each insight arrives word by word.
+  const caption = useAnime<HTMLDivElement>(
+    (el) => {
+      const p = el.querySelector("[data-caption]");
+      if (!p) return;
+      const { words } = splitText(p, { words: { wrap: "clip" } });
+      animate(words, { translateY: ["105%", "0%"], opacity: [0, 1], duration: 900, delay: stagger(55), ease: "outExpo" });
+    },
+    [step, !!data],
+  );
 
   useEffect(() => {
     if (!data) return;
@@ -104,6 +121,12 @@ export function ReadingSequence() {
           );
         })}
 
+        <div ref={sonar} className={cn("absolute left-1/2 top-[42%] transition-opacity duration-1000", converging && "opacity-0")}>
+          {[0, 1, 2].map((i) => (
+            <span key={i} data-ring className="absolute size-28 -translate-x-1/2 -translate-y-1/2 rounded-full border border-primary/30 opacity-0 motion-reduce:opacity-20" />
+          ))}
+        </div>
+
         <span
           className={cn(
             "absolute left-1/2 top-[42%] size-3 -translate-x-1/2 -translate-y-1/2 rounded-full bg-primary transition-all duration-[1400ms]",
@@ -112,13 +135,13 @@ export function ReadingSequence() {
         />
       </div>
 
-      <div className="relative min-h-40 px-8 pb-16 text-center" aria-live="polite">
+      <div ref={caption} className="relative min-h-40 px-8 pb-16 text-center" aria-live="polite">
         {currentHighlight ? (
-          <p key={currentHighlight} className="text-balance font-serif text-[26px] italic leading-snug motion-safe:animate-rise-in">
+          <p key={currentHighlight} data-caption className="text-balance font-serif text-[26px] italic leading-snug">
             {currentHighlight}
           </p>
         ) : converging ? (
-          <p className="font-serif text-xl italic text-muted-foreground motion-safe:animate-rise-in">I think I see it.</p>
+          <p key="converge" data-caption className="font-serif text-xl italic text-muted-foreground">I think I see it.</p>
         ) : (
           <p className="text-sm text-muted-foreground">Reading your music…</p>
         )}

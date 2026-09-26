@@ -3,11 +3,13 @@
 import Link from "next/link";
 import useSWR from "swr";
 import { MessageCircle } from "lucide-react";
+import { animate, stagger } from "animejs";
 import { EmptyState } from "@/components/empty-state";
 import { ScreenHeader } from "@/components/screen-header";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
+import { useAnime } from "@/hooks/use-anime";
 import { getConversations, ME_ID } from "@/lib/api";
 import { useSession } from "@/lib/session";
 import type { Message } from "@/lib/types";
@@ -23,6 +25,10 @@ function preview(m?: Message) {
 export default function MessagesPage() {
   const { version } = useSession();
   const { data } = useSWR(["conversations", version], getConversations, { refreshInterval: 4000 });
+  // Entrance plays once when the list first appears, not on every 4s refresh.
+  const list = useAnime<HTMLUListElement>(() => {
+    animate("li", { opacity: [0, 1], translateX: [-10, 0], duration: 550, delay: stagger(50), ease: "outQuart" });
+  }, [!!data?.length]);
 
   return (
     <main className="flex min-h-0 flex-1 flex-col">
@@ -48,7 +54,7 @@ export default function MessagesPage() {
             }
           />
         ) : (
-          <ul className="flex flex-col">
+          <ul ref={list} className="flex flex-col">
             {data.map((c) => (
               <li key={c.userId}>
                 <Link href={`/messages/${c.userId}`} className="flex min-h-16 items-center gap-3 rounded-2xl px-3 py-2.5 transition-colors hover:bg-white/[0.04]">
