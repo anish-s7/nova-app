@@ -1,11 +1,10 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { getCluster } from "@/lib/clusters";
 import type { LayoutPoint } from "@/lib/galaxy-layout";
-import { cn } from "@/lib/utils";
 import type { GalaxyApi, GalaxyViewProps } from "./types";
 
 const BG = "#110f22";
@@ -157,59 +156,12 @@ const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
-/** Pins a DOM label under a world-space point. Plain DOM instead of drei's <Html>, whose nested React root crashes on unmount under React 19. */
-function placeLabel(el: HTMLElement | null, at: THREE.Vector3 | null, camera: THREE.Camera, width: number, height: number, text?: string, opacity = 1) {
-  if (!el) return;
-  if (text !== undefined && el.textContent !== text) el.textContent = text;
-  if (!at || opacity <= 0.01) {
-    el.style.opacity = "0";
-    el.style.visibility = "hidden";
-    return;
-  }
-  const v = at.project(camera);
-  const hidden = v.z > 1;
-  el.style.opacity = hidden ? "0" : String(opacity);
-  el.style.visibility = hidden ? "hidden" : "visible";
-  el.style.transform = `translate(${((v.x + 1) / 2) * width}px, ${((1 - v.y) / 2) * height}px) translate(-50%, -50%)`;
-}
-
 /** Keep pitch short of the poles so the view never flips over the top. */
 const PITCH_LIMIT = 1.3;
 /** Radians of turn per pixel dragged. */
 const ORBIT_SPEED = 0.006;
 /** Wrap an angle into (-π, π] so tweens take the short way round. */
 const wrapAngle = (a: number) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
-
-
-/** Cluster names: projected, nudged apart when they collide, and kept inside the frame. */
-function layoutClusterLabels(items: { el: HTMLElement | null; at: THREE.Vector3; opacity: number }[], width: number, height: number) {
-  const placed: { x: number; y: number; w: number; h: number }[] = [];
-  const shown = items
-    .filter((i) => i.el)
-    .map((i) => ({ ...i, x: ((i.at.x + 1) / 2) * width, y: ((1 - i.at.y) / 2) * height }))
-    .sort((a, b) => a.y - b.y);
-  for (const i of shown) {
-    const el = i.el!;
-    if (i.opacity <= 0.01 || i.at.z > 1) {
-      el.style.opacity = "0";
-      el.style.visibility = "hidden";
-      continue;
-    }
-    const w = el.offsetWidth;
-    const h = el.offsetHeight;
-    const x = clamp(i.x, w / 2 + 8, width - w / 2 - 8);
-    let y = i.y;
-    for (const p of placed) {
-      if (Math.abs(p.x - x) < (p.w + w) / 2 + 4 && Math.abs(p.y - y) < (p.h + h) / 2 + 2) y = p.y + (p.h + h) / 2 + 2;
-    }
-    placed.push({ x, y, w, h });
-    // Fade out under the header/chips and the bottom strip rather than colliding with them.
-    const edgeFade = clamp((y - 150) / 40, 0, 1) * clamp((height - 170 - y) / 40, 0, 1);
-    el.style.visibility = edgeFade > 0.01 ? "visible" : "hidden";
-    el.style.opacity = String(i.opacity * edgeFade);
-    el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
-  }
-}
 
 function Scene({
   nodes,
@@ -223,16 +175,7 @@ function Scene({
   interactive = true,
   onReady,
   focusCluster = null,
-  meLabelRef,
-  selectedLabelRef,
-  hoverLabelRef,
-  clusterLabelRefs,
-}: GalaxyViewProps & {
-  meLabelRef: RefObject<HTMLSpanElement | null>;
-  selectedLabelRef: RefObject<HTMLSpanElement | null>;
-  hoverLabelRef: RefObject<HTMLSpanElement | null>;
-  clusterLabelRefs: RefObject<Map<string, HTMLButtonElement>>;
-}) {
+}: GalaxyViewProps) {
   const { camera, gl, size, invalidate } = useThree();
   const perspective = camera as THREE.PerspectiveCamera;
 
@@ -243,7 +186,6 @@ function Scene({
   }, [layout, extra]);
 
   const meId = nodes.find((n) => n.isMe)?.userId;
-  const nameById = useMemo(() => new Map(nodes.map((n) => [n.userId, n.name])), [nodes]);
 
   const t0 = useRef(performance.now());
   const now = () => (performance.now() - t0.current) / 1000;
@@ -376,15 +318,6 @@ function Scene({
   }, [visibleEdges, points, clusterOf]);
 
   const centers = useMemo(() => clusterCenters(points, meId), [points, meId]);
-  const simToMe = useMemo(() => {
-    const m = new Map<string, number>();
-    for (const e of edges) {
-      if (e.source === meId) m.set(e.target, e.similarity);
-      else if (e.target === meId) m.set(e.source, e.similarity);
-    }
-    return m;
-  }, [edges, meId]);
-
   // Highlight: 1 = selected (gets a ring), 0.5 = hovered.
   const hovered = useRef<string | null>(null);
   const applyHighlight = () => {
@@ -737,11 +670,6 @@ function Scene({
     };
   }, [interactive, gl, camera, points, meId, nodeMat, minDist, maxDist, invalidate]);
 
-  // "You" appears once your star has ignited; checked per frame so no React state is involved.
-  const labelsOn = useRef(initialPhase !== "dark");
-  const labelPos = useMemo(() => new THREE.Vector3(), []);
-  useEffect(() => invalidate(), [selectedId, invalidate]);
-
   const offset = useMemo(() => new THREE.Vector3(), []);
   const euler = useMemo(() => new THREE.Euler(), []);
 
@@ -783,7 +711,6 @@ function Scene({
     else if (perspective.view?.enabled) perspective.clearViewOffset();
 
     const time = now();
-    if (!labelsOn.current && nodeMat.uniforms.uMe.value > 0.9) labelsOn.current = true;
     nodeMat.uniforms.uTime.value = time;
     nodeMat.uniforms.uScale.value = size.height / (2 * Math.tan(((perspective.fov / 2) * Math.PI) / 180));
     nodeMat.uniforms.uPixelRatio.value = gl.getPixelRatio();
@@ -799,31 +726,6 @@ function Scene({
       const focus = !focusCluster ? 1 : id === focusCluster ? 1.5 : 0.25;
       sprite.material.opacity = 0.2 * others * focus;
     }
-    // Cluster names read at overview distance and fade as you fly in among the stars.
-    const zoomFade = clamp((c.dist - 16) / 14, 0, 1) * clamp((others - 0.5) * 2, 0, 1);
-    layoutClusterLabels(
-      centers.map((k) => ({
-        el: clusterLabelRefs.current.get(k.id) ?? null,
-        at: labelPos.set(k.x, k.y + k.spread + 2.4, k.z).project(camera).clone(),
-        opacity: zoomFade * (!focusCluster || focusCluster === k.id ? 1 : 0),
-      })),
-      size.width,
-      size.height,
-    );
-    const hov = hovered.current && hovered.current !== selectedId && hovered.current !== meId ? points.get(hovered.current) : undefined;
-    placeLabel(hoverLabelRef.current, hov ? labelPos.set(hov.x, hov.y - 1.4, hov.z) : null, camera, size.width, size.height, hov ? (nameById.get(hov.id) ?? "") : undefined);
-
-    const meLabel = labelsOn.current && me ? labelPos.set(me.x, me.y - 1.6, me.z) : null;
-    placeLabel(meLabelRef.current, meLabel, camera, size.width, size.height);
-    const sel = selectedId && selectedId !== meId ? points.get(selectedId) : undefined;
-    placeLabel(
-      selectedLabelRef.current,
-      sel ? labelPos.set(sel.x, sel.y - 1.4, sel.z) : null,
-      camera,
-      size.width,
-      size.height,
-      sel ? `${nameById.get(selectedId!) ?? ""}${simToMe.has(selectedId!) ? ` · ${Math.round(simToMe.get(selectedId!)! * 100)}% same why` : ""}` : undefined,
-    );
 
     if (active) invalidate();
   });
@@ -847,58 +749,16 @@ function Scene({
 }
 
 export default function GalaxyScene(props: GalaxyViewProps) {
-  const meLabelRef = useRef<HTMLSpanElement>(null);
-  const selectedLabelRef = useRef<HTMLSpanElement>(null);
-  const hoverLabelRef = useRef<HTMLSpanElement>(null);
-  const clusterLabelRefs = useRef(new Map<string, HTMLButtonElement>());
-  const clusters = [...new Set(props.nodes.filter((n) => !n.isMe).map((n) => n.cluster))];
-  const { interactive = true, onFocusCluster, focusCluster } = props;
-
   return (
-    <>
-      <Canvas
-        dpr={[1, 1.5]}
-        frameloop="demand"
-        camera={{ fov: FOV, near: 0.1, far: 800, position: [0, 0, 60] }}
-        gl={{ antialias: true, powerPreference: "high-performance" }}
-        className="!absolute inset-0"
-        aria-hidden
-      >
-        <Scene {...props} meLabelRef={meLabelRef} selectedLabelRef={selectedLabelRef} hoverLabelRef={hoverLabelRef} clusterLabelRefs={clusterLabelRefs} />
-      </Canvas>
-      <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        {clusters.map((id) => {
-          const c = getCluster(id);
-          return (
-            <button
-              key={id}
-              type="button"
-              tabIndex={-1}
-              ref={(el) => {
-                if (el) clusterLabelRefs.current.set(id, el);
-                else clusterLabelRefs.current.delete(id);
-              }}
-              onClick={() => onFocusCluster?.(focusCluster === id ? null : id)}
-              className={cn(
-                "invisible absolute left-0 top-0 whitespace-nowrap rounded-full px-2 py-1 font-serif text-[13px] italic opacity-0",
-                interactive && onFocusCluster && "pointer-events-auto hover:bg-white/5",
-              )}
-              style={{ color: c.color, textShadow: `0 0 12px ${c.color}66` }}
-            >
-              {c.label}
-            </button>
-          );
-        })}
-        <span ref={meLabelRef} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap text-xs font-semibold tracking-wide text-primary opacity-0">
-          You
-        </span>
-        <span
-          ref={selectedLabelRef}
-          aria-hidden
-          className="invisible absolute left-0 top-0 whitespace-nowrap rounded-full bg-background/70 px-2 py-0.5 text-xs font-semibold text-foreground opacity-0 backdrop-blur-sm"
-        />
-        <span ref={hoverLabelRef} aria-hidden className="invisible absolute left-0 top-0 whitespace-nowrap text-xs font-medium text-foreground/80 opacity-0" />
-      </div>
-    </>
+    <Canvas
+      dpr={[1, 1.5]}
+      frameloop="demand"
+      camera={{ fov: FOV, near: 0.1, far: 800, position: [0, 0, 60] }}
+      gl={{ antialias: true, powerPreference: "high-performance" }}
+      className="!absolute inset-0"
+      aria-hidden
+    >
+      <Scene {...props} />
+    </Canvas>
   );
 }

@@ -28,6 +28,4 @@ export type GalaxyViewProps = {
   onReady?: () => void;
   /** Dims every other cluster so one "why" stands out. */
   focusCluster?: string | null;
-  /** Tapping a cluster's floating name in the scene. */
-  onFocusCluster?: (cluster: string | null) => void;
 };
