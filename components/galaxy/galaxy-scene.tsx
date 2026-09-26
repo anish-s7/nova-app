@@ -168,6 +168,14 @@ function placeLabel(el: HTMLElement | null, at: THREE.Vector3 | null, camera: TH
   el.style.transform = `translate(${((v.x + 1) / 2) * width}px, ${((1 - v.y) / 2) * height}px) translate(-50%, -50%)`;
 }
 
+/** Drag delta with resistance once the camera is past its bound, growing the further it goes. */
+function rubber(pos: number, delta: number, limit: number) {
+  const next = pos + delta;
+  const over = Math.abs(next) - limit;
+  if (over <= 0 || Math.sign(delta) !== Math.sign(next)) return delta;
+  return delta * Math.max(0.04, 0.4 / (1 + over * 0.5));
+}
+
 /** Cluster names: projected, nudged apart when they collide, and kept inside the frame. */
 function layoutClusterLabels(items: { el: HTMLElement | null; at: THREE.Vector3; opacity: number }[], width: number, height: number) {
   const placed: { x: number; y: number; w: number; h: number }[] = [];
@@ -190,8 +198,10 @@ function layoutClusterLabels(items: { el: HTMLElement | null; at: THREE.Vector3;
       if (Math.abs(p.x - x) < (p.w + w) / 2 + 4 && Math.abs(p.y - y) < (p.h + h) / 2 + 2) y = p.y + (p.h + h) / 2 + 2;
     }
     placed.push({ x, y, w, h });
-    el.style.visibility = "visible";
-    el.style.opacity = String(i.opacity);
+    // Fade out under the header/chips and the bottom strip rather than colliding with them.
+    const edgeFade = clamp((y - 150) / 40, 0, 1) * clamp((height - 170 - y) / 40, 0, 1);
+    el.style.visibility = edgeFade > 0.01 ? "visible" : "hidden";
+    el.style.opacity = String(i.opacity * edgeFade);
     el.style.transform = `translate(${x}px, ${y}px) translate(-50%, -50%)`;
   }
 }
@@ -241,7 +251,17 @@ function Scene({
     return (layout.radius * 1.05) / Math.tan(half);
   }, [layout.radius, size.width, size.height]);
   const minDist = 7;
-  const maxDist = overviewDist * 1.35;
+  const maxDist = overviewDist * 1.1;
+
+  /**
+   * How far the camera may wander from the center at a given zoom. Zoomed out, the galaxy
+   * already fills the frame so there's little room to pan; zoomed in, you can reach any star.
+   */
+  const panBounds = (dist: number) => {
+    const halfH = dist * Math.tan(((FOV / 2) * Math.PI) / 180);
+    const halfW = halfH * (size.width / Math.max(1, size.height));
+    return { x: Math.max(0, layout.radius - halfW * 0.8) + 2, y: Math.max(0, layout.radius - halfH * 0.8) + 2 };
+  };
 
   const me = meId ? points.get(meId) : undefined;
   const cam = useRef<CamState>(
@@ -250,6 +270,9 @@ function Scene({
   const tilt = useRef({ x: 0, y: 0, tx: 0, ty: 0 });
   const tweens = useRef<Tween[]>([]);
   const dragging = useRef(false);
+  // Momentum after a flick, and whether the user (not a fly-to) last moved the camera.
+  const vel = useRef({ x: 0, y: 0 });
+  const userMoved = useRef(false);
 
   const nodeMat = useMemo(
     () =>
@@ -481,6 +504,8 @@ function Scene({
   }, [focusCluster, selectedId, nodeGeo, ordered]);
 
   const moveCamera = (to: CamState, dur: number) => {
+    vel.current = { x: 0, y: 0 };
+    userMoved.current = false;
     const from = { ...cam.current };
     return tween("camera", dur, (e) => {
       cam.current = { x: lerp(from.x, to.x, e), y: lerp(from.y, to.y, e), z: lerp(from.z, to.z, e), dist: lerp(from.dist, to.dist, e) };
@@ -565,6 +590,7 @@ function Scene({
     const pointers = new Map<number, { x: number; y: number }>();
     let down: { x: number; y: number; t: number; moved: number } | null = null;
     let pinch = 0;
+    let lastMove = 0;
 
     const worldPerPixel = () => (2 * cam.current.dist * Math.tan(((FOV / 2) * Math.PI) / 180)) / el.clientHeight;
 
@@ -597,6 +623,7 @@ function Scene({
         pinch = Math.hypot(a.x - b.x, a.y - b.y);
       }
       dragging.current = true;
+      vel.current = { x: 0, y: 0 };
       tweens.current = tweens.current.filter((t) => (t.group === "camera" ? (t.resolve(), false) : true));
     };
     const onMove = (e: PointerEvent) => {
@@ -614,10 +641,12 @@ function Scene({
       }
       const cur = { x: e.clientX, y: e.clientY };
       pointers.set(e.pointerId, cur);
+      lastMove = performance.now();
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
         if (pinch) cam.current.dist = clamp((cam.current.dist * pinch) / d, minDist, maxDist);
+        userMoved.current = true;
         pinch = d;
         if (down) down.moved = 99;
       } else {
@@ -625,10 +654,16 @@ function Scene({
         const dy = cur.y - prev.y;
         if (down) down.moved += Math.abs(dx) + Math.abs(dy);
         const wpp = worldPerPixel();
-        cam.current.x = clamp(cam.current.x - dx * wpp, -layout.radius * 1.3, layout.radius * 1.3);
-        cam.current.y = clamp(cam.current.y + dy * wpp, -layout.radius * 1.3, layout.radius * 1.3);
-        tilt.current.ty = clamp(tilt.current.ty - dx * 0.006, -0.22, 0.22);
-        tilt.current.tx = clamp(tilt.current.tx + dy * 0.006, -0.22, 0.22);
+        const b = panBounds(cam.current.dist);
+        const mx = rubber(cam.current.x, -dx * wpp, b.x);
+        const my = rubber(cam.current.y, dy * wpp, b.y);
+        cam.current.x += mx;
+        cam.current.y += my;
+        vel.current = { x: vel.current.x * 0.5 + mx * 0.5, y: vel.current.y * 0.5 + my * 0.5 };
+        userMoved.current = true;
+        // A hint of parallax while dragging, not enough to swing the galaxy out of frame.
+        tilt.current.ty = clamp(tilt.current.ty - dx * 0.0025, -0.08, 0.08);
+        tilt.current.tx = clamp(tilt.current.tx + dy * 0.0025, -0.08, 0.08);
       }
       invalidate();
     };
@@ -637,6 +672,8 @@ function Scene({
       if (pointers.size < 2) pinch = 0;
       if (pointers.size === 0) {
         dragging.current = false;
+        // A slow release shouldn't coast.
+        if (down && performance.now() - lastMove > 80) vel.current = { x: 0, y: 0 };
         if (down && down.moved < 8 && performance.now() - down.t < 450) {
           const hit = pick(e.clientX, e.clientY);
           if (hit) api.current.flyTo(hit, { lift: hit === meId ? 0 : 0.1 }).then(() => onSelectRef.current?.(hit));
@@ -649,6 +686,7 @@ function Scene({
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
       cam.current.dist = clamp(cam.current.dist * Math.exp(e.deltaY * 0.0012), minDist, maxDist);
+      userMoved.current = true;
       invalidate();
     };
 
@@ -672,7 +710,8 @@ function Scene({
       el.removeEventListener("pointercancel", onUp);
       el.removeEventListener("wheel", onWheel);
     };
-  }, [interactive, gl, camera, points, meId, nodeMat, layout.radius, minDist, maxDist, invalidate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- panBounds derives from size and layout.radius
+  }, [interactive, gl, camera, points, meId, nodeMat, layout.radius, size.width, size.height, minDist, maxDist, invalidate]);
 
   // "You" appears once your star has ignited; checked per frame so no React state is involved.
   const labelsOn = useRef(initialPhase !== "dark");
@@ -695,6 +734,32 @@ function Scene({
       active = true;
       return true;
     });
+
+    // Coast after a flick, then ease back inside the bounds if the user dragged past them.
+    const flying = tweens.current.some((t) => t.group === "camera");
+    if (!dragging.current && !flying) {
+      const c = cam.current;
+      const v = vel.current;
+      if (Math.abs(v.x) + Math.abs(v.y) > 0.002) {
+        c.x += v.x;
+        c.y += v.y;
+        v.x *= 0.9;
+        v.y *= 0.9;
+        active = true;
+      }
+      if (userMoved.current) {
+        const b = panBounds(c.dist);
+        const tx = clamp(c.x, -b.x, b.x);
+        const ty = clamp(c.y, -b.y, b.y);
+        if (Math.abs(tx - c.x) + Math.abs(ty - c.y) > 0.01) {
+          c.x += (tx - c.x) * 0.2;
+          c.y += (ty - c.y) * 0.2;
+          if (tx !== c.x) v.x *= 0.5;
+          if (ty !== c.y) v.y *= 0.5;
+          active = true;
+        }
+      }
+    }
 
     const tl = tilt.current;
     if (!dragging.current) {
