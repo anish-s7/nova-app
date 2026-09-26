@@ -7,6 +7,7 @@ import { CircleCheck } from "lucide-react";
 import { Logo } from "@/components/logo";
 import { buttonVariants } from "@/components/ui/button";
 import { announceConfirmation } from "@/lib/auth-handoff";
+import { safeNextPath } from "@/lib/safe-next";
 import { cn } from "@/lib/utils";
 
 /**
@@ -16,7 +17,7 @@ import { cn } from "@/lib/utils";
  */
 function Confirmed() {
   const raw = useSearchParams().get("next");
-  const next = raw && raw.startsWith("/") && !raw.startsWith("//") ? raw : "/onboarding/music";
+  const next = raw ? safeNextPath(raw) : "/onboarding/music";
   const [state, setState] = useState<"checking" | "handedOff" | "standalone">("checking");
 
   useEffect(() => {
