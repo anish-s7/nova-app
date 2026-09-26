@@ -1,6 +1,7 @@
 import { CLUSTERS, CLUSTER_IDS, type ClusterId } from "./clusters";
 import { contextFor, songById, songsInCluster, type SongMode } from "./music-context";
 import { cosine, dominantMode, infer, primaryCluster, vectorFromMotivations, type Vector } from "./inference";
+import { effectiveSongs, getSession } from "./session";
 import type { ConnectionCard, ContextTag, GalaxyEdge, InferredMotivation, ListeningSignal, Message, Song, SongSwap, User } from "./types";
 
 export const ME_ID = "me";
@@ -388,6 +389,48 @@ export function scheduleReply(userId: string) {
     text: REPLIES[u?.primary ?? "quiet_company"],
   });
   conversations.set(userId, list);
+}
+
+// ---------------------------------------------------------------------------
+// "Me": the signed-in user, derived from the mock session.
+
+export const DEMO_BIAS = { quiet_company: 3 };
+
+export function myMotivations(): InferredMotivation[] {
+  const s = getSession();
+  if (s.motivations.length) return s.motivations;
+  const songs = effectiveSongs(s);
+  const signals = s.signals.length ? s.signals : synthesizeSignals(ME_ID, songs, "quiet_company");
+  return infer({ userId: ME_ID, subject: { isMe: true }, songs, signals, bias: s.demo ? DEMO_BIAS : undefined }).motivations;
+}
+
+export function meParty(): Party {
+  const songs = effectiveSongs(getSession());
+  const motivations = myMotivations();
+  return { id: ME_ID, name: "You", songs, motivations, vector: vectorFromMotivations(motivations), mode: dominantMode(songs) };
+}
+
+export function myPrimaryCluster(): ClusterId {
+  return primaryCluster(myMotivations());
+}
+
+let arrivalUser: WorldUser | undefined;
+
+/** Any other user by id, including the realtime arrival. */
+export function lookupUser(id: string): WorldUser | undefined {
+  if (id === "priya") return (arrivalUser ??= buildArrival(myPrimaryCluster()));
+  return worldUser(id);
+}
+
+export function partyFor(id: string): Party | undefined {
+  if (id === ME_ID) return meParty();
+  const u = lookupUser(id);
+  return u && partyFromWorld(u);
+}
+
+export function resetWorld() {
+  resetConversations();
+  arrivalUser = undefined;
 }
 
 export { primaryCluster };
