@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { Search } from "lucide-react";
+import { Loader2, Search } from "lucide-react";
+import { mutate } from "swr";
 import { AlbumArt } from "@/components/album-art";
+import { addSong, REAL_DATA, getSongLayer } from "@/lib/api";
+import { getCluster } from "@/lib/clusters";
 import { SONG_CATALOG } from "@/lib/music-context";
 import { addPick, effectiveSongs, getSession, useSession } from "@/lib/session";
 import { describePick, type SongLayer, type SongPick } from "@/lib/song-layer";
@@ -13,8 +16,78 @@ export type AddedInfo = ReturnType<typeof describePick>;
 
 const MAX_THEMES = 2;
 
+const norm = (s: string) => s.trim().toLowerCase();
+
+/**
+ * Real mode: type any song. It goes through the real pipeline (MusicBrainz identity, cover art, Gemini
+ * for a new song), which takes a few seconds, then the layer reloads and the star lands.
+ */
+function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info: AddedInfo) => void }) {
+  const [title, setTitle] = useState("");
+  const [artist, setArtist] = useState("");
+  const [reason, setReason] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const titleRef = useRef<HTMLInputElement>(null);
+  useEffect(() => titleRef.current?.focus({ preventScroll: true }), []);
+
+  const submit = async () => {
+    if (!title.trim() || !artist.trim() || busy) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await addSong({ title: title.trim(), artist: artist.trim(), reason: reason.trim() });
+      const fresh = await getSongLayer();
+      await mutate((k) => Array.isArray(k) && k[0] === "song-layer", fresh, { revalidate: false });
+      // The catalog may spell it differently than you typed (MusicBrainz canonicalizes), so match loosely.
+      const star = fresh.stars.find((s) => norm(s.song.title) === norm(title) && norm(s.song.artist) === norm(artist)) ?? fresh.stars.find((s) => s.listeners.some((l) => l.isMe && l.daysAgo === 0));
+      if (!star) throw new Error("Saved, but it didn't show up yet. Reload the galaxy.");
+      onAdded({ star, wasThere: layer.stars.some((s) => s.id === star.id), others: star.listeners.filter((l) => !l.isMe).length, formed: [], cluster: getCluster(star.cluster) });
+    } catch (err) {
+      console.error("Add song failed", err);
+      setError(err instanceof Error ? err.message : "That didn't save. Try again.");
+      setBusy(false);
+    }
+  };
+
+  const field = "min-h-11 border border-white/15 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground focus:border-white/30";
+  return (
+    <div className="flex flex-col gap-3">
+      <h2 className="font-serif text-xl italic">Add a song to the galaxy</h2>
+      <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Song title" aria-label="Song title" disabled={busy} className={field} />
+      <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" aria-label="Artist" disabled={busy} className={field} />
+      <label className="flex flex-col gap-1.5">
+        <span className="text-xs text-muted-foreground">Why does it matter to you? Optional.</span>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value.slice(0, 140))}
+          rows={2}
+          disabled={busy}
+          placeholder="the song I put on when…"
+          className="resize-none border border-white/15 bg-transparent p-2.5 text-sm outline-none placeholder:text-muted-foreground focus:border-white/30"
+        />
+      </label>
+      {error ? <p role="alert" className="text-sm text-destructive">{error}</p> : null}
+      <button type="button" onClick={submit} disabled={busy || !title.trim() || !artist.trim()} className="flex min-h-11 items-center justify-center gap-2 bg-primary px-4 text-sm font-semibold text-primary-foreground hover:bg-primary/90 disabled:opacity-50">
+        {busy ? (
+          <>
+            <Loader2 className="size-4 animate-spin" aria-hidden />
+            Finding it…
+          </>
+        ) : (
+          "Add to the galaxy"
+        )}
+      </button>
+    </div>
+  );
+}
+
 /** Add a song to the galaxy with the reason in your own words. The star lands (or brightens) where its listeners are. */
 export function AddSongSheetContent({ layer, initialSongId, onAdded }: { layer: SongLayer; initialSongId?: string | null; onAdded: (info: AddedInfo) => void }) {
+  return REAL_DATA ? <RealAddSongSheet layer={layer} onAdded={onAdded} /> : <MockAddSongSheet layer={layer} initialSongId={initialSongId} onAdded={onAdded} />;
+}
+
+function MockAddSongSheet({ layer, initialSongId, onAdded }: { layer: SongLayer; initialSongId?: string | null; onAdded: (info: AddedInfo) => void }) {
   const session = useSession();
   const [query, setQuery] = useState("");
   const [songId, setSongId] = useState<string | null>(initialSongId ?? null);

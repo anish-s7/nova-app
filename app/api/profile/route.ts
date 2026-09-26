@@ -30,17 +30,22 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET(req: NextRequest) {
-  const id = req.nextUrl.searchParams.get("id");
-  if (!id) {
+  const idParam = req.nextUrl.searchParams.get("id");
+  if (!idParam) {
     return NextResponse.json({ error: "id query param is required" }, { status: 400 });
   }
 
   const requesterId = await getCurrentProfileId();
+  // `id=me` is the signed-in user, so the client can learn its own id.
+  if (idParam === "me" && !requesterId) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+  const id = idParam === "me" ? requesterId! : idParam;
   const supabase = createServerClient();
 
   let picksQuery = supabase
     .from("song_picks")
-    .select("id, tags, valence, energy, reason_text, is_public, songs(title, artist, album_art_url)")
+    .select("id, song_id, tags, valence, energy, reason_text, is_public, created_at, songs(id, title, artist, album_art_url, spotify_track_id)")
     .eq("profile_id", id);
 
   // Uses the service-role client, which bypasses RLS, so privacy has to be

@@ -14,7 +14,7 @@ import { ReasonSpectrum } from "@/components/reason-spectrum";
 import { ScreenHeader } from "@/components/screen-header";
 import { buttonVariants } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
-import { getConversations } from "@/lib/api";
+import { getConversations, getMe, REAL_DATA } from "@/lib/api";
 import { getCluster } from "@/lib/clusters";
 import { effectiveSongs, useHydrated, useSession } from "@/lib/session";
 import type { InferredMotivation, Song } from "@/lib/types";
@@ -28,9 +28,11 @@ export default function MePage() {
   const session = useSession();
   const account = useAccount();
   const { data: conversations } = useSWR(["conversations", session.version], getConversations);
+  // Real mode: your songs are your saved picks (with covers), not the onboarding session copy.
+  const mine = useSWR(REAL_DATA ? ["me", session.version] : null, getMe);
   if (!hydrated) return <main className="flex-1" />;
 
-  const songs = effectiveSongs(session);
+  const songs = REAL_DATA ? (mine.data?.songs ?? []) : effectiveSongs(session);
   const kept = session.motivations.filter((m) => m.feedback !== "rejected");
   const primary = [...kept].sort((a, b) => b.confidence - a.confidence)[0];
   const tone = primary ? getCluster(primary.cluster).color : undefined;

@@ -51,6 +51,7 @@ export default function PersonPage() {
               </Link>
             </div>
 
+            {user.motivations.length ? (
             <section className="mt-8" aria-labelledby="why-heading">
               <h2 id="why-heading" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
                 Why {user.name} listens
@@ -70,6 +71,7 @@ export default function PersonPage() {
                 ))}
               </div>
             </section>
+            ) : null}
 
             <section className="mt-8" aria-labelledby="songs-heading">
               <h2 id="songs-heading" className="text-xs font-medium uppercase tracking-wider text-muted-foreground">

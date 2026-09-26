@@ -1,10 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
-import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
+import { createSessionClient, getCurrentProfileId } from "@/lib/supabase/serverAuth";
 
-// Reads/subscriptions happen client-side via Supabase Realtime directly
-// against the `messages` table. This route only handles writes, so we can
-// validate/rate-limit server-side if needed later.
+/**
+ * Reads the signed-in user's messages (all threads, or one with `?with=<profileId>`), oldest first.
+ * Uses the session client so RLS ("Participants can view messages") scopes it: no one can read a
+ * thread they're not in. Clients poll this until the Realtime subscription lands (backburner #4).
+ */
+export async function GET(req: NextRequest) {
+  const me = await getCurrentProfileId();
+  if (!me) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const other = req.nextUrl.searchParams.get("with");
+  const supabase = await createSessionClient();
+  let query = supabase.from("messages").select("*").order("created_at", { ascending: true });
+  if (other) {
+    const [a, b] = me < other ? [me, other] : [other, me];
+    query = query.eq("user_a", a).eq("user_b", b);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.error("GET /api/messages failed:", error);
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json({ messages: data ?? [] });
+}
+
+// Writes go through here so we can validate/rate-limit server-side later.
 export async function POST(req: NextRequest) {
   const senderId = await getCurrentProfileId();
   if (!senderId) {

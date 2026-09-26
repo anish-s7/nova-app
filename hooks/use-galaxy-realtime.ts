@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getArrival } from "@/lib/api";
+import { getArrival, REAL_DATA } from "@/lib/api";
 import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
 
 export type Arrival = { node: GalaxyNode; edges: GalaxyEdge[] };
@@ -20,7 +20,8 @@ export function useGalaxyRealtime(enabled: boolean) {
   const [arrivals, setArrivals] = useState<Arrival[]>(arrived);
 
   useEffect(() => {
-    if (!enabled || arrived.length) return;
+    // The simulated arrival is mock-only; real arrivals need a Realtime subscription (backburner).
+    if (!enabled || REAL_DATA || arrived.length) return;
 
     // ---------------------------------------------------------------------
     // PLACEHOLDER: Supabase Realtime subscription. Replace the timer below with:

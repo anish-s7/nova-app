@@ -15,6 +15,10 @@
  */
 
 import { CLUSTER_IDS, getCluster } from "./clusters";
+import { ApiError } from "./api-error";
+import { REAL_DATA } from "./data-source";
+import { httpDb } from "./http-db";
+import * as real from "./real-api";
 import { infer, primaryCluster } from "./inference";
 import { mockDb, resetMockDb } from "./mock-db";
 import { expandOrder, sampleGalaxy } from "./galaxy-sample";
@@ -76,20 +80,13 @@ import type {
 } from "./types";
 
 // ===========================================================================
-// SWAP POINT: the only line that decides mock vs real data.
-const db: Db = mockDb;
+// SWAP POINT: the only line that decides mock vs real data (see lib/data-source.ts).
+// Real mode: `db` is the route handlers, and every exported view function below that has a
+// real counterpart delegates to lib/real-api.ts first. The mock bodies stay for demo mode.
+const db: Db = REAL_DATA ? httpDb : mockDb;
 // ===========================================================================
 
-export { ME_ID };
-
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public code: "unavailable" | "failed" = "failed",
-  ) {
-    super(message);
-  }
-}
+export { ME_ID, ApiError, REAL_DATA };
 
 /** Mock-only latency so loading states are visible. */
 function delay(ms: number) {
@@ -260,6 +257,15 @@ export async function saveSongs() {
   }
 }
 
+/**
+ * Adds one song from the galaxy's "+" sheet (real mode only). Same placeholder tags/valence/energy
+ * as saveSongs until the feel step exists (CLAUDE.md Phase C). Slow: MusicBrainz, cover art and,
+ * for a new song, Gemini all run inside the request.
+ */
+export async function addSong(input: { title: string; artist: string; reason?: string }) {
+  await db.insertPick({ title: input.title, artist: input.artist, tags: ["comfort"], valence: 0, energy: 0, reasonText: input.reason || undefined });
+}
+
 /** NOT IN CONTRACT: motivations rows have no feedback/isPublic/note (lib/types.ts #4). */
 export async function updateMotivation(id: string, patch: Partial<Pick<InferredMotivation, "feedback" | "isPublic" | "note">>) {
   await delay(120);
@@ -332,7 +338,7 @@ function mockWindow(limit?: number) {
  * (GET /api/galaxy) instead of the mock world. Needs a Supabase session and the
  * 20260927010000_galaxy_window migration. Default stays mock so the demo keeps working.
  */
-const GALAXY_HTTP = process.env.NEXT_PUBLIC_GALAXY_SOURCE === "http";
+const GALAXY_HTTP = REAL_DATA || process.env.NEXT_PUBLIC_GALAXY_SOURCE === "http";
 
 async function galaxyFetch<T>(path: string): Promise<T> {
   const res = await fetch(path, { credentials: "same-origin" });
@@ -343,7 +349,9 @@ async function galaxyFetch<T>(path: string): Promise<T> {
 export async function getGalaxy(query: GalaxyQuery = {}): Promise<GalaxyResponse> {
   if (GALAXY_HTTP) {
     const qs = query.limit ? `?limit=${query.limit}` : "";
-    return galaxyFromWindow(await galaxyFetch<GalaxyWindow>(`/api/galaxy${qs}`));
+    const galaxy = galaxyFromWindow(await galaxyFetch<GalaxyWindow>(`/api/galaxy${qs}`), ME_ID);
+    real.rememberSimilarities(galaxy.edges);
+    return galaxy;
   }
   await delay(700);
   maybeFail("galaxy");
@@ -400,12 +408,14 @@ export async function getGalaxyMore(cluster: string, have: number, step = 40, li
 
 /** NOT IN CONTRACT: clusters aren't stored yet (lib/types.ts #5). Songs + listeners inside one "why". */
 export async function getClusterDetail(id: string): Promise<ClusterDetail> {
+  if (REAL_DATA) return real.getClusterDetail(id);
   await delay(250);
   return buildClusterDetail(getCluster(id).id);
 }
 
 /** NOT IN CONTRACT: song stars and themes come from per-pick clustering, which doesn't exist yet. */
 export async function getSongLayer(): Promise<SongLayer> {
+  if (REAL_DATA) return real.getSongLayer();
   await delay(150);
   return buildSongLayer(getSession().picks ?? []);
 }
@@ -429,6 +439,7 @@ export function getArrival(): { node: GalaxyNode; edges: GalaxyEdge[] } {
 // People and connection cards
 
 export async function getMe(): Promise<User & { cluster: string }> {
+  if (REAL_DATA) return real.getMe();
   await delay(150);
   const [profile, picks] = await Promise.all([db.getProfile(ME_ID), db.listPicks(ME_ID)]);
   if (!profile) throw new ApiError("We couldn't load your profile.");
@@ -437,6 +448,7 @@ export async function getMe(): Promise<User & { cluster: string }> {
 }
 
 export async function getUser(id: string): Promise<User & { cluster: string; edge: GalaxyEdge }> {
+  if (REAL_DATA) return real.getUser(id);
   await delay(350);
   const [profile, picks] = await Promise.all([db.getProfile(id), db.listPicks(id)]);
   const u = lookupUser(id); // NOT IN CONTRACT: motivations, cluster, edge
@@ -453,6 +465,7 @@ export async function getUser(id: string): Promise<User & { cluster: string; edg
 }
 
 export async function getConnections(): Promise<Connection[]> {
+  if (REAL_DATA) return real.getConnections();
   await delay(450);
   // Every match here already passed the AI evidence-check and carries its card (ConfirmedMatchRow).
   const rows = await db.getMatches(14);
@@ -485,6 +498,7 @@ function evidenceSongs(mine: Song[], theirs: Song[], max = 4): Song[] {
 }
 
 export async function getConnectionCard(otherId: string): Promise<ConnectionCard> {
+  if (REAL_DATA) return real.getConnectionCard(otherId);
   await delay(900);
   maybeFail("card");
   const row = await db.getConnectionCard(otherId);
@@ -498,6 +512,7 @@ export async function getConnectionCard(otherId: string): Promise<ConnectionCard
  * explicit tap, never on load. Real backend: POST /api/wander (Gemini judges each candidate).
  */
 export async function getWander(): Promise<WanderEntry[]> {
+  if (REAL_DATA) return real.getWander();
   await delay(1800); // stands in for the Gemini contrast check
   maybeFail("card");
   const rows = await db.wander();
@@ -508,6 +523,7 @@ export async function getWander(): Promise<WanderEntry[]> {
 }
 
 export async function getContrastCard(otherId: string): Promise<ContrastCard> {
+  if (REAL_DATA) return real.getContrastCard(otherId);
   await delay(300);
   const row = await db.getConnectionCard(otherId);
   if (!row) throw new ApiError("That person isn't in the galaxy anymore.");
@@ -524,6 +540,7 @@ function mockSwaps(otherId?: string): [string, Message][] {
 }
 
 export async function getConversations(): Promise<ConversationSummary[]> {
+  if (REAL_DATA) return real.getConversations();
   await delay(300);
   const rows = await db.listMessages(ME_ID);
   const threads = new Map<string, Message[]>();
@@ -553,6 +570,7 @@ export async function getConversations(): Promise<ConversationSummary[]> {
 }
 
 export async function getConversation(userId: string): Promise<Conversation> {
+  if (REAL_DATA) return real.getConversation(userId);
   await delay(200);
   const [profile, card, rows] = await Promise.all([db.getProfile(userId), db.getConnectionCard(userId), db.listMessages(ME_ID, userId)]);
   const u = lookupUser(userId); // NOT IN CONTRACT: cluster
@@ -567,12 +585,14 @@ export async function getConversation(userId: string): Promise<Conversation> {
 }
 
 export async function sendMessage(userId: string, text: string): Promise<Message> {
+  if (REAL_DATA) return real.sendMessage(userId, text);
   await delay(150);
   return messageFromRow(await db.insertMessage({ otherProfileId: userId, text }));
 }
 
 /** NOT IN CONTRACT: no song-swap table. */
 export async function sendSongSwap(userId: string, song: Song, reason: string, replyToSwapId?: string): Promise<Message> {
+  if (REAL_DATA) return real.sendSongSwap(userId, song, reason);
   await delay(300);
   const list = (conversations.get(userId) ?? []).map((m) =>
     m.kind === "swap" && m.swap.id === replyToSwapId ? { ...m, swap: { ...m.swap, status: "returned" as const } } : m,
@@ -590,10 +610,11 @@ export async function sendSongSwap(userId: string, song: Song, reason: string, r
   return msg;
 }
 
-/** Mock-only: resets seeded conversations and the realtime arrival (logo long-press). */
+/** Resets the mock world (seeded conversations, realtime arrival; logo long-press) and forgets who "me" is in real mode, so a new sign-in starts clean. */
 export function resetWorld() {
   resetMockWorld();
   resetMockDb();
+  real.resetRealWorld();
 }
 
 export function clusterColor(cluster: string) {

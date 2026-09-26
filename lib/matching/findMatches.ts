@@ -3,10 +3,23 @@ import { evaluateAndGenerateCard, type PickForEvaluation } from "../gemini/evalu
 import { alignCardEvidence } from "./alignCardEvidence";
 import type { ConnectionCardJson } from "../supabase/types";
 
+export interface MatchSong {
+  id: string;
+  title: string;
+  artist: string;
+  album_art_url: string | null;
+}
+
 export interface ConfirmedMatch {
   profileId: string;
   displayName: string;
   card: ConnectionCardJson;
+  /** Cosine similarity of the best pick pair, straight from match_picks. */
+  similarity: number;
+  /** The candidate's primary cluster, if computed. */
+  cluster: string | null;
+  /** The candidate's public songs, for covers and overlap counts. */
+  songs: MatchSong[];
 }
 
 function orderedPair(a: string, b: string): [string, string] {
@@ -74,6 +87,26 @@ export async function findMatches(profileId: string, limit = 10): Promise<Confir
   const pickById = new Map((picks as unknown as PickRow[] | null ?? []).map((p) => [p.id, p]));
   const results: ConfirmedMatch[] = [];
 
+  // Everything the UI needs beside the card, in two batched reads.
+  const candidateIds = Array.from(new Set(candidates.map((c) => c.profile_id)));
+  const [{ data: clusterRows }, { data: songRows }, { data: cachedCards }] = await Promise.all([
+    supabase.from("profiles").select("id, primary_cluster").in("id", candidateIds),
+    supabase.from("song_picks").select("profile_id, songs(id, title, artist, album_art_url)").in("profile_id", candidateIds).eq("is_public", true),
+    supabase.from("connection_cards").select("user_a, user_b, card_json").or(`user_a.eq.${profileId},user_b.eq.${profileId}`),
+  ]);
+  const clusterOf = new Map((clusterRows ?? []).map((r) => [r.id, r.primary_cluster as string | null]));
+  const songsOf = new Map<string, MatchSong[]>();
+  for (const r of (songRows ?? []) as unknown as { profile_id: string; songs: MatchSong | null }[]) {
+    if (r.songs) songsOf.set(r.profile_id, [...(songsOf.get(r.profile_id) ?? []), r.songs]);
+  }
+  // A card that already exists is never regenerated (CLAUDE.md), so loading Connections doesn't respend Gemini calls.
+  const cachedMatch = new Map<string, ConnectionCardJson>();
+  for (const c of cachedCards ?? []) {
+    const other = c.user_a === profileId ? c.user_b : c.user_a;
+    if (c.card_json.kind !== "contrast") cachedMatch.set(other, c.card_json);
+  }
+  const extras = (id: string, similarity: number) => ({ similarity, cluster: clusterOf.get(id) ?? null, songs: songsOf.get(id) ?? [] });
+
   for (const candidate of candidates) {
     const targetPickRow = pickById.get(candidate.target_pick_id);
     const candidatePickRow = pickById.get(candidate.song_pick_id);
@@ -100,6 +133,12 @@ export async function findMatches(profileId: string, limit = 10): Promise<Confir
       reasonText: candidatePickRow.reason_text,
     };
 
+    const cached = cachedMatch.get(candidate.profile_id);
+    if (cached) {
+      results.push({ profileId: candidate.profile_id, displayName: candidate.display_name, card: cached, ...extras(candidate.profile_id, candidate.similarity) });
+      continue;
+    }
+
     const evaluation = await evaluateAndGenerateCard(targetPick, candidatePick);
     if (evaluation.status !== "match") continue;
 
@@ -121,6 +160,7 @@ export async function findMatches(profileId: string, limit = 10): Promise<Confir
       profileId: candidate.profile_id,
       displayName: candidate.display_name,
       card: alignedCard,
+      ...extras(candidate.profile_id, candidate.similarity),
     });
   }
 

@@ -1,5 +1,18 @@
 # Merge checklist: wiring the frontend to the real backend
 
+> **Update 2026-09-26 (Phase D, mostly done).** `lib/api.ts` now switches on `REAL_DATA`
+> (`lib/data-source.ts`): real whenever the `NEXT_PUBLIC_SUPABASE_*` keys are set, mock
+> otherwise or with `NEXT_PUBLIC_DATA_SOURCE=mock`. `lib/http-db.ts` is the real `Db`;
+> `lib/real-api.ts` builds the view shapes. In real mode "me" is the alias `ME_ID` at the
+> api boundary (the uuid never reaches components). Done: profile/picks (with cover art),
+> connections (real similarity, cluster, covers), cards (cache read, then generate),
+> wander, contrast cards, messages read/write (`GET /api/messages`, polled), the galaxy,
+> the song layer and cluster detail (`GET /api/galaxy/songs`). Still mock or empty in real
+> mode: motivations / "why I listen" (mismatch #4, #7 backburner), song swaps (sent as a
+> plain text message until a swap table exists), themes, per-side "where you differ",
+> simulated arrivals (off), and onboarding's tags/valence/energy (Phase C; `saveSongs` still
+> sends placeholders). Nothing below was re-numbered; read it as the original plan.
+
 **Rewritten 2026-09-26 against `main` @ `26a33b3`.** The previous version of this file
 was written against `ba262ec`, before the backend's tag/slider/MusicBrainz redesign —
 `POST /api/songs`, a `motivations` table, and camelCase-only match results no longer
