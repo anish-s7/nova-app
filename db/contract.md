@@ -93,6 +93,10 @@ Unique constraint on `(user_a, user_b)`. Only rows where the evidence-check
 | body | text | |
 | created_at | timestamptz | Supabase Realtime subscribes to this table directly |
 
+Reads: `GET /api/messages[?with=<profileId>]` returns the signed-in user's messages, oldest
+first, through the **session** client, so the "Participants can view messages" RLS policy
+scopes it. The frontend polls it until the Realtime subscription is built.
+
 ## RPCs
 
 ### `match_picks(target_profile_id uuid, match_count int default 10)`
@@ -159,6 +163,22 @@ picks. No LLM, no embeddings. It is recomputed after every pick and lazily for t
 galaxy load; profiles with no picks stay null. Someone whose picks straddle two "whys" can
 move between clusters as they add songs, and the layout follows.
 `supabase/migrations/20260927010000_galaxy_window.sql` is applied to the live project and verified (2026-09-26): `wander_picks`, `galaxy_pool` and `galaxy_cluster_counts` return correct rows for the seeded personas.
+
+**Route shapes the frontend reads** (all session-authenticated):
+- `GET /api/profile?id=<uuid|me>` -> `{ profile, picks }`. `me` is the signed-in user.
+  Each pick is `{ id, song_id, tags, valence, energy, reason_text, is_public, created_at,
+  songs: { id, title, artist, album_art_url, spotify_track_id } }`. Other people's private
+  picks are filtered out server-side.
+- `GET /api/match` -> `{ matches: [{ profileId, displayName, card, similarity, cluster, songs }] }`.
+  `similarity` is the best pick pair's cosine score from `match_picks`; `cluster` is the
+  candidate's `primary_cluster`; `songs` are their public songs (with `album_art_url`).
+  A pair whose card is already cached is **not** re-evaluated by Gemini, so loading
+  Connections is cheap after the first time.
+- `GET /api/galaxy/songs` -> `{ meId, people, songs }`: the song layer for your galaxy window.
+  Each song has `albumArtUrl`, `meaning` (`songs.context_summary`) and `listeners`, where
+  every listener carries `why`, the cluster that pick's tags/slider lean toward
+  (`pickWhy` in `lib/cluster-assign.ts`). Only public picks of other people are read.
+  No Gemini.
 
 ## Auth model
 Real Supabase Auth — RLS should mirror the standard pattern: profiles are

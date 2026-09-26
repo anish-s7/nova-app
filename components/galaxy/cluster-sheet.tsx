@@ -77,7 +77,7 @@ function SongRow({ entry, clusterId, expanded, onToggle }: { entry: ClusterSong;
 
       {expanded ? (
         <div className="pb-3 pl-1">
-          <p className="mb-2 text-xs italic text-muted-foreground">“{song.title}” {entry.meaning}</p>
+          {entry.meaning ? <p className="mb-2 text-xs italic text-muted-foreground">“{song.title}” {entry.meaning}</p> : null}
           <ListenerList listeners={listeners} cluster={clusterId} songId={song.id} />
         </div>
       ) : null}
@@ -116,7 +116,8 @@ export function ListenerList({
             <UserAvatar name={l.name} cluster={cluster} isMe={l.isMe} size={30} />
             <div className="min-w-0 flex-1">
               <p className="text-sm leading-snug">
-                <span className="font-medium">{l.name}</span> <span className="text-foreground/80">· {l.reason}</span>
+                <span className="font-medium">{l.name}</span>
+                {l.reason ? <span className="text-foreground/80"> · {l.reason}</span> : null}
               </p>
               <p className="text-[11px] text-muted-foreground">{l.daysAgo === 0 ? "added just now" : `added ${ago(l.daysAgo)}`}</p>
             </div>

@@ -417,6 +417,12 @@ export type ConfirmedMatchRow = {
   profileId: string;
   displayName: string;
   card: ConnectionCardJson;
+  /** Real cosine similarity of the best pick pair (GET /api/match). Absent in the mock. */
+  similarity?: number;
+  /** Their primary cluster, if computed. */
+  cluster?: string | null;
+  /** Their public songs, so the list can show covers without a request per person. */
+  songs?: { id: string; title: string; artist: string; album_art_url: string | null }[];
 };
 
 /** One confirmed Wander result: the candidate plus the contrast card already cached for the pair. */

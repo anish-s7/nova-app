@@ -86,7 +86,10 @@ export async function POST(req: NextRequest) {
     // COMPLIANCE: only title/artist strings go to Gemini, never Spotify's
     // API response or anything MusicBrainz-derived beyond the plain name.
     const { contextSummary, embedding } = await generateSongContext(canonicalTitle, canonicalArtist);
-    const coverArt = albumArtUrl ?? (await findCover(canonicalTitle, canonicalArtist, resolution?.releaseIds));
+    // The client's art is only trusted when it's Spotify's CDN (the import). Anything else, like the
+    // mock catalog's local /covers/*.png paths, would be stored as a broken URL and skip the lookup.
+    const trustedArt = albumArtUrl && /^https:\/\/i\.scdn\.co\//.test(albumArtUrl) ? albumArtUrl : null;
+    const coverArt = trustedArt ?? (await findCover(canonicalTitle, canonicalArtist, resolution?.releaseIds));
 
     const { data: inserted, error: insertError } = await supabase
       .from("songs")

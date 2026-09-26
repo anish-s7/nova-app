@@ -46,9 +46,11 @@ export function SongSheetContent({
         </div>
       </div>
 
-      <p className="border-l-2 pl-3 font-serif text-base italic leading-snug text-foreground/85" style={{ borderColor: cluster.color }}>
-        “{star.song.title}” {star.meaning}
-      </p>
+      {star.meaning ? (
+        <p className="border-l-2 pl-3 font-serif text-base italic leading-snug text-foreground/85" style={{ borderColor: cluster.color }}>
+          “{star.song.title}” {star.meaning}
+        </p>
+      ) : null}
 
       <button
         type="button"

@@ -90,16 +90,18 @@ export function ConnectionCardView({ card, me, other }: { card: ConnectionCard; 
           Where you differ
         </h2>
         <p className="mt-1.5 text-pretty text-sm font-medium">{card.meaningfulDifference.summary}</p>
-        <dl className="mt-2 grid grid-cols-2 gap-3 text-xs">
-          <div>
-            <dt className="text-xs text-muted-foreground">You</dt>
-            <dd className="mt-0.5 text-foreground/85">{card.meaningfulDifference.evidenceA}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-muted-foreground">{other.name}</dt>
-            <dd className="mt-0.5 text-foreground/85">{card.meaningfulDifference.evidenceB}</dd>
-          </div>
-        </dl>
+        {card.meaningfulDifference.evidenceA || card.meaningfulDifference.evidenceB ? (
+          <dl className="mt-2 grid grid-cols-2 gap-3 text-xs">
+            <div>
+              <dt className="text-xs text-muted-foreground">You</dt>
+              <dd className="mt-0.5 text-foreground/85">{card.meaningfulDifference.evidenceA}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted-foreground">{other.name}</dt>
+              <dd className="mt-0.5 text-foreground/85">{card.meaningfulDifference.evidenceB}</dd>
+            </div>
+          </dl>
+        ) : null}
       </section>
 
       <section data-card-section aria-labelledby="openers-heading">
