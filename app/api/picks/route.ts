@@ -5,6 +5,7 @@ import { generateSongContext } from "@/lib/gemini/generateSongContext";
 import { resolveSong } from "@/lib/musicbrainz/client";
 import { EMOTION_WEIGHT, clampEmotionValue } from "@/lib/emotion";
 import { isValidTag } from "@/lib/tags";
+import { parseVector } from "@/lib/supabase/vector";
 
 function fallbackKey(title: string, artist: string) {
   return `${title.trim().toLowerCase()}::${artist.trim().toLowerCase()}`;
@@ -114,7 +115,7 @@ export async function POST(req: NextRequest) {
   const clampedValence = clampEmotionValue(valence ?? 0);
   const clampedEnergy = clampEmotionValue(energy ?? 0);
   const pickEmbedding = [
-    ...song.embedding,
+    ...parseVector(song.embedding),
     clampedValence * EMOTION_WEIGHT,
     clampedEnergy * EMOTION_WEIGHT,
   ];

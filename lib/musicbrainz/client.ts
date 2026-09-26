@@ -2,10 +2,16 @@ const MUSICBRAINZ_BASE_URL = "https://musicbrainz.org/ws/2/recording/";
 const MIN_REQUEST_INTERVAL_MS = 1000; // MusicBrainz rate limit: 1 req/sec
 const CONFIDENCE_THRESHOLD = 0.85; // below this, caller should fall back to Gemini
 
-// TODO: replace with a real contact email before the demo — MusicBrainz
-// requires a descriptive User-Agent with contact info and may block
-// generic/missing ones.
-const USER_AGENT = "SongGalaxy/0.1 (hackgt-meta-track; contact: set-real-email@example.com)";
+// MusicBrainz requires a descriptive User-Agent with real contact info and
+// may block requests without one. The email comes from an env var, not a
+// literal here, since this file is in a public repo — see .env.local.example.
+function buildUserAgent() {
+  const contact = process.env.MUSICBRAINZ_CONTACT_EMAIL;
+  if (!contact) {
+    throw new Error("Missing MUSICBRAINZ_CONTACT_EMAIL in .env.local");
+  }
+  return `SongGalaxy/0.1 (hackgt-meta-track; contact: ${contact})`;
+}
 
 export interface MusicBrainzResolution {
   title: string;
@@ -50,7 +56,7 @@ export async function resolveSong(title: string, artist: string): Promise<MusicB
   const url = `${MUSICBRAINZ_BASE_URL}?query=${encodeURIComponent(query)}&fmt=json&limit=5`;
 
   const res = await fetch(url, {
-    headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+    headers: { "User-Agent": buildUserAgent(), Accept: "application/json" },
   });
 
   if (!res.ok) {

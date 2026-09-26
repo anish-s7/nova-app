@@ -2,6 +2,7 @@ import {
   getGeminiClient,
   GEMINI_TEXT_MODEL,
   GEMINI_EMBEDDING_MODEL,
+  EMBEDDING_DIMENSIONS,
 } from "./client";
 
 const PROMPT = `Describe the mood and typical emotional/listening context of this song
@@ -40,9 +41,7 @@ export async function generateSongContext(
     ai.models.embedContent({
       model: GEMINI_EMBEDDING_MODEL,
       contents: songLabel,
-      config: {
-        outputDimensionality: 768,
-      },
+      config: { outputDimensionality: EMBEDDING_DIMENSIONS },
     }),
   ]);
 

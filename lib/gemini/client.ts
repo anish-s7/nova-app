@@ -16,5 +16,15 @@ export function getGeminiClient() {
 
 // Flash, not Pro — this is extraction/matching, not a task that needs
 // frontier reasoning, and it keeps hackathon API costs down.
-export const GEMINI_TEXT_MODEL = "gemini-3.8-flash";
+//
+// gemini-2.5-flash was retired for new callers (confirmed via a live 404
+// from the real API on 2026-09-26), and gemini-flash-latest was returning
+// 503 (high demand) at the time this was set. Using the "lite" alias
+// instead of a pinned version so this doesn't go stale again, and because
+// this task (mood description, evidence-check) doesn't need full Flash.
+export const GEMINI_TEXT_MODEL = "gemini-flash-lite-latest";
+
 export const GEMINI_EMBEDDING_MODEL = "gemini-embedding-001";
+
+// gemini-embedding-001 defaults to 3072 dims...
+export const EMBEDDING_DIMENSIONS = 768;
