@@ -6,7 +6,10 @@ export async function GET(req: NextRequest) {
   const profileId = req.nextUrl.searchParams.get("state");
 
   if (!code || !profileId) {
-    return NextResponse.json({ error: "Missing code or state" }, { status: 400 });
+    return NextResponse.json(
+      { error: "Missing code or state" },
+      { status: 400 },
+    );
   }
 
   const { access_token } = await exchangeCodeForToken(code);
@@ -18,6 +21,9 @@ export async function GET(req: NextRequest) {
   // circular slider for each one, then POST each to /api/user-songs.
   const encodedTracks = encodeURIComponent(JSON.stringify(topTracks));
   return NextResponse.redirect(
-    new URL(`/onboarding?profileId=${profileId}&tracks=${encodedTracks}`, req.url)
+    new URL(
+      `/onboarding/pick?profileId=${profileId}&tracks=${encodedTracks}`,
+      req.url,
+    ),
   );
 }
