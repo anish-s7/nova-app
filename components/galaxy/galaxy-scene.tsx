@@ -226,7 +226,7 @@ const ORBIT_SPEED = 0.006;
  * with it, star to star (see edgeVertex).
  */
 const BUILD_START = 0.15;
-const BUILD_SPAN = 2.4;
+const BUILD_SPAN = 3.0;
 /** Wrap an angle into (-π, π] so tweens take the short way round. */
 const wrapAngle = (a: number) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
 
@@ -465,7 +465,7 @@ function Scene({
         const farSlot = nearIsSource ? 1 : 0;
         from.set([near.x, near.y, near.z], i * 6 + farSlot * 3);
         const start = Math.min(a, b);
-        const end = Math.max(a, b) + 0.35;
+        const end = Math.max(a, b) + 0.45;
         grow.set([start, end, start, end], i * 4);
       }
     });
