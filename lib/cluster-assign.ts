@@ -1,5 +1,5 @@
 import { CLUSTER_IDS, type ClusterId } from "./clusters";
-import type { Tag } from "./tags";
+import { FEELINGS, type FeelingTag, type Tag } from "./tags";
 import { classifyMix, mixFromScores, type MixClass, type WhyMix } from "./why-mix";
 
 /**
@@ -11,8 +11,12 @@ import { classifyMix, mixFromScores, type MixClass, type WhyMix } from "./why-mi
 
 type Weights = Partial<Record<ClusterId, number>>;
 
-/** How each mood tag (lib/tags.ts) leans across the five "whys". */
+/**
+ * How each tag (lib/tags.ts) leans across the five "whys". A feeling counts fully toward its own
+ * reason; the original tags keep the spread they always had, so older picks cluster as before.
+ */
 export const TAG_WEIGHTS: Record<Tag, Weights> = {
+  ...(Object.fromEntries(FEELINGS.map((f) => [f.tag, { [f.why]: 1 }])) as Record<FeelingTag, Weights>),
   "late night": { quiet_company: 1, carrying_loss: 0.4 },
   heartbreak: { carrying_loss: 1, old_selves: 0.4, quiet_company: 0.3 },
   "hype / workout": { armor_up: 1 },

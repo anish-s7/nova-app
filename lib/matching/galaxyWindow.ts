@@ -1,5 +1,5 @@
 import { createServerClient } from "../supabase/server";
-import { TAGS } from "../tags";
+import { ALL_TAGS } from "../tags";
 import { DEFAULT_BUDGET, expandOrder, knnEdges, sampleGalaxy, type SampleCandidate } from "../galaxy-sample";
 import { MIN_EMOTION_GAP } from "./findWander";
 import { refreshPrimaryCluster } from "./refreshPrimaryCluster";
@@ -53,7 +53,7 @@ type Loaded = SampleCandidate & { displayName: string };
  * Similarity to you comes from the pgvector search, and nothing here is a profile-level average.
  */
 function diversityVector(tags: string[], valence: number, energy: number) {
-  return [...TAGS.map((t) => (tags.includes(t) ? 1 : 0)), valence * 1.5, energy * 1.5];
+  return [...ALL_TAGS.map((t) => (tags.includes(t) ? 1 : 0)), valence * 1.5, energy * 1.5];
 }
 
 const day = () => Math.floor(Date.now() / 86_400_000);

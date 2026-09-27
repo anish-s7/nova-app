@@ -13,7 +13,6 @@ import { TagPicker } from "@/components/tag-picker";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { getMySongs, sameSong, saveSongs } from "@/lib/api";
 import { setSession, useHydrated, useSession, type Feeling } from "@/lib/session";
-import type { Tag } from "@/lib/tags";
 import type { Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -171,11 +170,8 @@ function DescribeSongs({ songs, feelings, fromSpotify }: { songs: Song[]; feelin
           </div>
           {existing ? <p className="mt-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">Already in your songs. Your answers here replace the old ones.</p> : null}
 
+          {/* Mood circle first: where the dot lands puts the likeliest feelings at the top below. */}
           <div className="mt-6">
-            <TagPicker value={feeling.tags} onChange={(tags: Tag[]) => update({ tags })} label={`Tags for ${song.title}`} />
-          </div>
-
-          <div className="mt-8">
             <MoodCircle
               value={{ valence: feeling.valence, energy: feeling.energy }}
               placed={feeling.placed}
@@ -183,12 +179,16 @@ function DescribeSongs({ songs, feelings, fromSpotify }: { songs: Song[]; feelin
               label={`How ${song.title} makes you feel`}
             />
           </div>
+
+          <div className="mt-8">
+            <TagPicker value={feeling.tags} onChange={(tags) => update({ tags })} label={`Feelings for ${song.title}`} mood={feeling} />
+          </div>
         </div>
       </div>
 
       <div className="border-t border-white/5 bg-background/90 px-5 pb-6 pt-3 backdrop-blur">
         <Button className="h-12 w-full rounded-full text-base" disabled={!ready} onClick={next}>
-          {!ready ? "Pick at least one tag" : last ? "Read my music" : "Next song"}
+          {!ready ? "Pick at least one feeling" : last ? "Read my music" : "Next song"}
         </Button>
         {ready && !feeling.placed ? <p className="mt-2 text-center text-xs text-muted-foreground">Tip: place the circle too. It&apos;s how we match you.</p> : null}
       </div>

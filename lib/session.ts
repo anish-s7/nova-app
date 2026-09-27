@@ -3,14 +3,14 @@
 import { useSyncExternalStore } from "react";
 import { songById } from "./music-context";
 import type { SongPick } from "./song-layer";
-import type { Tag } from "./tags";
 import type { AnalysisResult, InferredMotivation, ListeningSignal, Song } from "./types";
 
 export type FailureKey = "spotify" | "analysis" | "galaxy" | "card";
 
 /** How one song feels to this person: what the backend matches on (POST /api/picks). */
 export type Feeling = {
-  tags: Tag[];
+  /** Feeling tags (lib/tags.ts); older picks may carry the original ones. */
+  tags: string[];
   /** -1..1, sad ↔ happy. */
   valence: number;
   /** -1..1, calm ↔ intense. */

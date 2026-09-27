@@ -61,8 +61,7 @@ function Editor({ item, onClose, onChanged }: { item: MySong; onClose: () => voi
       </div>
 
       <div className="-mx-5 mt-4 min-h-0 flex-1 overflow-y-auto px-5">
-        <TagPicker value={feeling.tags} onChange={(tags) => setFeeling((f) => ({ ...f, tags }))} label={`Tags for ${item.song.title}`} />
-        <div className="mt-6 flex justify-center">
+        <div className="flex justify-center">
           <MoodCircle
             value={{ valence: feeling.valence, energy: feeling.energy }}
             placed={feeling.placed}
@@ -70,6 +69,9 @@ function Editor({ item, onClose, onChanged }: { item: MySong; onClose: () => voi
             label={`How ${item.song.title} makes you feel`}
             size={200}
           />
+        </div>
+        <div className="mt-6">
+          <TagPicker value={feeling.tags} onChange={(tags) => setFeeling((f) => ({ ...f, tags }))} label={`Feelings for ${item.song.title}`} mood={feeling} />
         </div>
       </div>
 
@@ -98,7 +100,7 @@ function Editor({ item, onClose, onChanged }: { item: MySong; onClose: () => voi
           onClick={() => run("save", () => updateSongFeeling(item.pickId, feeling))}
         >
           {busy === "save" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-          {feeling.tags.length === 0 ? "Pick at least one tag" : changed ? "Save changes" : "No changes"}
+          {feeling.tags.length === 0 ? "Pick at least one feeling" : changed ? "Save changes" : "No changes"}
         </Button>
       </div>
     </div>
