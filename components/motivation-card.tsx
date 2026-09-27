@@ -58,7 +58,7 @@ export function MotivationCard({ motivation: m, songs, className, inline = false
       <h3 id={`${id}-label`} className={inline ? "sr-only" : "mt-3 text-xl font-semibold leading-tight"}>
         {m.label}
       </h3>
-      <p className={cn(inline ? "" : "mt-1.5", "text-pretty font-serif text-[17px] italic leading-snug text-foreground/85")}>{m.description}</p>
+      <p className={cn(inline ? "" : "mt-1.5", "text-pretty text-[17px] leading-snug text-foreground/85")}>{m.description}</p>
 
       <ul className="mt-4 flex flex-col gap-3 border-t border-white/5 pt-4" aria-label="Why we think so">
         {m.evidence.slice(0, 2).map((e, i) => (
@@ -90,7 +90,7 @@ export function MotivationCard({ motivation: m, songs, className, inline = false
               onChange={(e) => setNote(e.target.value)}
               onBlur={() => note !== (m.note ?? "") && updateMotivation(m.id, { note: note.trim() || undefined })}
               placeholder="Add a note (optional)"
-              className={cn("w-full resize-none border border-white/10 bg-background/60 px-3 py-2.5 font-serif text-base italic outline-none placeholder:font-sans placeholder:not-italic placeholder:text-muted-foreground focus:border-[var(--tone)]", !inline && "rounded-xl")}
+              className={cn("w-full resize-none border border-white/10 bg-background/60 px-3 py-2.5 text-base outline-none placeholder:text-muted-foreground focus:border-[var(--tone)]", !inline && "rounded-xl")}
             />
           </div>
 

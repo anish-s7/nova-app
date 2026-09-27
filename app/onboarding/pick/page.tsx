@@ -47,7 +47,7 @@ function PickSongsGate() {
   if (mine.error) {
     return (
       <main className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-        <p className="font-serif text-xl italic">We couldn&apos;t check your songs.</p>
+        <p className="text-xl font-semibold tracking-tight">We couldn&apos;t check your songs.</p>
         <Button className="h-11 rounded-full px-6" disabled={mine.isValidating} onClick={() => void mine.mutate()}>
           Try again
         </Button>

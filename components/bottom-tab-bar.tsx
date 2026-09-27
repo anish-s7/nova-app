@@ -52,22 +52,24 @@ export function BottomTabBar() {
             <li key={href} className="relative flex-1 lg:flex-none">
               <Link
                 href={href}
+                aria-label={label}
+                title={label}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "group flex min-h-[3.75rem] items-center justify-center text-[10px] font-medium tracking-wide transition-colors lg:min-h-0 lg:text-[13px] lg:tracking-normal",
+                  "group flex min-h-[3.75rem] items-center justify-center transition-colors lg:min-h-0",
                   active ? "text-foreground" : "text-muted-foreground hover:text-foreground",
                 )}
               >
+                {/* Icons only; the name is the link's accessible label and hover tooltip. */}
                 <span
                   data-indicator-active={active ? "true" : undefined}
-                  className="flex flex-col items-center gap-0.5 rounded-2xl px-4 py-1.5 lg:flex-row lg:gap-2 lg:rounded-full lg:px-4 lg:py-2.5"
+                  className="flex items-center justify-center rounded-2xl px-5 py-2.5 lg:rounded-full lg:px-5 lg:py-2.5"
                 >
                   <Icon
-                    className={cn("size-6 transition-transform duration-150 group-active:scale-90 lg:size-5", active && "text-primary")}
+                    className={cn("size-6 transition-transform duration-150 group-active:scale-90 lg:size-[22px]", active && "text-primary")}
                     strokeWidth={active ? 2.1 : 1.6}
                     aria-hidden
                   />
-                  <span>{label}</span>
                 </span>
               </Link>
             </li>

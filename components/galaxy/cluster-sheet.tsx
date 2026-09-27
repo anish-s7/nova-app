@@ -25,7 +25,7 @@ export function ClusterSheetContent({ clusterId }: { clusterId: string }) {
   return (
     <div className="flex flex-col gap-3" style={{ "--tone": cluster.color } as CSSProperties}>
       <div className="border-l-2 pl-3" style={{ borderColor: cluster.color }}>
-        <h2 className="font-serif text-xl italic leading-snug">{cluster.label}</h2>
+        <h2 className="text-xl leading-snug font-semibold tracking-tight">{cluster.label}</h2>
         {data ? (
           <p className="mt-1 text-xs text-muted-foreground">
             <span className="tabular-nums text-foreground">{data.listeners}</span> {data.listeners === 1 ? "person" : "people"} here for{" "}
@@ -83,7 +83,7 @@ function SongRow({ entry, clusterId, expanded, onToggle }: { entry: ClusterSong;
 
       {expanded ? (
         <div className="pb-3 pl-1">
-          {entry.meaning ? <p className="mb-2 text-xs italic text-muted-foreground">“{song.title}” {entry.meaning}</p> : null}
+          {entry.meaning ? <p className="mb-2 text-xs text-muted-foreground">“{song.title}” {entry.meaning}</p> : null}
           <ListenerList listeners={listeners} cluster={clusterId} songId={song.id} />
         </div>
       ) : null}

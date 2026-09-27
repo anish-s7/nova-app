@@ -41,7 +41,7 @@ export default function YourWhyPage() {
           <Logo />
         </div>
         <p className="mt-8 text-xs font-medium uppercase tracking-wider text-muted-foreground">A first pass</p>
-        <h1 className="mt-3 text-balance font-serif text-[30px] italic leading-[1.18] motion-safe:animate-rise-in">{session.analysis.headline}</h1>
+        <h1 className="mt-3 text-balance text-[30px] leading-[1.18] motion-safe:animate-rise-in">{session.analysis.headline}</h1>
         <p className="mt-4 text-sm text-muted-foreground">Correct anything that&apos;s off. One tap each.</p>
 
         <div className="mt-6 flex flex-col gap-3">

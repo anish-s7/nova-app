@@ -61,7 +61,7 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
   const field = "min-h-11 border border-white/15 bg-transparent px-3 text-sm outline-none placeholder:text-muted-foreground focus:border-white/30";
   return (
     <div className="flex flex-col gap-3">
-      <h2 className="font-serif text-xl italic">Add a song to the galaxy</h2>
+      <h2 className="text-xl font-semibold tracking-tight">Add a song to the galaxy</h2>
       <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What's the song called?" aria-label="Song title" disabled={busy} className={field} />
       <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Who made it?" aria-label="Artist" disabled={busy} className={field} />
 
@@ -139,7 +139,7 @@ function MockAddSongSheet({ layer, initialSongId, onAdded }: { layer: SongLayer;
   if (!chosen) {
     return (
       <div className="flex flex-col gap-3">
-        <h2 className="font-serif text-xl italic">Add a song to the galaxy</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Add a song to the galaxy</h2>
         <label className="flex min-h-11 items-center gap-2 border border-white/15 px-3">
           <Search className="size-4 text-muted-foreground" aria-hidden />
           <input

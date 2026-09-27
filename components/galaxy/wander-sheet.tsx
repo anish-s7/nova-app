@@ -25,7 +25,7 @@ export function WanderSheetContent() {
   return (
     <div className="flex flex-col gap-3">
       <div>
-        <h2 className="font-serif text-xl italic leading-snug">Same song, different feeling</h2>
+        <h2 className="text-xl leading-snug font-semibold tracking-tight">Same song, different feeling</h2>
         <p className="mt-1 text-xs text-muted-foreground">People who picked a song you did and hear it another way.</p>
       </div>
 

@@ -92,7 +92,7 @@ export default function MePage() {
                 </div>
               </div>
 
-              <p className="mt-5 border-l-2 border-[var(--tone,var(--primary))] pl-3 text-balance font-serif text-xl italic leading-snug">{session.analysis.headline}</p>
+              <p className="mt-5 border-l-2 border-[var(--tone,var(--primary))] pl-3 text-balance text-xl leading-snug font-semibold tracking-tight">{session.analysis.headline}</p>
 
               <dl className="mt-5 grid grid-cols-3 border border-white/10">
                 <Stat label="Songs" value={songs.length} />

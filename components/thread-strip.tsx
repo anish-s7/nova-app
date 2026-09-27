@@ -33,7 +33,7 @@ export function ThreadStrip({ thread, name, userId, onJumpToPending }: { thread:
   }, [entries.length]);
 
   return (
-    <section ref={root} aria-label={`Your thread with ${name}`} className="flex min-h-14 items-center gap-3 border-b border-white/[0.07] bg-background/95 px-4 py-2">
+    <section ref={root} aria-label={`Your thread with ${name}`} className="flex min-h-14 items-center gap-3 border-b border-white/[0.07] bg-background/80 px-4 py-2 backdrop-blur-xl lg:px-8">
       {entries.length ? (
         <ul className="flex shrink-0 items-center" aria-label={`${entries.length} ${entries.length === 1 ? "song" : "songs"} traded`}>
           {hidden > 0 ? <li className="mr-1.5 text-[11px] tabular-nums text-muted-foreground">+{hidden}</li> : null}
@@ -65,12 +65,12 @@ export function ThreadStrip({ thread, name, userId, onJumpToPending }: { thread:
       </p>
 
       {turn === "mine" && onJumpToPending ? (
-        <button type="button" onClick={onJumpToPending} className="inline-flex min-h-9 shrink-0 items-center gap-1 px-2 text-xs font-medium text-primary hover:bg-white/5">
+        <button type="button" onClick={onJumpToPending} className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-full px-2.5 text-xs font-semibold text-primary hover:bg-white/5">
           Jump to it
           <ArrowDown className="size-3.5" aria-hidden />
         </button>
       ) : turn === "even" || turn === "open" ? (
-        <Link href={`/messages/${userId}/swap`} className="inline-flex min-h-9 shrink-0 items-center border border-primary/50 px-3 text-xs font-medium text-primary hover:bg-primary/10">
+        <Link href={`/messages/${userId}/swap`} className="inline-flex min-h-8 shrink-0 items-center rounded-full bg-primary/15 px-3 text-xs font-semibold text-primary transition-colors hover:bg-primary/25">
           {turn === "open" ? "Send a song" : "Send another"}
         </Link>
       ) : null}

@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-/** Screens that use the whole window on a laptop (the welcome page and the galaxy); everything else
- * sits in a centered column. "/" only matches the welcome page itself (see `matches`). */
-const FULL_WIDTH = ["/galaxy", "/"];
+/** Screens that use the whole window on a laptop (the welcome page, the galaxy, Connections and
+ * Messages, which lay themselves out for it); everything else sits in a centered column. "/" only
+ * matches the welcome page itself (see `matches`). */
+const FULL_WIDTH = ["/galaxy", "/", "/connections", "/messages"];
 /** Scripted demos composed for a phone screen: they keep the phone frame at every size. */
 const PHONE_ONLY = ["/pitch", "/sim", "/proto"];
 
@@ -14,7 +15,7 @@ const matches = (path: string, prefixes: string[]) => prefixes.some((p) => path 
 
 /**
  * The app's outer shell. Phones: edge to edge. Tablets and small windows (sm): a phone-shaped
- * frame. Laptops (lg+): the whole window, with the galaxy full width and every other screen in a
+ * frame. Laptops (lg+): the whole window, with FULL_WIDTH screens edge to edge and every other screen in a
  * readable centered column (the screens are mobile-first single columns, so stretching them edge
  * to edge would look worse). The /pitch, /sim and prototype demos keep the phone frame everywhere.
  */

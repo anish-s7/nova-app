@@ -22,7 +22,7 @@ export default function ConnectionCardPage() {
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-8">
         {card.error ? (
           <div className="flex flex-col items-center gap-3 py-16 text-center">
-            <p className="font-serif text-xl italic">We couldn&apos;t put this card together.</p>
+            <p className="text-xl font-semibold tracking-tight">We couldn&apos;t put this card together.</p>
             <p className="text-sm text-muted-foreground">{card.error.message}</p>
             <Button className="mt-2 rounded-full" disabled={card.isValidating} onClick={() => card.mutate()}>
               Try again

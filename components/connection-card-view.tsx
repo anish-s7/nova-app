@@ -73,7 +73,7 @@ export function ConnectionCardView({ card, me, other }: { card: ConnectionCard; 
         <p data-count className="text-sm text-muted-foreground">
           {sharedSongs === 1 ? "song" : "songs"} in common · {sharedArtists} shared {sharedArtists === 1 ? "artist" : "artists"}
         </p>
-        <p data-verdict className="mt-3 text-balance font-serif text-lg italic">
+        <p data-verdict className="mt-3 text-balance text-lg font-semibold tracking-tight">
           {card.sharedMotivations.length > 1 ? `${card.sharedMotivations.length} shared reasons.` : "The same reason."}
         </p>
       </section>
@@ -119,7 +119,7 @@ export function ConnectionCardView({ card, me, other }: { card: ConnectionCard; 
                 href={`/messages/${other.id}?draft=${encodeURIComponent(o)}`}
                 className="flex min-h-11 items-center gap-3 rounded-2xl border border-white/10 bg-card/60 px-4 py-2.5 text-left transition-colors hover:border-primary/40"
               >
-                <span className="flex-1 text-pretty text-sm italic">&ldquo;{o}&rdquo;</span>
+                <span className="flex-1 text-pretty text-sm">&ldquo;{o}&rdquo;</span>
                 <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
               </Link>
             </li>

@@ -155,8 +155,8 @@ function textSprite(text: string) {
   const px = 44;
   const c = document.createElement("canvas");
   const g = c.getContext("2d")!;
-  const family = getComputedStyle(document.documentElement).getPropertyValue("--font-newsreader").trim() || "serif";
-  const font = `italic ${px}px ${family}`;
+  const family = getComputedStyle(document.documentElement).getPropertyValue("--font-source-sans").trim() || "system-ui, sans-serif";
+  const font = `${px}px ${family}`;
   g.font = font;
   c.width = Math.ceil(g.measureText(text).width) + 16;
   c.height = Math.ceil(px * 1.4);

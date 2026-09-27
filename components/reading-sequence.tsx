@@ -215,7 +215,7 @@ export function ReadingSequence() {
   if (animationDone && saveFailed) {
     return (
       <main className="starfield flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-        <p className="font-serif text-2xl italic">We couldn&apos;t save all your songs.</p>
+        <p className="text-2xl font-semibold tracking-tight">We couldn&apos;t save all your songs.</p>
         <p className="text-sm text-muted-foreground">{session.saveError ?? "Something went wrong on our end."} The ones already saved are kept.</p>
         <Button className="mt-2 h-11 rounded-full px-6" onClick={() => void saveSongs()}>
           Try again
@@ -227,7 +227,7 @@ export function ReadingSequence() {
   if (error) {
     return (
       <main className="starfield flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-        <p className="font-serif text-2xl italic">We couldn&apos;t get through your songs just now.</p>
+        <p className="text-2xl font-semibold tracking-tight">We couldn&apos;t get through your songs just now.</p>
         <p className="text-sm text-muted-foreground">Your songs are saved. Give it another try.</p>
         {/* The error stays up while retrying, so the button itself has to show that something is happening. */}
         <Button className="mt-2 h-11 rounded-full px-6" disabled={isValidating} onClick={() => mutate()}>
@@ -328,12 +328,12 @@ export function ReadingSequence() {
 
       <div ref={caption} className="relative min-h-40 px-8 pb-16 text-center" aria-live="polite">
         {currentHighlight ? (
-          <p key={currentHighlight} data-caption className="text-balance font-serif text-[26px] italic leading-snug">
+          <p key={currentHighlight} data-caption className="text-balance text-[26px] leading-snug">
             {currentHighlight}
           </p>
         ) : converging ? (
           <>
-            <p key="converge" data-caption className="font-serif text-xl italic text-muted-foreground">Here&apos;s a first pass.</p>
+            <p key="converge" data-caption className="text-xl font-medium tracking-tight text-muted-foreground">Here&apos;s a first pass.</p>
             {animationDone && saving ? <p className="mt-3 text-sm text-muted-foreground">Saving your songs…</p> : null}
           </>
         ) : (

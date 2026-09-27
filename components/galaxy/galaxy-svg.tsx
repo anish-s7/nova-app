@@ -142,7 +142,7 @@ export function GalaxySvg({
           <circle r={d.radius * 1.4} fill={destOf.get(d.id)?.color} opacity={0.18} />
           <circle r={d.radius * 0.35} fill={destOf.get(d.id)?.color} opacity={0.5} />
           {view === "universe" ? (
-            <text y={d.radius * 1.4 + 3} textAnchor="middle" className="fill-foreground font-serif text-[3px] italic">
+            <text y={d.radius * 1.4 + 3} textAnchor="middle" className="fill-foreground text-[3px]">
               {destOf.get(d.id)?.name}
             </text>
           ) : null}

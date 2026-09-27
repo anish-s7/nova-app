@@ -35,7 +35,7 @@ export function EmptyState({ title, body, action }: { icon?: LucideIcon; title: 
   return (
     <div className="flex flex-col items-center px-8 py-16 text-center motion-safe:animate-in motion-safe:fade-in">
       <Constellation />
-      <h2 className="font-serif text-2xl italic leading-snug">{title}</h2>
+      <h2 className="text-2xl leading-snug font-semibold tracking-tight">{title}</h2>
       <p className="mt-1.5 max-w-64 text-pretty text-sm leading-relaxed text-muted-foreground">{body}</p>
       {action ? <div className="mt-6">{action}</div> : null}
     </div>

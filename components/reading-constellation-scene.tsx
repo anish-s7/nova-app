@@ -38,15 +38,18 @@ function glowTexture() {
   return new THREE.CanvasTexture(c);
 }
 
+/** The page's sans-serif (Source Sans 3), falling back to the system UI font. */
+const SANS = `"Source Sans 3", -apple-system, system-ui, sans-serif`;
+
 /** A song title baked into a billboard sprite so it always faces the camera. */
 function textSprite(text: string) {
   const px = 44;
   const c = document.createElement("canvas");
   const g = c.getContext("2d")!;
-  g.font = `italic ${px}px Georgia, serif`;
+  g.font = `500 ${px}px ${SANS}`;
   c.width = Math.ceil(g.measureText(text).width) + 16;
   c.height = Math.ceil(px * 1.5);
-  g.font = `italic ${px}px Georgia, serif`;
+  g.font = `500 ${px}px ${SANS}`;
   g.textBaseline = "middle";
   g.fillStyle = "rgba(236, 234, 250, 0.92)";
   g.fillText(text, 8, c.height / 2);

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Loader2, LogOut } from "lucide-react";
 import { useAccount } from "@/components/auth/use-account";
 import { resetWorld } from "@/lib/api";
+import { replayGalaxyIntro } from "@/lib/galaxy-intro";
 import { resetSession } from "@/lib/session";
 import { createClient } from "@/lib/supabase/browser";
 
@@ -22,6 +23,7 @@ export function AccountRow({ className }: { className?: string }) {
     // Don't leave this account's picks behind for the next person on this browser.
     resetSession();
     resetWorld();
+    replayGalaxyIntro();
     router.replace("/");
     router.refresh();
   };

@@ -55,8 +55,8 @@ function SnippetPlayback({ swap }: { swap: SongSwap }) {
   };
 
   return (
-    <div className="mx-4 mt-3 border-y border-white/[0.07] py-3">
-      {snippet.label ? <p className="mb-2 font-serif text-sm italic text-foreground/90">{snippet.label}</p> : null}
+    <div className="mx-4 mt-3 rounded-2xl bg-black/15 px-3 py-2.5">
+      {snippet.label ? <p className="mb-2 text-sm font-medium text-foreground/90">{snippet.label}</p> : null}
       <div className="flex items-center gap-3">
         <button type="button" onClick={() => void toggle()} disabled={unavailable || resolving} className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/40 text-primary disabled:border-white/10 disabled:text-muted-foreground" aria-label={playback.status === "playing" ? "Pause favorite snippet" : "Play favorite snippet"}>
           {resolving || playback.status === "loading" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : unavailable || playback.status === "error" ? <VolumeX className="size-4" aria-hidden /> : playback.status === "playing" ? <Pause className="size-4" aria-hidden /> : <Play className="size-4" aria-hidden />}
@@ -90,26 +90,30 @@ export function SongSwapCard({
   return (
     <article
       id={id}
-      className={cn("w-[84%] scroll-mt-20 border border-white/10 bg-card/60 transition-shadow motion-safe:animate-in motion-safe:fade-in", preview && "w-full")}
+      className={cn(
+        "w-[84%] max-w-[380px] scroll-mt-24 overflow-hidden rounded-[22px] border transition-shadow motion-safe:animate-in motion-safe:fade-in",
+        mine ? "border-primary/30 bg-primary/[0.08]" : "border-white/10 bg-[var(--bubble-theirs)]",
+        preview && "w-full max-w-none",
+      )}
       aria-label={`Song Swap from ${mine ? "you" : otherName}: ${swap.song.title}`}
     >
-      <p className="flex items-center gap-1.5 px-4 pt-3 text-[11px] font-medium uppercase tracking-wider text-primary">
+      <p className="flex items-center gap-1.5 px-4 pt-3.5 text-[13px] font-semibold text-primary">
         <Disc3 className="size-3.5" aria-hidden />
         {mine ? (preview ? `Song Swap for ${otherName}` : "You sent a Song Swap") : `${otherName} sent a Song Swap`}
       </p>
       <div className="flex items-center gap-3 px-4 pt-3">
-        <AlbumArt song={swap.song} size={60} className="rounded-md" />
+        <AlbumArt song={swap.song} size={60} className="rounded-xl" />
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold leading-tight">{swap.song.title}</p>
           <p className="truncate text-sm text-muted-foreground">{swap.song.artist}</p>
         </div>
       </div>
       <SnippetPlayback swap={swap} />
-      <blockquote className="mx-4 mb-4 mt-3 border-l-2 border-primary/60 pl-3 font-serif text-[15px] italic leading-relaxed text-foreground/90">
-        {swap.reason ? <>&ldquo;{swap.reason}&rdquo;</> : <span className="text-muted-foreground">Your reason shows here.</span>}
-      </blockquote>
+      <p className="mx-4 mb-4 mt-3 text-[15px] leading-snug text-foreground/90">
+        {swap.reason ? swap.reason : <span className="text-muted-foreground">Your reason shows here.</span>}
+      </p>
       {preview ? null : (
-        <div className="border-t border-white/[0.07]">
+        <div className="border-t border-white/[0.08]">
           {swap.status === "returned" ? (
             <p className="flex min-h-11 items-center gap-2 px-4 text-sm text-muted-foreground">
               <Check className="size-4" aria-hidden />

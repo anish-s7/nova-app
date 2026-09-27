@@ -139,7 +139,7 @@ export function SnippetSelector({ song, value, onChange }: { song: Song; value?:
 
       <div
         ref={trackRef}
-        className="relative h-20 touch-none select-none overflow-hidden border border-white/10 bg-card/50"
+        className="relative h-20 touch-none select-none overflow-hidden rounded-2xl border border-white/10 bg-card/50"
         onPointerDown={(event) => {
           if ((event.target as HTMLElement).closest("[data-handle]")) return;
           const rect = event.currentTarget.getBoundingClientRect();
@@ -193,7 +193,7 @@ export function SnippetSelector({ song, value, onChange }: { song: Song; value?:
         {isPlaying ? <div className="pointer-events-none absolute inset-y-0 z-20 w-px bg-white" style={{ left: `${startPct + (endPct - startPct) * playback.progress}%` }} /> : null}
       </div>
       <label className="block text-xs text-muted-foreground">Optional label
-        <input value={range.label ?? ""} maxLength={80} onChange={(event) => commit({ ...range, label: event.target.value || undefined })} placeholder="This is my favorite part" className="mt-1 h-10 w-full border border-white/10 bg-card/50 px-3 text-sm text-foreground outline-none focus:border-primary/50" />
+        <input value={range.label ?? ""} maxLength={80} onChange={(event) => commit({ ...range, label: event.target.value || undefined })} placeholder="This is my favorite part" className="mt-1.5 h-10 w-full rounded-full border border-white/10 bg-card/50 px-4 text-sm text-foreground outline-none transition-colors focus:border-primary/50" />
       </label>
     </div>
   );

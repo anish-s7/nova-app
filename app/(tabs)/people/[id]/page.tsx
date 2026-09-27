@@ -64,7 +64,7 @@ export default function PersonPage() {
                   <article key={m.id} className="rounded-3xl border border-white/10 bg-card/60 p-5">
                     <ThemeTag cluster={m.cluster} size="sm" short />
                     <h3 className="mt-3 text-lg font-semibold">{m.label}</h3>
-                    <p className="mt-1 font-serif text-base italic text-foreground/85">{m.note ? `“${m.note}”` : m.description}</p>
+                    <p className="mt-1 text-base text-foreground/85">{m.note ? `“${m.note}”` : m.description}</p>
                     <ul className="mt-4 flex flex-col gap-3 border-t border-white/5 pt-4">
                       {m.evidence.slice(0, 2).map((e, i) => (
                         <EvidenceLine key={i} evidence={e} songs={user.songs} />

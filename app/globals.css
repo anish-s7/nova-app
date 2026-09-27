@@ -10,6 +10,8 @@
   --font-sans: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
   --font-serif: var(--font-newsreader), ui-serif, Georgia, serif;
   --font-mono: ui-monospace, monospace;
+  /* Messages: the platform's own UI font (San Francisco on Apple devices), as in iMessage. */
+  --font-chat: -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, "Segoe UI", Roboto, sans-serif;
   --font-heading: var(--font-source-sans), ui-sans-serif, system-ui, sans-serif;
   --color-ring: var(--ring);
   --color-input: var(--input);
@@ -42,6 +44,8 @@
   --background: oklch(0.165 0.03 280);
   --foreground: oklch(0.95 0.012 280);
   --card: oklch(0.205 0.034 280);
+  /* The other person's chat bubbles: a lifted slate, like iMessage's gray on our night palette. */
+  --bubble-theirs: oklch(0.275 0.035 280);
   --card-foreground: oklch(0.95 0.012 280);
   --popover: oklch(0.215 0.035 280);
   --popover-foreground: oklch(0.95 0.012 280);
@@ -276,5 +280,58 @@
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+  }
+}
+
+/*
+ * Chat bubbles (components/chat-view.tsx), iMessage-style. The last bubble in a run gets a tail:
+ * ::before is the tail in the bubble's color, ::after trims it with the page background, which
+ * is why the chat scroller must sit on bg-background.
+ */
+@utility bubble-tail-mine {
+  position: relative;
+  &::before {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    right: -7px;
+    width: 20px;
+    height: 20px;
+    background: var(--primary);
+    border-bottom-left-radius: 16px 14px;
+  }
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    right: -26px;
+    width: 26px;
+    height: 20px;
+    background: var(--background);
+    border-bottom-left-radius: 10px;
+  }
+}
+
+@utility bubble-tail-theirs {
+  position: relative;
+  &::before {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: -7px;
+    width: 20px;
+    height: 20px;
+    background: var(--bubble-theirs);
+    border-bottom-right-radius: 16px 14px;
+  }
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: -26px;
+    width: 26px;
+    height: 20px;
+    background: var(--background);
+    border-bottom-right-radius: 10px;
   }
 }

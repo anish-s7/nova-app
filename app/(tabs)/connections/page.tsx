@@ -66,8 +66,9 @@ export default function ConnectionsPage() {
       <ScreenHeader
         title="Connections"
         subtitle="Ranked by why you listen, not what"
+        className="lg:px-10 lg:pt-6"
       />
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
+      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 lg:px-10">
         {error ? (
           <div className="flex flex-col items-center gap-3 py-16 text-center">
             <p className="text-muted-foreground">
@@ -82,7 +83,7 @@ export default function ConnectionsPage() {
             </Button>
           </div>
         ) : !data ? (
-          <ul className="mt-2 flex flex-col gap-2" aria-busy="true">
+          <ul className="mt-2 grid gap-2 lg:grid-cols-2 lg:gap-x-10 2xl:grid-cols-3" aria-busy="true">
             {Array.from({ length: 6 }, (_, i) => (
               <li key={i}>
                 <Skeleton className="h-24 rounded-2xl" />
@@ -90,8 +91,8 @@ export default function ConnectionsPage() {
             ))}
           </ul>
         ) : (
-          <div ref={list} className="mt-2 flex flex-col gap-5">
-            <div className="flex flex-col gap-2">
+          <div ref={list} className="mt-2 flex flex-col gap-5 lg:gap-8">
+            <div className="flex flex-col gap-2 lg:max-w-xl">
               <div className="relative">
                 <Search
                   className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground"
@@ -135,77 +136,80 @@ export default function ConnectionsPage() {
                 No one matches &ldquo;{query}&rdquo;.
               </p>
             ) : null}
-            {groups.map((g) => (
-              <section key={g.cluster} aria-label={g.label}>
-                <h2 className="mb-1 flex items-center gap-2 px-1 text-sm font-medium">
-                  <ClusterStar color={g.color} size={12} />
-                  {g.label}
-                  <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-                    {g.people.length}
-                  </span>
-                </h2>
-                <ul className="flex flex-col divide-y divide-white/[0.06]">
-                  {(searching || expanded.has(g.cluster)
-                    ? g.people
-                    : g.people.slice(0, GROUP_PREVIEW)
-                  ).map((c) => (
-                    <li key={c.user.id}>
-                      <Link
-                        href={`/people/${c.user.id}/card`}
-                        className="flex items-center gap-3 rounded-xl px-1 py-3 transition-colors hover:bg-white/[0.04]"
-                      >
-                        <UserAvatar
-                          name={c.user.name}
-                          cluster={c.cluster}
-                          userId={c.user.id}
-                          size={40}
-                        />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate font-medium">{c.user.name}</p>
-                          <p className="truncate text-xs text-muted-foreground">
-                            {c.sharedMotivation ||
-                              (c.sharedSongs > 0
-                                ? `${c.sharedSongs} shared song${c.sharedSongs === 1 ? "" : "s"}`
-                                : `${c.sharedArtists} shared artist${c.sharedArtists === 1 ? "" : "s"}`)}
-                          </p>
-                        </div>
-                        <SongStack
-                          songs={c.evidenceSongs}
-                          total={
-                            c.sharedSongs > 0 ? c.sharedSongs : c.sharedArtists
-                          }
-                        />
-                        <span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                          {Math.round(c.similarity * 100)}% match
-                        </span>
-                        <ChevronRight
-                          className="size-4 shrink-0 text-muted-foreground"
-                          aria-hidden
-                        />
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
-                {!searching && g.people.length > GROUP_PREVIEW ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpanded((prev) => {
-                        const n = new Set(prev);
-                        if (n.has(g.cluster)) n.delete(g.cluster);
-                        else n.add(g.cluster);
-                        return n;
-                      })
-                    }
-                    className="mt-1 w-full rounded-xl py-2 text-xs text-muted-foreground hover:bg-white/[0.04]"
-                  >
-                    {expanded.has(g.cluster)
-                      ? "Show less"
-                      : `Show ${g.people.length - GROUP_PREVIEW} more`}
-                  </button>
-                ) : null}
-              </section>
-            ))}
+            {/* Laptops: the groups sit side by side instead of in one long column. */}
+            <div className="flex flex-col gap-5 lg:grid lg:grid-cols-2 lg:items-start lg:gap-x-10 lg:gap-y-8 2xl:grid-cols-3">
+              {groups.map((g) => (
+                <section key={g.cluster} aria-label={g.label} className="lg:rounded-3xl lg:border lg:border-white/[0.07] lg:bg-card/30 lg:p-4">
+                  <h2 className="mb-1 flex items-center gap-2 px-1 text-sm font-medium">
+                    <ClusterStar color={g.color} size={12} />
+                    {g.label}
+                    <span className="ml-auto text-xs tabular-nums text-muted-foreground">
+                      {g.people.length}
+                    </span>
+                  </h2>
+                  <ul className="flex flex-col divide-y divide-white/[0.06]">
+                    {(searching || expanded.has(g.cluster)
+                      ? g.people
+                      : g.people.slice(0, GROUP_PREVIEW)
+                    ).map((c) => (
+                      <li key={c.user.id}>
+                        <Link
+                          href={`/people/${c.user.id}/card`}
+                          className="flex items-center gap-3 rounded-xl px-1 py-3 transition-colors hover:bg-white/[0.04]"
+                        >
+                          <UserAvatar
+                            name={c.user.name}
+                            cluster={c.cluster}
+                            userId={c.user.id}
+                            size={40}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-medium">{c.user.name}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {c.sharedMotivation ||
+                                (c.sharedSongs > 0
+                                  ? `${c.sharedSongs} shared song${c.sharedSongs === 1 ? "" : "s"}`
+                                  : `${c.sharedArtists} shared artist${c.sharedArtists === 1 ? "" : "s"}`)}
+                            </p>
+                          </div>
+                          <SongStack
+                            songs={c.evidenceSongs}
+                            total={
+                              c.sharedSongs > 0 ? c.sharedSongs : c.sharedArtists
+                            }
+                          />
+                          <span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                            {Math.round(c.similarity * 100)}% match
+                          </span>
+                          <ChevronRight
+                            className="size-4 shrink-0 text-muted-foreground"
+                            aria-hidden
+                          />
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  {!searching && g.people.length > GROUP_PREVIEW ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpanded((prev) => {
+                          const n = new Set(prev);
+                          if (n.has(g.cluster)) n.delete(g.cluster);
+                          else n.add(g.cluster);
+                          return n;
+                        })
+                      }
+                      className="mt-1 w-full rounded-xl py-2 text-xs text-muted-foreground hover:bg-white/[0.04]"
+                    >
+                      {expanded.has(g.cluster)
+                        ? "Show less"
+                        : `Show ${g.people.length - GROUP_PREVIEW} more`}
+                    </button>
+                  ) : null}
+                </section>
+              ))}
+            </div>
           </div>
         )}
       </div>

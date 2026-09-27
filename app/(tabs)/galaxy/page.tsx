@@ -33,22 +33,9 @@ import { THEME_THRESHOLD } from "@/lib/themes";
 import { BOND_AT } from "@/lib/thread";
 import type { GalaxyEdge, GalaxyNode, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { markGalaxyIntroSeen, shouldPlayGalaxyIntro } from "@/lib/galaxy-intro";
 
 const MAX_HOPS = 4;
-
-const BUILD_OUT_KEY = "song-galaxy-built-out";
-
-/** First galaxy view this browser session, or ?intro in the address (replays it, for demos). */
-function shouldBuildOut() {
-  if (typeof window === "undefined") return false;
-  try {
-    return new URLSearchParams(window.location.search).has("intro") || !sessionStorage.getItem(BUILD_OUT_KEY);
-  } catch (err) {
-    // Storage blocked (e.g. some private modes): skip the intro rather than replay it every visit.
-    console.error("Couldn't check whether the galaxy intro was shown:", err);
-    return false;
-  }
-}
 
 export default function GalaxyPage() {
   const session = useSession();
@@ -78,16 +65,10 @@ export default function GalaxyPage() {
   const [clusterOpen, setClusterOpen] = useState(false);
   const [wandering, setWandering] = useState(false);
   const [mode, setMode] = useState<"people" | "songs">("people");
-  // Build the galaxy out from you the first time you see it this session (or with ?intro, for demos).
+  // Build the galaxy out from you on the first view after signing in or opening a tab (lib/galaxy-intro.ts).
   // Read once on mount; marked seen afterwards so later visits open straight to the galaxy.
-  const [buildOut] = useState(shouldBuildOut);
-  useEffect(() => {
-    try {
-      sessionStorage.setItem(BUILD_OUT_KEY, "1");
-    } catch (err) {
-      console.error("Couldn't remember the galaxy intro was shown:", err);
-    }
-  }, []);
+  const [buildOut] = useState(shouldPlayGalaxyIntro);
+  useEffect(() => markGalaxyIntroSeen(), []);
   const [themeFocus, setThemeFocus] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ songId: string | null } | null>(null);
   const [celebrate, setCelebrate] = useState<{ title: string; body: string } | null>(null);
@@ -265,7 +246,7 @@ export default function GalaxyPage() {
   if (error) {
     return (
       <main className="starfield flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-        <p className="font-serif text-2xl italic">The galaxy didn&apos;t load.</p>
+        <p className="text-2xl font-semibold tracking-tight">The galaxy didn&apos;t load.</p>
         <Button className="h-11 px-6" disabled={isValidating} onClick={() => mutate()}>
           Try again
         </Button>
@@ -361,7 +342,7 @@ export default function GalaxyPage() {
       {celebrate ? (
         <div role="status" className="relative z-10 mx-4 mt-2 flex items-start gap-2 border border-white/15 bg-background/95 py-2 pl-3 pr-1">
           <div className="min-w-0 flex-1">
-            <p className="font-serif text-base italic leading-snug">{celebrate.title}</p>
+            <p className="text-base font-semibold leading-snug">{celebrate.title}</p>
             <p className="mt-0.5 text-xs text-muted-foreground">{celebrate.body}</p>
           </div>
           <button type="button" onClick={() => setCelebrate(null)} aria-label="Dismiss" className="inline-flex size-9 shrink-0 items-center justify-center text-muted-foreground hover:bg-white/5">
@@ -602,7 +583,7 @@ function StarPreview({ node, traded, hop }: { node: GalaxyNode; traded: number; 
         {edge && moment ? (
           <>
             <p className="text-xs text-muted-foreground">You both come back to &ldquo;{edge.sharedMotivation}&rdquo;</p>
-            <p className="mt-2 font-serif text-lg italic leading-snug">“{moment.text}”</p>
+            <p className="mt-2 text-lg font-medium leading-snug">“{moment.text}”</p>
             <p className="mt-1.5 text-sm text-foreground/80">
               {moment.song.title} <span className="text-muted-foreground">· {moment.song.artist}</span>
             </p>

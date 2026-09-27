@@ -17,7 +17,7 @@ export function GalaxySkeleton({ label }: { label?: string }) {
         <span className="absolute size-10 rounded-full bg-primary/15 motion-safe:animate-orbit-pulse" />
         <span className="size-2 rounded-full bg-primary" />
       </span>
-      {label ? <p className="font-serif text-base italic text-muted-foreground">{label}</p> : null}
+      {label ? <p className="text-base text-muted-foreground">{label}</p> : null}
     </div>
   );
 }

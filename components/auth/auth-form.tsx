@@ -11,6 +11,7 @@ import { resetWorld } from "@/lib/api";
 import { listenForConfirmation } from "@/lib/auth-handoff";
 import { safeNextPath } from "@/lib/safe-next";
 import { resetSession } from "@/lib/session";
+import { replayGalaxyIntro } from "@/lib/galaxy-intro";
 import { createClient } from "@/lib/supabase/browser";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -91,6 +92,7 @@ export function AuthForm({ mode, next, initialError, initialNotice }: { mode: Mo
   const callbackUrl = () => `${window.location.origin}/auth/callback?next=${encodeURIComponent(destination)}`;
 
   const finish = () => {
+    replayGalaxyIntro();
     // Local demo state belongs to whoever used this browser last.
     if (mode === "signup") {
       resetSession();
@@ -168,6 +170,7 @@ export function AuthForm({ mode, next, initialError, initialNotice }: { mode: Mo
     // as email signup does. (Brand-new accounts are sent to onboarding by /auth/callback.)
     resetSession();
     resetWorld();
+    replayGalaxyIntro();
     const { error } = await createClient().auth.signInWithOAuth({ provider, options: { redirectTo: callbackUrl() } });
     // On success the browser is already navigating to the provider.
     if (error) {
@@ -280,6 +283,11 @@ export function AuthForm({ mode, next, initialError, initialNotice }: { mode: Mo
           {copy.switchText}{" "}
           <Link href={copy.switchLink.href} className="font-medium text-foreground hover:text-primary">
             {copy.switchLink.label}
+          </Link>
+        </p>
+        <p className="mt-3 text-center text-xs text-muted-foreground/80">
+          <Link href="/privacy" className="hover:text-foreground">
+            Privacy policy
           </Link>
         </p>
       </div>

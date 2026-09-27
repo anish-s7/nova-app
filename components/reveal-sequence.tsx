@@ -69,7 +69,7 @@ export function RevealSequence() {
   if (error) {
     return (
       <main className="starfield flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
-        <p className="font-serif text-2xl italic">The galaxy didn&apos;t load.</p>
+        <p className="text-2xl font-semibold tracking-tight">The galaxy didn&apos;t load.</p>
         <Button className="h-11 rounded-full px-6" disabled={isValidating} onClick={() => mutate()}>
           Try again
         </Button>
@@ -96,7 +96,7 @@ export function RevealSequence() {
 
       <div className="pointer-events-none relative z-20 mt-auto px-5 pb-8">
         {CAPTIONS[step] ? (
-          <p key={step} className="mb-6 text-center font-serif text-2xl italic text-foreground/90 motion-safe:animate-rise-in" aria-live="polite">
+          <p key={step} className="mb-6 text-center text-2xl text-foreground/90 motion-safe:animate-rise-in font-semibold tracking-tight" aria-live="polite">
             {CAPTIONS[step]}
           </p>
         ) : null}
@@ -116,7 +116,7 @@ export function RevealSequence() {
             {/* Real mode only knows the shared reason once their Connection Card exists; don't show an empty tag. */}
             {edge.sharedMotivation ? (
               <div className={cn("transition-all duration-700", step >= 4 ? "mt-3 opacity-100" : "mt-0 h-0 overflow-hidden opacity-0")}>
-                <p className="font-serif text-xl italic text-muted-foreground">You both listen for the same reason</p>
+                <p className="text-xl font-medium tracking-tight text-muted-foreground">You both listen for the same reason</p>
                 <ThemeTag label={edge.sharedMotivation} className="mt-2" />
               </div>
             ) : null}

@@ -53,6 +53,11 @@ export default function WelcomePage() {
               </Link>
             </p>
           ) : null}
+          <p className="mt-6 text-center text-xs text-muted-foreground/80 lg:text-left">
+            <Link href="/privacy" className="hover:text-foreground">
+              Privacy
+            </Link>
+          </p>
         </div>
       </div>
     </main>

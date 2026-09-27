@@ -3,25 +3,24 @@
 import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { ArrowUp, Disc3, Sparkles } from "lucide-react";
-import { ScreenHeader } from "@/components/screen-header";
+import { ArrowUp, ChevronLeft, ChevronRight, Disc3, Sparkles } from "lucide-react";
 import { SongSwapCard } from "@/components/song-swap-card";
 import { ThemeTag } from "@/components/theme-tag";
 import { ThreadStrip } from "@/components/thread-strip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { getConversation, ME_ID, sendMessage } from "@/lib/api";
-import { getCluster } from "@/lib/clusters";
 import { markRead } from "@/lib/read-state";
 import { threadFrom } from "@/lib/thread";
 import { clockTime, dayLabel, sameDay } from "@/lib/time";
 import type { Conversation, Message } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { ClusterStar } from "@/components/cluster-star";
 
 const PENDING = "pending-";
 /** Messages from the same person this close together read as one group. */
 const GROUP_GAP_MS = 5 * 60_000;
+/** A quiet spell this long gets a centered time stamp, as in iMessage. */
+const STAMP_GAP_MS = 60 * 60_000;
 
 type Group = { from: string; day: string; messages: Message[] };
 
@@ -90,103 +89,105 @@ export function ChatView({ userId, initialDraft }: { userId: string; initialDraf
   };
 
   return (
-    <>
-      <ScreenHeader
-        backHref="/messages"
-        title={
-          data ? (
-            <Link href={`/people/${userId}`} className="inline-flex items-center gap-2.5 py-1 pr-2 hover:opacity-80">
-              <UserAvatar name={data.user.name} cluster={data.cluster} userId={data.user.id} size={32} />
-              <span className="min-w-0">
-                <span className="block truncate font-semibold leading-tight">{data.user.name}</span>
-                {data.sharedMotivation ? (
-                  <span className="flex items-center gap-1.5 truncate text-xs font-normal text-muted-foreground">
-                    <ClusterStar color={getCluster(data.cluster).color} size={10} />
-                    {data.sharedMotivation}
-                  </span>
-                ) : null}
-              </span>
-            </Link>
-          ) : (
-            <Skeleton className="h-8 w-36" />
-          )
-        }
-        trailing={
-          <Link href={`/people/${userId}/card`} aria-label="View Connection Card" className="inline-flex size-11 items-center justify-center text-primary hover:bg-white/5">
-            <Sparkles className="size-5" aria-hidden />
+    <div className="flex min-h-0 flex-1 flex-col font-chat">
+      {/* iMessage-style header: back on the left (phones only; laptops have the list beside it),
+          the person centered, their Connection Card on the right. */}
+      <header className="grid min-h-16 grid-cols-[44px_1fr_44px] items-center gap-2 border-b border-white/[0.07] bg-background/80 px-3 pb-2 pt-3 backdrop-blur-xl lg:px-6">
+        <Link href="/messages" aria-label="Back to messages" className="inline-flex size-11 items-center justify-center rounded-full text-primary transition-colors hover:bg-white/5 lg:invisible">
+          <ChevronLeft className="size-7" strokeWidth={1.8} aria-hidden />
+        </Link>
+        {data ? (
+          <Link href={`/people/${userId}`} className="mx-auto flex min-w-0 flex-col items-center gap-1 rounded-xl px-2 py-0.5 hover:opacity-85">
+            <UserAvatar name={data.user.name} cluster={data.cluster} userId={data.user.id} size={40} />
+            <span className="flex max-w-full items-center gap-0.5 text-[13px] font-medium leading-none">
+              <span className="truncate">{data.user.name}</span>
+              <ChevronRight className="size-3 shrink-0 text-muted-foreground" aria-hidden />
+            </span>
           </Link>
-        }
-        className="border-b border-white/[0.07] pb-2"
-      />
+        ) : (
+          <span className="mx-auto flex flex-col items-center gap-1" aria-busy="true">
+            <Skeleton className="size-10 rounded-full" />
+            <Skeleton className="h-3 w-20" />
+          </span>
+        )}
+        <Link href={`/people/${userId}/card`} aria-label="View Connection Card" className="inline-flex size-11 items-center justify-center rounded-full text-primary transition-colors hover:bg-white/5">
+          <Sparkles className="size-5" aria-hidden />
+        </Link>
+      </header>
 
       {data && thread ? <ThreadStrip thread={thread} name={data.user.name} userId={userId} onJumpToPending={pendingSwapId ? jumpToPending : undefined} /> : null}
 
-      <main ref={scroller} className="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
+      <main ref={scroller} className="min-h-0 flex-1 overflow-y-auto bg-background px-4 pb-4 lg:px-8">
         {error ? (
           <p className="py-16 text-center text-muted-foreground">{error.message}</p>
         ) : !data ? (
           <div className="flex flex-col gap-3 pt-4" aria-busy="true">
-            <Skeleton className="h-10 w-2/3" />
-            <Skeleton className="ml-auto h-10 w-1/2" />
+            <Skeleton className="h-10 w-2/3 rounded-[18px]" />
+            <Skeleton className="ml-auto h-10 w-1/2 rounded-[18px]" />
           </div>
         ) : data.messages.length === 0 ? (
-          <div className="flex flex-col items-center pb-2 pt-8 text-center">
-            <UserAvatar name={data.user.name} cluster={data.cluster} userId={data.user.id} size={64} ring />
-            <p className="mt-3 font-semibold">{data.user.name}</p>
+          <div className="mx-auto flex max-w-md flex-col items-center pb-2 pt-10 text-center">
+            <UserAvatar name={data.user.name} cluster={data.cluster} userId={data.user.id} size={72} ring />
+            <p className="mt-3 text-lg font-semibold">{data.user.name}</p>
             {data.sharedMotivation ? (
               <>
-                <p className="mt-3 font-serif text-base italic text-muted-foreground">You both listen for</p>
+                <p className="mt-3 text-sm text-muted-foreground">You both listen for</p>
                 <ThemeTag label={data.sharedMotivation} size="sm" className="mt-1.5" />
               </>
             ) : null}
             {data.suggestedOpeners.length ? (
-              <div className="mt-8 flex w-full flex-col gap-2 text-left">
-                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">Start with one of these</p>
+              <div className="mt-8 flex w-full flex-col items-end gap-2">
+                <p className="w-full text-center text-[13px] text-muted-foreground">Tap one to start</p>
                 {data.suggestedOpeners.map((o) => (
-                  <button key={o} type="button" onClick={() => setDraft(o)} className="border-l-2 border-primary/50 bg-card/40 px-4 py-3 text-left font-serif text-[15px] italic transition-colors hover:bg-card/70">
-                    &ldquo;{o}&rdquo;
+                  <button
+                    key={o}
+                    type="button"
+                    onClick={() => setDraft(o)}
+                    className="max-w-[85%] rounded-[18px] border border-primary/35 px-3.5 py-2 text-left text-[15px] leading-snug text-foreground transition-colors hover:bg-primary/10"
+                  >
+                    {o}
                   </button>
                 ))}
               </div>
             ) : null}
           </div>
         ) : (
-          <ol className="flex flex-col pt-3" role="log" aria-live="polite" aria-label={`Conversation with ${data.user.name}`}>
+          <ol className="mx-auto flex max-w-3xl flex-col pt-2" role="log" aria-live="polite" aria-label={`Conversation with ${data.user.name}`}>
             {groupMessages(data.messages).map((g, gi, groups) => {
               const mine = g.from === ME_ID;
-              const newDay = gi === 0 || !sameDay(groups[gi - 1].day, g.day);
+              const prev = groups[gi - 1];
+              // A centered time stamp starts each day, and any run after a long quiet spell.
+              const stamp = !prev || !sameDay(prev.day, g.day) || new Date(g.day).getTime() - new Date(prev.messages.at(-1)!.sentAt).getTime() > STAMP_GAP_MS;
+              const lastGroup = gi === groups.length - 1;
               const last = g.messages.at(-1)!;
               return (
                 <Fragment key={g.messages[0].id}>
-                  {newDay ? (
-                    <li className="my-3 flex items-center gap-3 text-[11px] font-medium uppercase tracking-wider text-muted-foreground" aria-label={dayLabel(g.day)}>
-                      <span className="h-px flex-1 bg-white/[0.07]" aria-hidden />
-                      {dayLabel(g.day)}
-                      <span className="h-px flex-1 bg-white/[0.07]" aria-hidden />
+                  {stamp ? (
+                    <li className="mb-1 mt-4 text-center text-[11px] text-muted-foreground">
+                      <span className="font-semibold">{dayLabel(g.day)}</span> {clockTime(g.day)}
                     </li>
                   ) : null}
-                  <li className={cn("mt-2 flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
-                    {mine ? null : <UserAvatar name={data.user.name} cluster={data.cluster} userId={data.user.id} size={26} className="mb-5" />}
-                    <div className={cn("flex min-w-0 max-w-[82%] flex-col gap-1", mine ? "items-end" : "items-start")}>
-                      {g.messages.map((m, mi) =>
-                        m.kind === "swap" ? (
-                          <SongSwapCard key={m.id} id={`swap-${m.swap.id}`} swap={m.swap} mine={mine} otherName={data.user.name} otherId={userId} />
-                        ) : (
-                          <p
-                            key={m.id}
-                            className={cn(
-                              "whitespace-pre-wrap text-pretty rounded-2xl px-4 py-2.5 text-[15px] leading-snug",
-                              mine ? "bg-primary text-primary-foreground" : "bg-card text-foreground",
-                              mi === g.messages.length - 1 && (mine ? "rounded-br-sm" : "rounded-bl-sm"),
-                              m.id.startsWith(PENDING) && "opacity-70",
-                            )}
-                          >
-                            {m.text}
-                          </p>
-                        ),
-                      )}
-                      <span className="px-1 text-[11px] text-muted-foreground">{last.id.startsWith(PENDING) ? "Sending…" : clockTime(last.sentAt)}</span>
-                    </div>
+                  <li className={cn("flex flex-col gap-[3px]", stamp ? "mt-1" : "mt-3", mine ? "items-end pr-1.5" : "items-start pl-1.5")}>
+                    {g.messages.map((m, mi) =>
+                      m.kind === "swap" ? (
+                        <SongSwapCard key={m.id} id={`swap-${m.swap.id}`} swap={m.swap} mine={mine} otherName={data.user.name} otherId={userId} />
+                      ) : (
+                        <p
+                          key={m.id}
+                          className={cn(
+                            "max-w-[78%] whitespace-pre-wrap break-words rounded-[18px] px-3.5 py-[7px] text-[16px] leading-[1.35] lg:max-w-[520px]",
+                            mine ? "bg-primary text-primary-foreground" : "bg-[var(--bubble-theirs)] text-foreground",
+                            mi === g.messages.length - 1 && (mine ? "bubble-tail-mine" : "bubble-tail-theirs"),
+                            m.id.startsWith(PENDING) && "opacity-70",
+                          )}
+                        >
+                          {m.text}
+                        </p>
+                      ),
+                    )}
+                    {lastGroup && mine ? (
+                      <span className="mt-0.5 pr-1 text-[11px] font-medium text-muted-foreground">{last.id.startsWith(PENDING) ? "Sending…" : "Delivered"}</span>
+                    ) : null}
                   </li>
                 </Fragment>
               );
@@ -197,7 +198,7 @@ export function ChatView({ userId, initialDraft }: { userId: string; initialDraf
       </main>
 
       {sendError ? (
-        <p role="alert" className="border-t border-white/[0.07] px-4 pt-2 text-xs text-destructive">
+        <p role="alert" className="px-4 pt-2 text-center text-xs text-destructive">
           {sendError}
         </p>
       ) : null}
@@ -206,34 +207,44 @@ export function ChatView({ userId, initialDraft }: { userId: string; initialDraf
           e.preventDefault();
           send();
         }}
-        className="flex items-end gap-2 border-t border-white/[0.07] bg-background/95 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3"
+        className="flex items-end gap-2 bg-background/80 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 backdrop-blur-xl lg:px-8"
       >
-        <Link href={`/messages/${userId}/swap`} className="inline-flex h-11 shrink-0 items-center gap-1.5 border border-white/15 px-3 text-sm font-medium text-primary hover:bg-white/5">
-          <Disc3 className="size-4" aria-hidden />
-          Song
-          <span className="sr-only">Swap: send a song</span>
+        <Link
+          href={`/messages/${userId}/swap`}
+          aria-label="Send a song (Song Swap)"
+          title="Send a song"
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-primary transition-colors hover:bg-white/[0.14]"
+        >
+          <Disc3 className="size-5" aria-hidden />
         </Link>
-        <label className="sr-only" htmlFor="chat-input">
-          Message
-        </label>
-        <textarea
-          id="chat-input"
-          rows={1}
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== "Enter" || e.shiftKey) return;
-            if (e.nativeEvent.isComposing || e.keyCode === 229) return;
-            e.preventDefault();
-            send();
-          }}
-          placeholder="Say something…"
-          className="max-h-32 min-h-11 flex-1 resize-none border border-white/10 bg-card/60 px-3 py-2.5 text-[15px] outline-none placeholder:text-muted-foreground focus:border-primary/50"
-        />
-        <button type="submit" disabled={!draft.trim()} aria-label="Send" className="inline-flex size-11 shrink-0 items-center justify-center bg-primary text-primary-foreground transition-opacity disabled:opacity-40">
-          <ArrowUp className="size-5" aria-hidden />
-        </button>
+        <div className="flex min-h-9 flex-1 items-end rounded-[20px] border border-white/15 bg-transparent py-[3px] pl-3.5 pr-[3px] transition-colors focus-within:border-white/30">
+          <label className="sr-only" htmlFor="chat-input">
+            Message
+          </label>
+          <textarea
+            id="chat-input"
+            rows={1}
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== "Enter" || e.shiftKey) return;
+              if (e.nativeEvent.isComposing || e.keyCode === 229) return;
+              e.preventDefault();
+              send();
+            }}
+            placeholder="Message"
+            className="field-sizing-content max-h-32 min-h-7 flex-1 resize-none bg-transparent py-[3px] text-[16px] leading-[1.35] outline-none placeholder:text-muted-foreground"
+          />
+          <button
+            type="submit"
+            disabled={!draft.trim()}
+            aria-label="Send"
+            className="inline-flex size-7 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground transition-[opacity,transform] active:scale-90 disabled:opacity-0"
+          >
+            <ArrowUp className="size-4" strokeWidth={2.6} aria-hidden />
+          </button>
+        </div>
       </form>
-    </>
+    </div>
   );
 }

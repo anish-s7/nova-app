@@ -19,7 +19,7 @@ export function ReachQuestion({ className }: { className?: string }) {
         maxLength={140}
         placeholder="Optional. Usually the same three Fleetwood Mac songs…"
         aria-labelledby={`${id}-q`}
-        className="mt-3 w-full resize-none border border-white/10 bg-background/60 px-3 py-2.5 font-serif text-base italic outline-none placeholder:font-sans placeholder:not-italic placeholder:text-muted-foreground focus:border-primary"
+        className="mt-3 w-full resize-none border border-white/10 bg-background/60 px-3 py-2.5 text-base outline-none placeholder:text-muted-foreground focus:border-primary"
       />
     </section>
   );

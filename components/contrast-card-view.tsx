@@ -25,7 +25,7 @@ export function ContrastCardView({ card, me, other }: { card: ContrastCard; me: 
           <UserAvatar name={other.name} cluster={other.cluster} userId={other.id} size={56} ring />
         </div>
         <p className="mt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Same song</p>
-        <p className="mt-1 text-balance font-serif text-xl italic">{card.song.title}</p>
+        <p className="mt-1 text-balance text-xl font-semibold tracking-tight">{card.song.title}</p>
         <p className="text-sm text-muted-foreground">{card.song.artist}</p>
         <div className="mt-2 flex justify-center">
           <PreviewButton song={card.song} />
@@ -36,11 +36,11 @@ export function ContrastCardView({ card, me, other }: { card: ContrastCard; me: 
       <section className="grid grid-cols-2 gap-3" aria-label="How each of you feels it">
         <div className="surface rounded-3xl border border-white/10 bg-card/70 p-4" style={{ borderColor: tone }}>
           <p className="text-xs font-medium text-muted-foreground">You</p>
-          <p className="mt-1.5 text-pretty font-serif text-[15px] italic leading-snug">{card.feelA}</p>
+          <p className="mt-1.5 text-pretty text-[15px] leading-snug">{card.feelA}</p>
         </div>
         <div className="surface rounded-3xl border border-white/10 bg-card/70 p-4">
           <p className="text-xs font-medium text-muted-foreground">{other.name}</p>
-          <p className="mt-1.5 text-pretty font-serif text-[15px] italic leading-snug">{card.feelB}</p>
+          <p className="mt-1.5 text-pretty text-[15px] leading-snug">{card.feelB}</p>
         </div>
       </section>
 
@@ -63,7 +63,7 @@ export function ContrastCardView({ card, me, other }: { card: ContrastCard; me: 
                 href={`/messages/${other.id}?draft=${encodeURIComponent(o)}`}
                 className="flex min-h-12 items-center gap-3 rounded-2xl border border-white/10 bg-card/60 px-4 py-3 text-left transition-colors hover:border-primary/40"
               >
-                <span className="flex-1 text-pretty font-serif text-[15px] italic">&ldquo;{o}&rdquo;</span>
+                <span className="flex-1 text-pretty text-[15px]">&ldquo;{o}&rdquo;</span>
                 <ArrowRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
               </Link>
             </li>
