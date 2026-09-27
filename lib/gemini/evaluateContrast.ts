@@ -1,4 +1,5 @@
 import { getGeminiClient, GEMINI_TEXT_MODEL } from "./client";
+import { describeFeelings } from "../postcards";
 import type { PickForEvaluation } from "./evaluateAndGenerateCard";
 import type { ConnectionCardJson } from "../supabase/types";
 
@@ -12,7 +13,7 @@ other. This is for a feature where someone chooses to wander outside their usual
 neighborhood, so the interesting part is the difference, anchored by one real
 thing they share: the song.
 
-You're given ONE pick from each person: the same song, the mood tags they chose,
+You're given ONE pick from each person: the same song, how it feels to them (1-3 "it feels like…" postcards, each a metaphor plus the precise feeling, or older mood tags),
 and a valence/energy score (-1..1, valence = sad<->happy, energy = calm<->intense).
 A reason_text quote, if present, is bonus color, not the primary signal.
 
@@ -40,7 +41,7 @@ Respond with ONLY one of those two JSON shapes, nothing else.`;
 
 function formatPick(label: string, pick: PickForEvaluation) {
   const reason = pick.reasonText ? ` — "${pick.reasonText}"` : "";
-  return `${label} (${pick.displayName}): "${pick.title}" by ${pick.artist} [tags: ${pick.tags.join(", ")}; valence: ${pick.valence.toFixed(2)}, energy: ${pick.energy.toFixed(2)}]${reason}`;
+  return `${label} (${pick.displayName}): "${pick.title}" by ${pick.artist} [${describeFeelings(pick.tags)}; valence: ${pick.valence.toFixed(2)}, energy: ${pick.energy.toFixed(2)}]${reason}`;
 }
 
 function isContrastCard(v: unknown): v is ConnectionCardJson {

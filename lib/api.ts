@@ -15,8 +15,7 @@
  */
 
 import { CLUSTER_IDS, getCluster } from "./clusters";
-import type { SongTag } from "./tags";
-import { LEGACY_SONG_TAGS } from "./cluster-assign";
+import { DEFAULT_POSTCARD_ORDER, POSTCARDS_SHOWN } from "./postcards";
 import { ApiError } from "./api-error";
 import { REAL_DATA } from "./data-source";
 import { httpDb } from "./http-db";
@@ -178,11 +177,12 @@ function byTime(messages: Message[]) {
 // handful of allowlisted accounts, so everyone picks their own songs.
 
 /**
- * The tags to choose from for a song on the feel step, "+" and the edit sheet. Real mode: written
- * for that song (song_tags); demo mode: the original fixed tags.
+ * Which "it feels like…" postcards (lib/postcards.ts) to show first for a song, on the feel step,
+ * "+" and the edit sheet. Real mode: ranked for that song by Gemini (stored per song); demo mode
+ * and fallbacks: the default order. The whole deck is always one tap away.
  */
-export async function getSongTags(song: { title: string; artist: string }): Promise<SongTag[]> {
-  return REAL_DATA ? real.getSongTags(song) : LEGACY_SONG_TAGS;
+export async function getSongPostcards(song: { title: string; artist: string }): Promise<string[]> {
+  return REAL_DATA ? real.getSongPostcards(song) : DEFAULT_POSTCARD_ORDER.slice(0, POSTCARDS_SHOWN);
 }
 
 export async function searchSongs(q: string): Promise<Song[]> {

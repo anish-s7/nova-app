@@ -1,4 +1,5 @@
 import { getGeminiClient, GEMINI_TEXT_MODEL } from "./client";
+import { describeFeelings } from "../postcards";
 import type { ConnectionCardJson } from "../supabase/types";
 
 export interface PickForEvaluation {
@@ -43,7 +44,7 @@ Respond with ONLY one of those two JSON shapes, nothing else.`;
 
 function formatPick(label: string, pick: PickForEvaluation) {
   const reason = pick.reasonText ? ` — "${pick.reasonText}"` : "";
-  return `${label} (${pick.displayName}): "${pick.title}" by ${pick.artist} [tags: ${pick.tags.join(", ")}; valence: ${pick.valence.toFixed(2)}, energy: ${pick.energy.toFixed(2)}]${reason}`;
+  return `${label} (${pick.displayName}): "${pick.title}" by ${pick.artist} [${describeFeelings(pick.tags)}; valence: ${pick.valence.toFixed(2)}, energy: ${pick.energy.toFixed(2)}]${reason}`;
 }
 
 /**

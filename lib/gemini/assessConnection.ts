@@ -2,6 +2,7 @@ import { Type, type Schema } from "@google/genai";
 import type { CardThread, Portrait, SongRef } from "../portrait";
 import type { ConnectionCardJson } from "../supabase/types";
 import type { PortraitPick } from "./generatePortrait";
+import { describeFeelings } from "../postcards";
 import { generateJson } from "./json";
 
 export interface PersonForAssessment {
@@ -40,7 +41,7 @@ type Rubric = {
 
 const SYSTEM_INSTRUCTION = `You decide whether two people should be introduced because of WHY they listen
 to music: a shared, specific reason, not shared taste. You see each person's whole
-listening profile: every song they chose to share, the mood tags they picked, a
+listening profile: every song they chose to share, how each one feels to them (1-3 "it feels like…" postcards: a metaphor plus the precise feeling underneath, or older mood tags), a
 point on a circle (valence = sad to happy, energy = calm to intense, -1 to 1), any
 words of their own, and (when available) a short portrait of how they use music.
 A vector search suggested this pair; its best-matching songs are given as a hint only.
@@ -144,7 +145,7 @@ function describePerson(label: string, p: PersonForAssessment) {
   lines.push("  songs:");
   for (const s of p.picks) {
     const words = s.reasonText ? `; in their words: "${s.reasonText}"` : "";
-    lines.push(`  - "${s.title}" by ${s.artist} [tags: ${s.tags.join(", ")}; valence ${s.valence.toFixed(2)}, energy ${s.energy.toFixed(2)}${words}]`);
+    lines.push(`  - "${s.title}" by ${s.artist} [${describeFeelings(s.tags)}; valence ${s.valence.toFixed(2)}, energy ${s.energy.toFixed(2)}${words}]`);
   }
   return lines.join("\n");
 }

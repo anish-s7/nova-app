@@ -5,10 +5,10 @@ import { Loader2, Search } from "lucide-react";
 import useSWR, { mutate } from "swr";
 import { AlbumArt } from "@/components/album-art";
 import { MoodCircle, type Mood } from "@/components/mood-circle";
-import { TagPicker } from "@/components/tag-picker";
+import { PostcardPicker } from "@/components/postcard-picker";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { addSong, getSongTags, REAL_DATA, getSongLayer } from "@/lib/api";
-import { LEGACY_SONG_TAGS } from "@/lib/cluster-assign";
+import { addSong, getSongPostcards, REAL_DATA, getSongLayer } from "@/lib/api";
+import { DEFAULT_POSTCARD_ORDER, POSTCARDS_SHOWN } from "@/lib/postcards";
 import { getCluster } from "@/lib/clusters";
 import { SONG_CATALOG } from "@/lib/music-context";
 import { addPick, effectiveSongs, getSession, useSession } from "@/lib/session";
@@ -38,16 +38,14 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
   const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => titleRef.current?.focus({ preventScroll: true }), []);
 
-  // The song's own tags, once a title and artist are typed (and typing has paused).
+  // The song's best-fit postcards, once a title and artist are typed (and typing has paused).
   const named = useDebouncedValue(`${title.trim()}\n${artist.trim()}`, 600);
   const [tagTitle, tagArtist] = named.split("\n");
-  const { data: songTags, error: tagError } = useSWR(tagTitle && tagArtist ? ["song-tags", tagTitle, tagArtist] : null, () => getSongTags({ title: tagTitle, artist: tagArtist }), {
-    revalidateOnFocus: false,
-  });
-  // A different song means different tags: drop choices that aren't this song's.
-  useEffect(() => {
-    if (songTags) setTags((t) => t.filter((x) => songTags.some((o) => o.label === x)));
-  }, [songTags]);
+  const { data: songCards, error: cardError } = useSWR(
+    tagTitle && tagArtist ? ["song-postcards", tagTitle, tagArtist] : null,
+    () => getSongPostcards({ title: tagTitle, artist: tagArtist }),
+    { revalidateOnFocus: false },
+  );
   const ready = title.trim() && artist.trim() && tags.length > 0;
 
   const submit = async () => {
@@ -77,9 +75,14 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
       <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" aria-label="Artist" disabled={busy} className={field} />
 
       {tagTitle && tagArtist ? (
-        <TagPicker value={tags} onChange={setTags} label={`Tags for ${title.trim() || "this song"}`} options={tagError ? LEGACY_SONG_TAGS : songTags} />
+        <PostcardPicker
+          value={tags}
+          onChange={setTags}
+          label={`What ${title.trim() || "this song"} feels like`}
+          order={cardError ? DEFAULT_POSTCARD_ORDER.slice(0, POSTCARDS_SHOWN) : songCards}
+        />
       ) : (
-        <p className="text-sm text-muted-foreground">Type the song and artist to see its tags.</p>
+        <p className="text-sm text-muted-foreground">Type the song and artist to choose what it feels like.</p>
       )}
       <MoodCircle
         value={mood}

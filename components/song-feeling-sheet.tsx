@@ -6,10 +6,10 @@ import { Loader2, Trash2 } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
 import { BottomSheet } from "@/components/bottom-sheet";
 import { MoodCircle } from "@/components/mood-circle";
-import { TagPicker } from "@/components/tag-picker";
+import { PostcardPicker } from "@/components/postcard-picker";
 import { Button } from "@/components/ui/button";
-import { getSongTags, removeSong, updateSongFeeling, type MySong } from "@/lib/api";
-import { LEGACY_SONG_TAGS } from "@/lib/cluster-assign";
+import { getSongPostcards, removeSong, updateSongFeeling, type MySong } from "@/lib/api";
+import { DEFAULT_POSTCARD_ORDER, POSTCARDS_SHOWN } from "@/lib/postcards";
 import type { Feeling } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -28,8 +28,10 @@ export function SongFeelingSheet({ item, onClose, onChanged }: { item: MySong | 
 
 function Editor({ item, onClose, onChanged }: { item: MySong; onClose: () => void; onChanged: () => void }) {
   const [feeling, setFeeling] = useState<Feeling>(item.feeling);
-  // This song's own tags; the ones already on the pick stay visible (TagPicker keeps them).
-  const { data: songTags, error: tagError } = useSWR(["song-tags", item.song.title, item.song.artist], () => getSongTags(item.song), { revalidateOnFocus: false });
+  // This song's best-fit postcards; what the pick already has stays visible (PostcardPicker keeps it).
+  const { data: songCards, error: cardError } = useSWR(["song-postcards", item.song.title, item.song.artist], () => getSongPostcards(item.song), {
+    revalidateOnFocus: false,
+  });
   const [busy, setBusy] = useState<"save" | "remove" | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [error, setError] = useState("");
@@ -65,11 +67,11 @@ function Editor({ item, onClose, onChanged }: { item: MySong; onClose: () => voi
       </div>
 
       <div className="-mx-5 mt-4 min-h-0 flex-1 overflow-y-auto px-5">
-        <TagPicker
+        <PostcardPicker
           value={feeling.tags}
           onChange={(tags) => setFeeling((f) => ({ ...f, tags }))}
-          label={`Tags for ${item.song.title}`}
-          options={tagError ? LEGACY_SONG_TAGS : songTags}
+          label={`What ${item.song.title} feels like`}
+          order={cardError ? DEFAULT_POSTCARD_ORDER.slice(0, POSTCARDS_SHOWN) : songCards}
         />
         <div className="mt-6 flex justify-center">
           <MoodCircle
@@ -107,7 +109,7 @@ function Editor({ item, onClose, onChanged }: { item: MySong; onClose: () => voi
           onClick={() => run("save", () => updateSongFeeling(item.pickId, feeling))}
         >
           {busy === "save" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-          {feeling.tags.length === 0 ? "Pick at least one tag" : changed ? "Save changes" : "No changes"}
+          {feeling.tags.length === 0 ? "Pick at least one postcard" : changed ? "Save changes" : "No changes"}
         </Button>
       </div>
     </div>

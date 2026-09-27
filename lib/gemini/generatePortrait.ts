@@ -1,6 +1,7 @@
 import { Type, type Schema } from "@google/genai";
 import { CLUSTERS, CLUSTER_IDS } from "../clusters";
 import type { Portrait } from "../portrait";
+import { describeFeelings } from "../postcards";
 import { generateJson } from "./json";
 
 /** One public pick, as the portrait sees it. Plain strings only — never a Spotify payload (CLAUDE.md). */
@@ -18,7 +19,7 @@ export type PortraitPick = {
 const CLUSTER_GUIDE = CLUSTER_IDS.map((id) => `- ${id}: "${CLUSTERS[id].label}" — ${CLUSTERS[id].description}`).join("\n");
 
 const SYSTEM_INSTRUCTION = `You read how one person uses music, from the songs they chose to share and
-how they described each one: mood tags they picked, and a point they placed on a
+how they described each one: 1-3 "it feels like…" postcards (a metaphor plus the precise feeling underneath; older picks may have mood tags instead), and a point they placed on a
 circle (valence = sad to happy, energy = calm to intense, each -1 to 1). Some picks
 include a line in their own words. Each song also has a one-line description of the
 song itself. Write a short "listening portrait" of them, spoken to them directly ("you").
@@ -95,7 +96,7 @@ const SCHEMA: Schema = {
 function describePick(p: PortraitPick) {
   const lines = [`- "${p.title}" by ${p.artist}`];
   if (p.contextSummary) lines.push(`  about the song: ${p.contextSummary}`);
-  lines.push(`  their tags: ${p.tags.join(", ") || "(none)"}; valence ${p.valence.toFixed(2)}, energy ${p.energy.toFixed(2)}`);
+  lines.push(`  how it feels to them: ${describeFeelings(p.tags)}; valence ${p.valence.toFixed(2)}, energy ${p.energy.toFixed(2)}`);
   if (p.reasonText) lines.push(`  in their words: "${p.reasonText}"`);
   return lines.join("\n");
 }

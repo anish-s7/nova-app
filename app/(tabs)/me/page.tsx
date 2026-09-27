@@ -17,6 +17,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { getConversations, getMySongs, getStoredAnalysis, REAL_DATA, type MySong } from "@/lib/api";
 import { getCluster } from "@/lib/clusters";
+import { feelingLabel } from "@/lib/postcards";
 import { setSession, useHydrated, useSession } from "@/lib/session";
 import type { InferredMotivation, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -240,7 +241,7 @@ function Songs({ items, onSelect }: { items: MySong[]; onSelect: (item: MySong) 
                 <AlbumArt song={item.song} size={200} className="!absolute inset-0 !size-full rounded-md transition-opacity group-hover:opacity-80" />
               </div>
               <p className="mt-1.5 truncate text-xs font-medium">{item.song.title}</p>
-              <p className="truncate text-[11px] text-muted-foreground">{item.feeling.tags.length ? item.feeling.tags.join(" · ") : item.song.artist}</p>
+              <p className="truncate text-[11px] text-muted-foreground">{item.feeling.tags.length ? item.feeling.tags.map(feelingLabel).join(" · ") : item.song.artist}</p>
             </button>
           </li>
         ))}

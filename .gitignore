@@ -44,3 +44,6 @@ node_modules
 
 # scripts/reassess-connections.ts run state (pair verdicts, local only)
 scripts/.reassess-state.json
+
+# scripts/curate-postcards.ts candidate lists (local only)
+scripts/.postcard-candidates.json

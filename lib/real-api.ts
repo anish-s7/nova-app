@@ -15,7 +15,6 @@ import type { ClusterDetail, ClusterSong } from "./cluster-songs";
 import { fetchProfile, forgetMe, generatePortrait, getMyId, getPortrait, httpDb } from "./http-db";
 import { ME_ID } from "./mock-world";
 import type { Portrait } from "./portrait";
-import type { SongTag } from "./tags";
 import type { SongLayer, SongListener, SongStar } from "./song-layer";
 import type {
   AnalysisResult,
@@ -115,16 +114,16 @@ export async function searchSongs(q: string): Promise<Song[]> {
   }));
 }
 
-/** The tags to choose from for one song (POST /api/songs/tags): its own, or the fixed ones as a fallback. */
-export async function getSongTags(song: { title: string; artist: string }): Promise<SongTag[]> {
-  const res = await fetch("/api/songs/tags", {
+/** Which postcards to show first for one song (POST /api/songs/postcards), best fit first. */
+export async function getSongPostcards(song: { title: string; artist: string }): Promise<string[]> {
+  const res = await fetch("/api/songs/postcards", {
     method: "POST",
     credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title: song.title, artist: song.artist }),
   });
-  if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to continue." : "Couldn't load tags for this song.");
-  return ((await res.json()) as { tags: SongTag[] }).tags;
+  if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to continue." : "Couldn't load postcards for this song.");
+  return ((await res.json()) as { order: string[] }).order;
 }
 
 // --- listening portrait ----------------------------------------------------------

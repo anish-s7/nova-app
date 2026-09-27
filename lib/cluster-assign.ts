@@ -1,5 +1,5 @@
 import { CLUSTER_IDS, type ClusterId } from "./clusters";
-import { TAGS, type SongTag, type Tag } from "./tags";
+import type { Tag } from "./tags";
 import { classifyMix, mixFromScores, type MixClass, type WhyMix } from "./why-mix";
 
 /**
@@ -25,25 +25,16 @@ export const TAG_WEIGHTS: Record<Tag, Weights> = {
   "falling in love": { somewhere_else: 0.7, quiet_company: 0.3 },
 };
 
-/** The original fixed tags as SongTags: demo mode's tags, and the fallback when a song's own can't be written. */
-export const LEGACY_SONG_TAGS: SongTag[] = TAGS.map((label) => ({ label, why: pickWhyOfLegacyTag(label) }));
-
 /** How much valence/energy can move a pick, next to a tag's weight of up to 1. Tags lead; the slider breaks ties. */
 const EMOTION = 0.4;
 
 /**
- * `tag_whys[i]` is the listening reason of `tags[i]` when it's a song-specific tag (song_tags);
+ * `tag_whys[i]` is the listening reason of `tags[i]` when it's a postcard (lib/postcards.ts);
  * "" or missing means one of the original fixed tags, weighted by TAG_WEIGHTS.
  */
 export type PickForCluster = { tags: string[]; valence: number; energy: number; tag_whys?: string[] | null };
 
 const isCluster = (c: string | undefined): c is ClusterId => !!c && (CLUSTER_IDS as readonly string[]).includes(c);
-
-/** The reason a fixed tag leans toward most (for showing fixed tags alongside song-specific ones). */
-export function pickWhyOfLegacyTag(tag: Tag): ClusterId {
-  const weights = Object.entries(TAG_WEIGHTS[tag] ?? {}) as [ClusterId, number][];
-  return weights.sort((a, b) => b[1] - a[1])[0]?.[0] ?? "quiet_company";
-}
 
 /** One pick's lean across the clusters. */
 export function scorePick(pick: PickForCluster): Record<ClusterId, number> {

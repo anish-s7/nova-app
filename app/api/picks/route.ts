@@ -7,7 +7,7 @@ import { resolveSong } from "@/lib/musicbrainz/client";
 import { clampEmotionValue } from "@/lib/emotion";
 import { buildPickEmbedding } from "@/lib/matching/pickEmbedding";
 import { MAX_PICK_TAGS } from "@/lib/tags";
-import { resolvePickTags } from "@/lib/matching/songTags";
+import { resolvePickTags } from "@/lib/matching/songPostcards";
 import { refreshPrimaryCluster } from "@/lib/matching/refreshPrimaryCluster";
 import { parseVector } from "@/lib/supabase/vector";
 
@@ -57,9 +57,9 @@ export async function POST(req: NextRequest) {
 
   const supabase = createServerClient();
 
-  // Tags must be this song's own (song_tags, fetched on the feel step by the same title/artist) or
-  // one of the original fixed tags. Checked before any MusicBrainz/Gemini work.
-  const checked = await resolvePickTags(supabase, [{ title, artist }], tags);
+  // Feelings must be postcards from the deck (lib/postcards.ts) or the original fixed tags.
+  // Checked before any MusicBrainz/Gemini work.
+  const checked = resolvePickTags(tags);
   if ("invalid" in checked) {
     return NextResponse.json({ error: `Invalid tags: ${checked.invalid.join(", ")}` }, { status: 400 });
   }
@@ -207,18 +207,19 @@ export async function PATCH(req: NextRequest) {
     .maybeSingle();
   if (findError) return NextResponse.json({ error: findError.message }, { status: 500 });
   if (!existing) return NextResponse.json({ error: "Pick not found" }, { status: 404 });
-  const { data: song } = await supabase.from("songs").select("title, artist, embedding").eq("id", existing.song_id).maybeSingle();
+  const { data: song } = await supabase.from("songs").select("embedding").eq("id", existing.song_id).maybeSingle();
   if (!song?.embedding) return NextResponse.json({ error: "Catalog song is missing an embedding" }, { status: 500 });
 
-  // Tags the pick already has stay valid (the catalog's official title can differ a little from the
-  // one searched when it was saved); new ones must be the song's own or the original fixed tags.
+  // Feelings the pick already has stay valid (it may predate a deck change); new ones must be
+  // postcards from the deck or the original fixed tags.
   const kept = new Map(existing.tags.map((t, i) => [t, existing.tag_whys?.[i] ?? ""]));
-  const checked = await resolvePickTags(supabase, [{ title: song.title, artist: song.artist }], tags.filter((t) => !kept.has(t)));
+  const added = tags.filter((t) => !kept.has(t));
+  const checked = resolvePickTags(added);
   if ("invalid" in checked) {
     return NextResponse.json({ error: `Invalid tags: ${checked.invalid.join(", ")}` }, { status: 400 });
   }
-  const newWhys = new Map(tags.filter((t) => !kept.has(t)).map((t, i) => [t, checked.tagWhys[i]]));
-  const tagWhys = tags.map((t) => (kept.has(t) ? kept.get(t)! : newWhys.get(t)!));
+  const addedWhy = new Map(added.map((t, i) => [t, checked.tagWhys[i]]));
+  const tagWhys = tags.map((t) => (kept.has(t) ? kept.get(t)! : addedWhy.get(t)!));
 
   const clampedValence = clampEmotionValue(valence ?? 0);
   const clampedEnergy = clampEmotionValue(energy ?? 0);
