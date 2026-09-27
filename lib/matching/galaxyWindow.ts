@@ -175,11 +175,17 @@ export async function getGalaxyWindow(viewerId: string, limit = DEFAULT_BUDGET, 
   const anchors = hopped ? [profileId, viewerId] : [profileId];
   // The hop check, the centered pool and the anchor rows are independent: one round of latency, not three.
   // A rejected hop still throws before anything is returned.
-  const [yours, { candidates, counts }, { data: anchorRows }] = await Promise.all([
+  const [yours, { candidates, counts }, { data: firstAnchorRows }] = await Promise.all([
     hopped ? assertHopAllowed(viewerId, centerId) : undefined,
     loadCandidates(profileId),
     createServerClient().from("profiles").select("id, display_name, primary_cluster").in("id", anchors),
   ]);
+  // loadCandidates refreshes the center's cluster in parallel with the read above, so a brand-new user
+  // (no cluster yet) could be read before it's written and drawn under "unassigned" ("New") on their
+  // first galaxy. The refresh has finished by now, so re-read in that case only (one small query).
+  const anchorRows = firstAnchorRows?.some((r) => !r.primary_cluster)
+    ? (await createServerClient().from("profiles").select("id, display_name, primary_cluster").in("id", anchors)).data
+    : firstAnchorRows;
   const sample = sampleGalaxy(candidates, { budget: limit, seed: `${profileId}:${day()}` });
   const drawn = candidates.filter((c) => sample.ids.includes(c.id));
   const hidden = hiddenAfter(counts, drawn);
