@@ -6,6 +6,7 @@ import { THEME_THRESHOLD } from "@/lib/themes";
 import type { ThemeState } from "@/lib/song-layer";
 import { cn } from "@/lib/utils";
 import { ClusterStar } from "@/components/cluster-star";
+import { DuoRing } from "@/components/duo-ring";
 
 /** Song-layer chips. Themes that haven't reached three songs are still forming: dashed, with how far they are. */
 export function ThemeFilter({ themes, value, onChange, className }: { themes: ThemeState[]; value: string | null; onChange: (id: string | null) => void; className?: string }) {
@@ -66,7 +67,9 @@ export function ModeToggle({ value, onChange }: { value: "people" | "songs"; onC
         className="pointer-events-none absolute left-0 top-0 opacity-0 transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.3,0.7,0.2,1)]"
         aria-hidden
       >
-        <span className="duo-ring relative block size-full rounded-full bg-white/[0.14]" />
+        <span className="relative block size-full rounded-full bg-white/[0.14]">
+          <DuoRing />
+        </span>
       </span>
       {(["people", "songs"] as const).map((m) => (
         <button

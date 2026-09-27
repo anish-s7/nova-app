@@ -75,12 +75,19 @@ const nodeFragment = /* glsl */ `
 const edgeVertex = /* glsl */ `
   attribute vec3 color;
   attribute float aAlpha;
+  // Build-out (the web spinning out from you): each line grows from its nearer star (aFrom) to its
+  // own end between aGrow.x and aGrow.y seconds. aGrow.x < 0 = no growth, drawn in full.
+  attribute vec3 aFrom;
+  attribute vec2 aGrow;
+  uniform float uTime;
   varying vec3 vColor;
   varying float vAlpha;
   void main() {
+    float t = aGrow.x < 0.0 ? 1.0 : clamp((uTime - aGrow.x) / max(0.001, aGrow.y - aGrow.x), 0.0, 1.0);
+    t = t * t * (3.0 - 2.0 * t);
     vColor = color;
-    vAlpha = aAlpha;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    vAlpha = aAlpha * (aGrow.x < 0.0 ? 1.0 : smoothstep(0.0, 0.12, t));
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(mix(aFrom, position, t), 1.0);
   }
 `;
 
@@ -214,13 +221,12 @@ const PITCH_LIMIT = 1.3;
 /** Radians of turn per pixel dragged. */
 const ORBIT_SPEED = 0.006;
 /**
- * Build-out intro (buildOut), in seconds: when you appear, how long the ripple takes to reach the
- * farthest star (each star then fades in over 1.8s, see nodeVertex), and when the lines fade in.
+ * Build-out intro (buildOut), in seconds: when you appear, and how long the ripple takes to reach
+ * the farthest star (each star then fades in over 1.8s, see nodeVertex). Lines grow outward along
+ * with it, star to star (see edgeVertex).
  */
 const BUILD_START = 0.15;
 const BUILD_SPAN = 2.4;
-const BUILD_LINES_AT = 1.4;
-const BUILD_LINES_FADE = 1.6;
 /** Wrap an angle into (-π, π] so tweens take the short way round. */
 const wrapAngle = (a: number) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
 
@@ -346,7 +352,7 @@ function Scene({
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-        uniforms: { uOpacity: { value: initialPhase === "dark" || buildOut ? 0 : 1 } },
+        uniforms: { uOpacity: { value: initialPhase === "dark" ? 0 : 1 }, uTime: { value: 0 } },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial phase only applies on mount
     [],
@@ -438,17 +444,35 @@ function Scene({
     const g = new THREE.BufferGeometry();
     const pos = new Float32Array(visibleEdges.length * 6);
     const col = new Float32Array(visibleEdges.length * 6);
+    const from = new Float32Array(visibleEdges.length * 6);
+    const grow = new Float32Array(visibleEdges.length * 4).fill(-1);
     const c = new THREE.Color();
     visibleEdges.forEach((e, i) => {
       [e.source, e.target].forEach((id, j) => {
         const p = points.get(id)!;
         pos.set([p.x, p.y, p.z], i * 6 + j * 3);
+        from.set([p.x, p.y, p.z], i * 6 + j * 3);
         c.set(getCluster(clusterOf.get(id) ?? "").color);
         col.set([c.r, c.g, c.b], i * 6 + j * 3);
       });
+      // Build-out: the line grows from the star that appears first (nearer you) toward the other,
+      // arriving just after it does, so the web spins outward with the ripple.
+      const a = births.current.get(e.source);
+      const b = births.current.get(e.target);
+      if (buildOut && a !== undefined && b !== undefined && Math.max(a, b) > now()) {
+        const nearIsSource = a <= b;
+        const near = points.get(nearIsSource ? e.source : e.target)!;
+        const farSlot = nearIsSource ? 1 : 0;
+        from.set([near.x, near.y, near.z], i * 6 + farSlot * 3);
+        const start = Math.min(a, b);
+        const end = Math.max(a, b) + 0.35;
+        grow.set([start, end, start, end], i * 4);
+      }
     });
     g.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     g.setAttribute("color", new THREE.BufferAttribute(col, 3));
+    g.setAttribute("aFrom", new THREE.BufferAttribute(from, 3));
+    g.setAttribute("aGrow", new THREE.BufferAttribute(grow, 2));
     g.setAttribute("aAlpha", new THREE.BufferAttribute(new Float32Array(visibleEdges.length * 2), 1));
     return g;
   }, [visibleEdges, points, clusterOf]);
@@ -848,14 +872,6 @@ function Scene({
       invalidate();
     });
 
-  // Build-out: the lines fade in once the ripple is well underway.
-  useEffect(() => {
-    if (!buildOut) return;
-    const t = setTimeout(() => fadeUniform(edgeMat.uniforms.uOpacity, 1, BUILD_LINES_FADE * 1000, "edges"), BUILD_LINES_AT * 1000);
-    return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
-  }, []);
-
   useEffect(() => {
     // Keep frames coming until the last birth has finished fading in (build-out births lie ahead).
     const last = Math.max(0, ...births.current.values()) - now();
@@ -1239,6 +1255,7 @@ function Scene({
 
     const time = now();
     nodeMat.uniforms.uTime.value = time;
+    edgeMat.uniforms.uTime.value = time;
     nodeMat.uniforms.uScale.value = size.height / (2 * Math.tan(((perspective.fov / 2) * Math.PI) / 180));
     nodeMat.uniforms.uPixelRatio.value = gl.getPixelRatio();
 

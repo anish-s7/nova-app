@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { MessageCircle, Orbit, User, Users } from "lucide-react";
 import { useSlidingIndicator } from "@/hooks/use-sliding-indicator";
 import { cn } from "@/lib/utils";
+import { DuoRing } from "@/components/duo-ring";
 
 const TABS = [
   { href: "/galaxy", label: "Galaxy", icon: Orbit, match: ["/galaxy"] },
@@ -19,7 +20,7 @@ const TABS = [
  * bottom. Laptops (lg): a floating capsule centered near the bottom (centered with auto margins,
  * not a transform, so the blur and the outline line up exactly), with the page running underneath.
  * The active tab's highlight glides to whatever you tap and carries a slowly moving gold/violet
- * outline (`duo-ring` in globals.css).
+ * outline (components/duo-ring.tsx).
  */
 export function BottomTabBar() {
   const pathname = usePathname();
@@ -41,7 +42,9 @@ export function BottomTabBar() {
           className="pointer-events-none absolute left-0 top-0 opacity-0 transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.3,0.7,0.2,1)]"
           aria-hidden
         >
-          <span className="duo-ring relative block size-full rounded-2xl bg-white/[0.07] lg:rounded-full" />
+          <span className="relative block size-full rounded-2xl bg-white/[0.07] lg:rounded-full">
+            <DuoRing />
+          </span>
         </span>
         {TABS.map(({ href, label, icon: Icon }, i) => {
           const active = i === activeIndex;
