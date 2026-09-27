@@ -17,6 +17,19 @@ test("Last.fm classifies HTTP-200 API errors without leaking the provider payloa
   });
 });
 
+test("Last.fm honors Retry-After even when a 429 body is not JSON", async () => {
+  const adapter = createLastfmAdapter({
+    apiKey: "test",
+    now: () => 0,
+    fetch: () => Promise.resolve(new Response("slow down", { status: 429, headers: { "Retry-After": "12" } })),
+  });
+  await assert.rejects(adapter.validateUsername("user", signal), (error: ListeningProviderError) => {
+    assert.equal(error.code, "rate_limited");
+    assert.equal(error.retryAfterMs, 12_000);
+    return true;
+  });
+});
+
 test("Last.fm excludes now-playing and filters provider boundary drift", async () => {
   let requested = "";
   const adapter = createLastfmAdapter({

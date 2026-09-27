@@ -455,6 +455,10 @@ export function Portrait({ name, config }: { name: string; config?: AvatarConfig
   );
 }
 
+export function FacePortrait({ face, name }: { face?: any; name?: string }) {
+  return <Portrait name={name || "You"} />;
+}
+
 export function UserAvatar({
   name,
   cluster,
@@ -477,9 +481,9 @@ export function UserAvatar({
   const session = useSession();
   const saved = useAvatar(isMe ? "me" : userId);
   const activeConfig = config ?? (isMe ? session.avatarConfig : undefined);
+  const photo = activeConfig?.avatarUrl || saved?.photoUrl || undefined;
 
-  if (activeConfig?.avatarUrl || saved?.photoUrl) {
-    const photo = activeConfig?.avatarUrl || saved?.photoUrl;
+  if (photo) {
     return (
       <span
         style={{ "--tone": getCluster(cluster).color, width: size, height: size } as CSSProperties}
