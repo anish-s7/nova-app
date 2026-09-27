@@ -22,6 +22,8 @@ export interface ConnectionCardJson {
   score?: number;
   /** Why the AI judged this a connection, in a sentence. Not shown to users. */
   rationale?: string;
+  /** The AI's categorical judgments the score is computed from (lib/gemini/assessConnection.ts). Not shown. */
+  rubric?: { specificity: string; evidence: string; conversation: string };
   /** 1–2 specific shared threads, each anchored by a song on each side. Absent on older cards. */
   threads?: CardThread[];
 }

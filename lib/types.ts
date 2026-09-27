@@ -401,6 +401,7 @@ export type ConnectionCardJson = {
   /** Whole-profile AI assessment, 0..100 (sets the match order). Absent on older cards. */
   score?: number;
   rationale?: string;
+  rubric?: { specificity: string; evidence: string; conversation: string };
   /** 1–2 specific shared threads, each anchored by a song on each side. Absent on older cards. */
   threads?: CardThread[];
 };
