@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
   if (!title || !artist || !Array.isArray(tags) || tags.length === 0) {
     return NextResponse.json(
-      { error: "title, artist, and at least one tag are required" },
+      { error: "title, artist, and at least one feeling (postcard) are required" },
       { status: 400 }
     );
   }

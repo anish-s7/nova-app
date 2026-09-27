@@ -66,10 +66,10 @@ export function PostcardPicker({
         </div>
       ) : null}
 
-      <ul className="mt-2 grid grid-cols-2 gap-2.5" role="group" aria-label={label} aria-busy={!order}>
+      <ul className="mt-2 grid grid-cols-2 gap-2" role="group" aria-label={label} aria-busy={!order}>
         {order
           ? cards.map((id) => <Card key={id} id={id} selected={value.includes(id)} disabled={full && !value.includes(id)} onToggle={() => toggle(id)} />)
-          : Array.from({ length: POSTCARDS_SHOWN }, (_, i) => <li key={i} className="aspect-[4/5] animate-pulse rounded-2xl bg-white/[0.05]" aria-hidden />)}
+          : Array.from({ length: POSTCARDS_SHOWN }, (_, i) => <li key={i} className="aspect-[3/2] animate-pulse rounded-2xl bg-white/[0.05]" aria-hidden />)}
       </ul>
       {!order ? <p className="sr-only">Loading postcards for this song</p> : null}
 
@@ -98,7 +98,7 @@ function Card({ id, selected, disabled, onToggle }: { id: string; selected: bool
         aria-pressed={selected}
         aria-label={`It feels like ${card.phrase}: ${card.feeling}`}
         className={cn(
-          "group relative block aspect-[4/5] w-full overflow-hidden rounded-2xl border text-left transition-[transform,border-color] duration-200 active:scale-[0.98]",
+          "group relative block aspect-[3/2] w-full overflow-hidden rounded-2xl border text-left transition-[transform,border-color] duration-200 active:scale-[0.98]",
           selected ? "border-primary ring-2 ring-primary/60" : "border-white/10 hover:border-white/25",
         )}
         style={{ "--tone": tone } as CSSProperties}
@@ -110,9 +110,9 @@ function Card({ id, selected, disabled, onToggle }: { id: string; selected: bool
         ) : (
           <span className="absolute inset-0 bg-[radial-gradient(circle_at_30%_25%,color-mix(in_oklab,var(--tone)_45%,transparent),transparent_65%)]" aria-hidden />
         )}
-        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-3 pb-2.5 pt-8">
-          <span className="block text-[15px] font-semibold leading-tight text-white">{card.phrase}</span>
-          <span className="block text-xs text-white/70">{card.feeling}</span>
+        <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent px-2.5 pb-2 pt-6">
+          <span className="block text-sm font-semibold leading-tight text-white">{card.phrase}</span>
+          <span className="block text-[11px] text-white/70">{card.feeling}</span>
         </span>
         {selected ? (
           <span className="absolute right-2 top-2 flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground">

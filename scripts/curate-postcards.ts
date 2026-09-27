@@ -65,8 +65,8 @@ async function apply(choicesFile: string) {
     // Required by Unsplash's API guidelines when a photo is used in an app.
     await unsplash(`/photos/${photoId}/download`);
     images[cardId] = {
-      url: `${photo.urls.raw}&w=480&h=600&fit=crop&auto=format&q=70`,
-      thumb: `${photo.urls.raw}&w=40&h=50&fit=crop&auto=format&q=40`,
+      url: `${photo.urls.raw}&w=600&h=400&fit=crop&auto=format&q=70`,
+      thumb: `${photo.urls.raw}&w=60&h=40&fit=crop&auto=format&q=40`,
       artist: photo.user.name,
       artistUrl: photo.user.links.html,
       unsplashUrl: photo.links.html,

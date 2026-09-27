@@ -258,7 +258,7 @@ export async function saveSongs() {
     for (const song of songs) {
       if (getSession().savedSongIds?.includes(song.id)) continue;
       const feeling = s.feelings?.[song.id];
-      if (!feeling || feeling.tags.length === 0) throw new ApiError(`"${song.title}" still needs at least one tag.`);
+      if (!feeling || feeling.tags.length === 0) throw new ApiError(`"${song.title}" still needs at least one postcard.`);
       await db.insertPick({
         title: song.title,
         artist: song.artist,

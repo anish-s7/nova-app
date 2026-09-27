@@ -196,7 +196,7 @@ function DescribeSongs({ songs, feelings, fromSpotify }: { songs: Song[]; feelin
 
       <div className="border-t border-white/5 bg-background/90 px-5 pb-6 pt-3 backdrop-blur">
         <Button className="h-12 w-full rounded-full text-base" disabled={!ready} onClick={next}>
-          {!ready ? "Pick at least one tag" : last ? "Read my music" : "Next song"}
+          {!ready ? "Pick at least one postcard" : last ? "Read my music" : "Next song"}
         </Button>
         {ready && !feeling.placed ? <p className="mt-2 text-center text-xs text-muted-foreground">Tip: place the circle too. It&apos;s how we match you.</p> : null}
       </div>
