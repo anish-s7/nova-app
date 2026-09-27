@@ -30,10 +30,87 @@ anything derived from one.
 |---|---|---|
 | id | uuid, PK | = `auth.users.id` |
 | display_name | text | |
-| primary_cluster | text, nullable | one of `lib/clusters.ts` CLUSTER_IDS; read by `galaxy_pool`. Written by `lib/matching/refreshPrimaryCluster.ts` (rule in `lib/cluster-assign.ts`): after every `POST /api/picks`, and lazily for the viewer when the galaxy loads. Null until someone has a pick |
+| primary_topic_cluster_id | uuid, FK -> topic_clusters.id, nullable | replaces the old `primary_cluster` text column (migration `20260929000000`, data model only — see `topic_clusters` below). Null until someone has a pick |
 | created_at | timestamptz | default now() |
 
 No `embedding` column — matching lives entirely on `song_picks` now.
+
+### `topic_clusters` (migration `20260929000000`) — replaces the hard-coded 5-value cluster enum
+| column | type | notes |
+|---|---|---|
+| id | uuid, PK | default gen_random_uuid() |
+| label | text | full motivation label, e.g. "When it's too quiet at home" |
+| short | text | short label for compact UI |
+| description | text, nullable | one sentence, spoken to the person ("you"); the 5 seed rows have one, later ones are written by the recompute job's naming call |
+| color | text | hex, for the galaxy visualization |
+| centroid | vector(768), nullable | mean of member profiles' topic vectors (mood-stripped pick embeddings, see `topicVectorFor` in `lib/matching/topicClusterVector.ts`); null until `scripts/recompute-topic-clusters.ts` has run at least once |
+| member_count | int | kept in sync by `scripts/recompute-topic-clusters.ts` each run; the migration's insert is a one-time backfill count |
+| created_at | timestamptz | default now() |
+| superseded_by | uuid, FK -> topic_clusters.id, nullable | lets a cluster be retired into a merged successor instead of deleted; not yet written by anything — the recompute job (below) reuses/renames a drifted cluster in place rather than superseding it, and never auto-merges or auto-retires one |
+
+Seeded with the current 5 clusters (`lib/clusters.ts` CLUSTER_IDS) as literal rows so
+`profiles.primary_topic_cluster_id` could be backfilled 1:1 from the old
+`profiles.primary_cluster` text values on the same migration. Readable by any
+authenticated user (RLS); only the service role writes it.
+
+**Recompute job** (`scripts/recompute-topic-clusters.ts`, Phase 2 — run by hand, a cron job
+later): a batch job over everyone's picks, not inline in any route handler.
+1. **Input**: each profile's topic vector — the average of their picks' embeddings with the
+   mood dims stripped first (`topicVectorFor`/`stripMood` in `lib/matching/topicClusterVector.ts`
+   strip `song_picks.embedding`'s last 2 (valence/energy) dims, since mood isn't "topic"; no
+   portrait-level vector exists yet to prefer instead). Profiles with no picks are skipped.
+2. **Algorithm**: HDBSCAN (`lib/matching/hdbscan.ts` — a from-scratch implementation; the
+   available npm packages were either alpha-quality or only build the single-linkage tree, not
+   the density-based condensing HDBSCAN needs) over cosine distance, producing a noise bucket
+   (label `-1`) for profiles that don't fit any cluster — that maps directly onto the
+   `'unassigned'` fallback `galaxy_pool`/`galaxy_cluster_counts` already treat a null cluster as.
+3. **Reuse/naming**: each HDBSCAN cluster is matched to the nearest existing `topic_clusters` row
+   by centroid cosine similarity. Similarity ≥ 0.85 reuses that row's id (updating its centroid
+   and `member_count`); below 0.95 similarity counts as "changed enough" to also re-name it. A
+   cluster with no close match is newly inserted. Either way, naming is one `generateJson` call
+   (`lib/gemini/nameTopicCluster.ts`, same Flash → Flash-Lite fallback as portraits) given ~10
+   sample picks' `{title, artist, tags}` from real members — plain strings only, never raw
+   embeddings, and it only returns `{label, short, description}`, never a membership decision.
+4. **Assignment + stability rule** (`applyStabilityMargin`/`assignNearestCluster` in
+   `lib/matching/assignTopicCluster.ts`, `CLUSTER_STABILITY_MARGIN = 0.2`): a profile only moves
+   off its current `primary_topic_cluster_id` when another cluster's centroid is more than 20%
+   closer (cosine distance) than its current one's — prevents flapping between two similar
+   clusters on every run. HDBSCAN noise (`-1`) always clears the assignment (no margin check: a
+   structural "doesn't fit anywhere" verdict isn't a close call between two options); a profile
+   with no prior cluster is placed directly.
+5. Never applied to the hosted project's data until migration `20260929000000` is applied there
+   first (see above — `galaxy_pool`/`galaxy_cluster_counts` and several app files still expect
+   the pre-migration `profiles.primary_cluster` column and haven't been re-wired yet).
+
+**`lib/matching/refreshPrimaryCluster.ts`** shrank in Phase 2 to the cheap half only: on every new
+pick (and lazily for the viewer on galaxy load), it assigns the profile to its nearest *existing*
+`topic_clusters` centroid (same stability rule, no LLM, no re-clustering). It returns `null`
+whenever no `topic_clusters` row has a centroid yet — i.e. always, until the recompute job above
+has run at least once. `lib/cluster-assign.ts`'s tag/slider heuristic (`primaryClusterFor`) is no
+longer used for this; the file and its other exports (`pickWhy`, used by
+`lib/matching/galaxySongs.ts` for per-pick "why", and `whyMixFor`) are unchanged.
+
+**Phase 3 (visualization) — done, but not yet fed real ids.** The galaxy UI no longer assumes
+exactly five clusters:
+- `GET /api/clusters` (session client, RLS-gated) returns every non-superseded `topic_clusters`
+  row as `{id, label, short, description, color}[]`.
+- `lib/clusters.ts`'s `getCluster`/`clusterForLabel` read from an in-memory cache seeded with the
+  five static entries (so mock mode, and real mode before the fetch resolves, still work), and
+  `primeClusters()` merges `GET /api/clusters`'s rows in on top. `components/cluster-cache-provider.tsx`
+  calls it once per page load, in real-data mode only, from the root layout.
+- `lib/constellation-shapes.ts`'s five hand-drawn asterisms are gone. `shapeSlot(clusterId, index)`
+  now generates a deterministic point-ring from a hash of the cluster's *id* — works for any id,
+  including ones the recompute job discovers later, at the cost of the "real constellation" flavor
+  (Lyra, Orion, ...), which was never shown in the UI anyway.
+- `lib/galaxy-layout.ts`'s `anchor()` places however many distinct clusters are actually present
+  (`countClusters`) evenly around the ring, in a slot chosen by `hash(clusterId) % clusterCount`
+  rather than the cluster's index in some array — so a newly-discovered cluster mostly doesn't
+  renumber everyone else's anchor the way an index-based scheme would.
+- **Not done here**: the galaxy window itself (`lib/matching/galaxyWindow.ts`) and `lib/real-api.ts`
+  still read the pre-migration `profiles.primary_cluster` text column, so in real mode every node's
+  `cluster` is still one of the five static ids until that app-wiring phase (noted above) rewires
+  them to `primary_topic_cluster_id`. The visualization layer is ready for arbitrary cluster ids
+  today; it just isn't receiving any yet.
 
 ### `songs` — shared catalog, one row per unique resolved song
 | column | type | notes |
@@ -173,13 +250,18 @@ day so reloads don't reshuffle. Edges are only computed among the drawn people.
   here"). It ranks at most the pool (600), so a cluster larger than that can't be paged
   to the end. That is deliberate: past a screenful, use Wander or search instead.
 
-**Clusters:** `profiles.primary_cluster` (one of `lib/clusters.ts` CLUSTER_IDS; nullable,
-treated as `'unassigned'`). It is a label for grouping, not a matching vector.
-`lib/cluster-assign.ts` scores each pick from its mood tags plus valence/energy (tags lead,
-the slider breaks ties) and the profile takes the cluster with the highest total across its
-picks. No LLM, no embeddings. It is recomputed after every pick and lazily for the viewer on
-galaxy load; profiles with no picks stay null. Someone whose picks straddle two "whys" can
-move between clusters as they add songs, and the layout follows.
+**Clusters:** as of migration `20260929000000` the source-of-truth column is
+`profiles.primary_topic_cluster_id` (FK -> `topic_clusters`, nullable, treated as
+`'unassigned'`) — see `topic_clusters` above. It is a label for grouping, not a matching
+vector. `lib/cluster-assign.ts` scores each pick from its mood tags plus valence/energy
+(tags lead, the slider breaks ties) and the profile takes the cluster with the highest
+total across its picks. No LLM, no embeddings. It is recomputed after every pick and
+lazily for the viewer on galaxy load; profiles with no picks stay null. Someone whose
+picks straddle two "whys" can move between clusters as they add songs, and the layout
+follows. **This description is the target design; the code paths above and the SQL below
+still read/write the pre-migration `primary_cluster` text column and need re-wiring (see
+the `topic_clusters` table note) before `20260929000000` can be applied to the hosted
+project.**
 `supabase/migrations/20260927010000_galaxy_window.sql` is applied to the live project and verified (2026-09-26): `wander_picks`, `galaxy_pool` and `galaxy_cluster_counts` return correct rows for the seeded personas.
 
 **Route shapes the frontend reads** (all session-authenticated):

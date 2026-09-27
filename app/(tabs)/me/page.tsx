@@ -169,7 +169,7 @@ function Reasons({ motivations, songs }: { motivations: InferredMotivation[]; so
         <h2 id="reasons-heading" className={sectionLabel}>
           Your reasons
         </h2>
-        {toReview.length ? <span className="text-xs text-primary">{toReview.length === 1 ? "1 needs a look" : `${toReview.length} need a look`}</span> : null}
+        {toReview.length ? <span className="text-xs text-primary">{toReview.length === 1 ? "one worth a look" : `${toReview.length} worth a look`}</span> : null}
       </div>
       <ul className="mt-2 border-y border-white/[0.07]">
         {motivations.map((m) => {
@@ -213,8 +213,8 @@ function Status({ m }: { m: InferredMotivation }) {
         That&apos;s you
       </span>
     );
-  if (m.feedback === "rejected") return <span>Left out</span>;
-  return <span className="font-medium text-primary">Needs a look</span>;
+  if (m.feedback === "rejected") return <span>Not quite you</span>;
+  return <span className="font-medium text-primary">Worth a look</span>;
 }
 
 /** Your songs. Tap one to change how it feels or remove it; "Add songs" goes through the picker. */
@@ -225,7 +225,7 @@ function Songs({ items, onSelect }: { items: MySong[]; onSelect: (item: MySong) 
     <section className="mt-8 px-5" aria-labelledby="songs-heading">
       <div className="flex items-baseline justify-between">
         <h2 id="songs-heading" className={sectionLabel}>
-          Your songs · {items.length}
+          {items.length === 1 ? "Your one song" : `Your ${items.length} songs`}
         </h2>
         <Link href="/onboarding/pick" className="text-xs text-muted-foreground hover:text-foreground">
           Add songs

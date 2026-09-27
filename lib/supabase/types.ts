@@ -35,18 +35,59 @@ export interface Database {
         Row: {
           id: string;
           display_name: string;
-          /** One of lib/clusters.ts CLUSTER_IDS. Written by lib/matching/refreshPrimaryCluster.ts (service role); read by galaxy_pool. */
+          /**
+           * Pre-migration column (still what the hosted project actually has). One of
+           * lib/clusters.ts CLUSTER_IDS. Superseded by primary_topic_cluster_id below once
+           * migration 20260929000000 is applied — see db/contract.md's topic_clusters notes.
+           */
           primary_cluster: string | null;
+          /** Post-migration replacement for primary_cluster (not live on the hosted project yet). FK -> topic_clusters.id. Written by lib/matching/refreshPrimaryCluster.ts and scripts/recompute-topic-clusters.ts (service role). */
+          primary_topic_cluster_id: string | null;
           created_at: string;
         };
         Insert: {
           id: string;
           display_name: string;
           primary_cluster?: string | null;
+          primary_topic_cluster_id?: string | null;
         };
         Update: Partial<{
           display_name: string;
           primary_cluster: string | null;
+          primary_topic_cluster_id: string | null;
+        }>;
+        Relationships: [];
+      };
+      topic_clusters: {
+        Row: {
+          id: string;
+          label: string;
+          short: string;
+          description: string | null;
+          color: string;
+          centroid: number[] | null;
+          member_count: number;
+          created_at: string;
+          superseded_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          label: string;
+          short: string;
+          description?: string | null;
+          color: string;
+          centroid?: number[] | null;
+          member_count?: number;
+          superseded_by?: string | null;
+        };
+        Update: Partial<{
+          label: string;
+          short: string;
+          description: string | null;
+          color: string;
+          centroid: number[] | null;
+          member_count: number;
+          superseded_by: string | null;
         }>;
         Relationships: [];
       };

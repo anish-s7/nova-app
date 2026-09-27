@@ -67,7 +67,7 @@ export function ConnectionCardView({ card, me, other }: { card: ConnectionCard; 
         </div>
         <p data-count className="mt-4 text-3xl font-semibold tabular-nums tracking-tight">{sharedSongs}</p>
         <p data-count className="text-sm text-muted-foreground">
-          {sharedSongs === 1 ? "song" : "songs"} in common · {sharedArtists} {sharedArtists === 1 ? "artist" : "artists"}
+          {sharedSongs === 1 ? "song" : "songs"} in common, and {sharedArtists} {sharedArtists === 1 ? "artist" : "artists"} you both go back to
         </p>
         <p data-verdict className="mt-3 text-balance font-serif text-lg italic">
           {card.sharedMotivations.length > 1 ? `But ${card.sharedMotivations.length} of the same reasons.` : "But the same reason."}

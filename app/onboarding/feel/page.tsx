@@ -32,7 +32,7 @@ export default function FeelPage() {
       <main className="flex flex-1 flex-col justify-center px-6">
         <EmptyState
           icon={AudioLines}
-          title="No songs yet"
+          title="Nothing to feel out yet"
           body="Bring a few songs first, then tell us how each one feels."
           action={
             <Link href="/onboarding/pick" className={cn(buttonVariants(), "h-11 rounded-full px-6")}>

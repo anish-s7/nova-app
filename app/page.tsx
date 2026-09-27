@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { animate, splitText, stagger } from "animejs";
-import { HeroConstellation } from "@/components/hero-constellation";
+import { LandingStarfield } from "@/components/landing-starfield";
 import { Logo } from "@/components/logo";
 import { buttonVariants } from "@/components/ui/button";
 import { useAnime } from "@/hooks/use-anime";
@@ -23,26 +23,28 @@ export default function WelcomePage() {
   });
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-      <div className="flex items-center justify-between px-6 pt-5">
+    <main className="relative flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
+      <LandingStarfield />
+      <div className="sky-grain" />
+
+      <div className="relative z-10 flex items-center justify-between px-6 pt-5">
         <Logo />
         {demo ? <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-muted-foreground">Demo</span> : null}
       </div>
 
-      <HeroConstellation />
-
-      <div ref={intro} className="flex flex-1 flex-col px-6 pb-8 pt-8 motion-safe:opacity-0">
-        <h1 className="text-balance text-[32px] font-semibold leading-[1.12] tracking-tight">
-          Two people. Zero songs in common.{" "}
-          <span className="font-serif font-normal italic text-primary">The same reason.</span>
+      <div ref={intro} className="relative z-10 mt-auto flex flex-col px-6 pb-8 pt-8 motion-safe:opacity-0">
+        <h1 className="text-balance font-serif text-[2.6rem] font-light leading-[1.08] tracking-tight text-foreground">
+          Someone out there
+          <br />
+          <span className="italic text-foreground/90">feels it too.</span>
         </h1>
         <p data-intro-rest className="mt-4 text-pretty leading-relaxed text-muted-foreground">
-          Song Galaxy reads your music and finds people who use it the way you do, not people with the same playlist. You don&apos;t have to explain a thing.
+          Find your people through the stories behind your favorite songs.
         </p>
 
-        <div data-intro-rest className="mt-auto pt-10">
+        <div data-intro-rest className="mt-10">
           <Link href={authEnabled ? "/signup" : "/onboarding/pick"} className={cn(buttonVariants(), "btn-glow h-12 w-full rounded-full text-base")}>
-            Continue
+            Find your constellation
             <ArrowRight className="size-4" aria-hidden />
           </Link>
           {authEnabled ? (

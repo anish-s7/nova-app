@@ -3,14 +3,15 @@ import type { Metadata, Viewport } from "next";
 import { Newsreader, Source_Sans_3 } from "next/font/google";
 import { PhoneFrame } from "@/components/phone-frame";
 import { SessionSync } from "@/components/session-sync";
+import { ClusterCacheProvider } from "@/components/cluster-cache-provider";
 import "./globals.css";
 
 const sourceSans = Source_Sans_3({ variable: "--font-source-sans", subsets: ["latin"] });
 const newsreader = Newsreader({ variable: "--font-newsreader", subsets: ["latin"], style: ["normal", "italic"] });
 
 export const metadata: Metadata = {
-  title: "Song Galaxy: connected by why you listen",
-  description: "Two people. Zero songs in common. The same reason. Song Galaxy finds people who use music the way you do.",
+  title: "Song Galaxy — Someone out there feels it too",
+  description: "Song Galaxy connects people through the emotions and personal stories behind their favorite music.",
 };
 
 export const viewport: Viewport = {
@@ -27,7 +28,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Suspense>
           <SessionSync />
         </Suspense>
-        <PhoneFrame>{children}</PhoneFrame>
+        <ClusterCacheProvider>
+          <PhoneFrame>{children}</PhoneFrame>
+        </ClusterCacheProvider>
       </body>
     </html>
   );

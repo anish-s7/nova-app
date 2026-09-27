@@ -1,5 +1,4 @@
 import { forceLink, forceManyBody, forceSimulation, forceX, forceY, forceZ, type SimNode } from "d3-force-3d";
-import { CLUSTER_IDS, type ClusterId } from "./clusters";
 import { shapeSlot, SHAPE_SCALE } from "./constellation-shapes";
 import type { GalaxyEdge, GalaxyNode } from "./types";
 import { topTwo } from "./why-mix";
@@ -52,7 +51,7 @@ function perpAxes(n: Vec3): [Vec3, Vec3] {
  * `facing` — a fixed direction per cluster, so the same shape always sits the same way up
  * regardless of which layout (real galaxy, home view) is placing it or how many members it has.
  */
-function shapeOffsetFor(cluster: ClusterId, index: number, facing: Vec3): Vec3 {
+function shapeOffsetFor(cluster: string, index: number, facing: Vec3): Vec3 {
   const [u, w] = perpAxes(facing);
   const slot = shapeSlot(cluster, index);
   return v_add(v_scale(u, slot.x * SHAPE_SCALE), v_scale(w, slot.y * SHAPE_SCALE));
@@ -69,11 +68,25 @@ function clusterSlotIndex(nodes: Pick<GalaxyNode, "userId" | "cluster">[]): Map<
   return out;
 }
 
-function anchor(cluster: string) {
-  const i = Math.max(0, CLUSTER_IDS.indexOf(cluster as (typeof CLUSTER_IDS)[number]));
-  const a = (i / CLUSTER_IDS.length) * Math.PI * 2 - Math.PI / 2;
+/**
+ * A cluster's fixed position on the ring, evenly spaced by however many clusters exist right now.
+ * The slot a cluster lands in is a hash of its *id*, not its position in whatever array or fetch
+ * order produced `clusterCount` — an array-index anchor renumbers every cluster after the one just
+ * inserted the moment a new cluster is added (or the fetch returns them in a different order), so
+ * everyone's whole galaxy visually reshuffles. A hashed slot only reshuffles the (rare) cluster
+ * whose hash collides with another's under the new count, not everyone downstream of it.
+ */
+function anchor(cluster: string, clusterCount: number) {
+  const n = Math.max(1, clusterCount);
+  const slot = hash(cluster) % n;
+  const a = (slot / n) * Math.PI * 2 - Math.PI / 2;
   // Clusters sit at different depths so the galaxy has a body when you orbit it, not a flat disc.
   return { x: Math.cos(a) * 30, y: Math.sin(a) * 30, z: Math.sin(a * 2 + 0.6) * 14 };
+}
+
+/** However many distinct clusters are actually present in this batch of nodes, for `anchor`'s spacing. */
+function countClusters(nodes: Iterable<{ cluster: string }>): number {
+  return new Set([...nodes].map((n) => n.cluster)).size;
 }
 
 /**
@@ -81,12 +94,12 @@ function anchor(cluster: string) {
  * two regions settles between them. Only two, because the anchors sit on a ring and averaging all
  * five would drag everyone to the middle and collapse the regions. With no mix it is the cluster's anchor.
  */
-function nodeAnchor(n: Pick<GalaxyNode, "cluster" | "whys">) {
-  if (!n.whys) return anchor(n.cluster);
+function nodeAnchor(n: Pick<GalaxyNode, "cluster" | "whys">, clusterCount: number) {
+  if (!n.whys) return anchor(n.cluster, clusterCount);
   const top = topTwo(n.whys);
   const p = { x: 0, y: 0, z: 0 };
   for (const { id, w } of top) {
-    const a = anchor(id);
+    const a = anchor(id, clusterCount);
     p.x += a.x * w;
     p.y += a.y * w;
     p.z += a.z * w;
@@ -118,12 +131,13 @@ export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[]): Layout 
 
   const rand = seeded(hash(key));
   const slotIndex = clusterSlotIndex(nodes);
+  const clusterCount = countClusters(nodes);
   const simNodes: N[] = nodes.map((n) => {
-    const a = nodeAnchor(n);
+    const a = nodeAnchor(n, clusterCount);
     // Everyone in a cluster fills a slot in its constellation (see lib/constellation-shapes.ts),
     // so the region resolves into that recognizable shape as it fills rather than growing shapeless.
-    const facing = anchor(n.cluster);
-    const offset = shapeOffsetFor(n.cluster as ClusterId, slotIndex.get(n.userId) ?? 0, facing);
+    const facing = anchor(n.cluster, clusterCount);
+    const offset = shapeOffsetFor(n.cluster, slotIndex.get(n.userId) ?? 0, facing);
     const ax = a.x + offset.x;
     const ay = a.y + offset.y;
     const az = a.z + offset.z;
@@ -271,15 +285,17 @@ const MIN_CLEARANCE = 1.6;
 
 /** New arrivals take the next unfilled slot in their cluster's constellation, without re-running the layout. */
 export function placeArrival(layout: Layout, node: GalaxyNode, _edges: GalaxyEdge[], occupiedExtra: LayoutPoint[] = []): LayoutPoint {
-  const cluster = node.cluster as ClusterId;
-  const clusterPoints = [...layout.points.values(), ...occupiedExtra].filter((p) => p.cluster === node.cluster);
+  const cluster = node.cluster;
+  const allPoints = [...layout.points.values(), ...occupiedExtra];
+  const clusterPoints = allPoints.filter((p) => p.cluster === node.cluster);
+  const clusterCount = countClusters([...allPoints, { cluster }]);
 
   // The shape's current center in *this* layout (real galaxy or home view — whichever placed it),
   // and its facing, which stays fixed per cluster so the same shape is always the same way up.
   const center = clusterPoints.length
     ? v_scale(clusterPoints.reduce((a, p) => v_add(a, p), { x: 0, y: 0, z: 0 }), 1 / clusterPoints.length)
-    : anchor(cluster);
-  const facing = anchor(cluster);
+    : anchor(cluster, clusterCount);
+  const facing = anchor(cluster, clusterCount);
   const offset = shapeOffsetFor(cluster, clusterPoints.length, facing);
 
   const rand = seeded(hash(node.userId));

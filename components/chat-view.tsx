@@ -75,7 +75,7 @@ export function ChatView({ userId, initialDraft }: { userId: string; initialDraf
       );
     } catch {
       setDraft(text);
-      setSendError("Couldn't send that. Check your connection and try again.");
+      setSendError("That didn't send. It's still here, waiting — try again.");
     }
   }
 
@@ -226,7 +226,7 @@ export function ChatView({ userId, initialDraft }: { userId: string; initialDraf
             e.preventDefault();
             send();
           }}
-          placeholder="Message"
+          placeholder="Say something…"
           className="max-h-32 min-h-11 flex-1 resize-none border border-white/10 bg-card/60 px-3 py-2.5 text-[15px] outline-none placeholder:text-muted-foreground focus:border-primary/50"
         />
         <button type="submit" disabled={!draft.trim()} aria-label="Send" className="inline-flex size-11 shrink-0 items-center justify-center bg-primary text-primary-foreground transition-opacity disabled:opacity-40">

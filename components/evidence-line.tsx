@@ -3,7 +3,7 @@ import type { Evidence, Song } from "@/lib/types";
 import { AlbumArt } from "./album-art";
 
 const KIND = {
-  listening_pattern: { icon: AudioLines, label: "Listening pattern" },
+  listening_pattern: { icon: AudioLines, label: "How you listen" },
   song_context: { icon: BookOpen, label: "About the song" },
   user_tag: { icon: Tag, label: "You tagged" },
 } as const;

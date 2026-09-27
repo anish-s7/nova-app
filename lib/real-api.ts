@@ -10,7 +10,7 @@
  */
 
 import { ApiError } from "./api-error";
-import { CLUSTER_IDS, getCluster, type ClusterId } from "./clusters";
+import { getCluster } from "./clusters";
 import type { ClusterDetail, ClusterSong } from "./cluster-songs";
 import { fetchProfile, forgetMe, generatePortrait, getMyId, getPortrait, httpDb } from "./http-db";
 import { ME_ID } from "./mock-world";
@@ -348,19 +348,18 @@ async function fetchSongs(): Promise<SongsResponse> {
   return res.json() as Promise<SongsResponse>;
 }
 
-const asCluster = (c: string): ClusterId => (CLUSTER_IDS.includes(c as ClusterId) ? (c as ClusterId) : DEFAULT_CLUSTER);
 const songOf = (s: SongsResponse["songs"][number]): Song =>
   toSong({ id: s.id, title: s.title, artist: s.artist, album_art_url: s.albumArtUrl, spotify_track_id: s.spotifyId });
 
 export async function getSongLayer(): Promise<SongLayer> {
   const data = await fetchSongs();
-  const myCluster = asCluster(data.people.find((p) => p.id === data.meId)?.cluster ?? DEFAULT_CLUSTER);
+  const myCluster = data.people.find((p) => p.id === data.meId)?.cluster ?? DEFAULT_CLUSTER;
 
   const stars: SongStar[] = data.songs.map((s) => {
     const listeners: SongListener[] = s.listeners
-      .map((l) => ({ id: l.isMe ? ME_ID : l.id, name: l.name, isMe: l.isMe, reason: l.reason, daysAgo: l.daysAgo, why: asCluster(l.why) }))
+      .map((l) => ({ id: l.isMe ? ME_ID : l.id, name: l.name, isMe: l.isMe, reason: l.reason, daysAgo: l.daysAgo, why: l.why }))
       .sort((a, b) => Number(b.isMe) - Number(a.isMe) || a.daysAgo - b.daysAgo);
-    const counts = new Map<ClusterId, number>();
+    const counts = new Map<string, number>();
     for (const l of listeners) counts.set(l.why, (counts.get(l.why) ?? 0) + 1);
     const whyCounts = [...counts].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
     return {
@@ -384,7 +383,7 @@ export async function getSongLayer(): Promise<SongLayer> {
 export async function getClusterDetail(id: string): Promise<ClusterDetail> {
   const data = await fetchSongs();
   const cluster = getCluster(id);
-  const members = new Set(data.people.filter((p) => asCluster(p.cluster) === cluster.id).map((p) => p.id));
+  const members = new Set(data.people.filter((p) => p.cluster === cluster.id).map((p) => p.id));
 
   const songs: ClusterSong[] = data.songs
     .flatMap((s): ClusterSong[] => {

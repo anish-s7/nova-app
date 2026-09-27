@@ -116,7 +116,7 @@ export function RevealSequence() {
             {/* Real mode only knows the shared reason once their Connection Card exists; don't show an empty tag. */}
             {edge.sharedMotivation ? (
               <div className={cn("transition-all duration-700", step >= 4 ? "mt-3 opacity-100" : "mt-0 h-0 overflow-hidden opacity-0")}>
-                <p className="font-serif text-xl italic text-muted-foreground">Same reason:</p>
+                <p className="font-serif text-xl italic text-muted-foreground">You both listen for the same reason</p>
                 <ThemeTag label={edge.sharedMotivation} className="mt-2" />
               </div>
             ) : null}

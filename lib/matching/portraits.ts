@@ -1,9 +1,16 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { generatePortrait, type PortraitPick } from "../gemini/generatePortrait";
+import { generatePortrait, type PortraitCluster, type PortraitPick } from "../gemini/generatePortrait";
 import type { Portrait } from "../portrait";
 import type { Database } from "../supabase/types";
 
 type Client = SupabaseClient<Database>;
+
+/** The live (non-superseded) topic_clusters set, for generatePortrait's cluster naming schema. */
+async function loadLiveClusters(supabase: Client): Promise<PortraitCluster[]> {
+  const { data, error } = await supabase.from("topic_clusters").select("id, label, description").is("superseded_by", null);
+  if (error) throw new Error(`loadLiveClusters failed: ${error.message}`);
+  return (data ?? []).map((c) => ({ id: c.id, label: c.label, description: c.description ?? c.label }));
+}
 
 type PickRow = {
   profile_id: string;
@@ -86,7 +93,8 @@ export async function upsertPortrait(supabase: Client, profileId: string, { forc
     if (existing && existing.pickCount === picks.length && existing.picksUpdatedAt === picksUpdatedAt) return existing.portrait;
   }
 
-  const { portrait, model } = await generatePortrait(picks);
+  const clusters = await loadLiveClusters(supabase);
+  const { portrait, model } = await generatePortrait(picks, clusters);
   const { error } = await supabase.from("profile_portraits").upsert({
     profile_id: profileId,
     portrait,

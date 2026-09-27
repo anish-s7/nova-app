@@ -1,7 +1,7 @@
 "use client";
 
 import type { CSSProperties } from "react";
-import { CLUSTER_IDS, getCluster } from "@/lib/clusters";
+import { getCluster } from "@/lib/clusters";
 import type { GalaxyNode } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -26,7 +26,10 @@ export function ClusterFilter({
   const counts = new Map<string, number>();
   for (const n of nodes) if (!n.isMe) counts.set(n.cluster, (counts.get(n.cluster) ?? 0) + 1);
   for (const [id, h] of Object.entries(hidden ?? {})) if (h > 0) counts.set(id, (counts.get(id) ?? 0) + h);
-  const ids = CLUSTER_IDS.filter((id) => counts.has(id));
+  // Whatever clusters actually show up here, not a fixed list of five — a chip for a cluster this
+  // window has never seen would be dead weight, and a real, dynamically-discovered cluster
+  // (lib/clusters.ts) would otherwise never get a chip at all. Busiest first.
+  const ids = [...counts.keys()].sort((a, b) => (counts.get(b) ?? 0) - (counts.get(a) ?? 0));
 
   const chip = "inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border px-3 text-xs font-medium transition-colors";
 
@@ -41,7 +44,10 @@ export function ClusterFilter({
         type="button"
         aria-pressed={value === null}
         onClick={() => onChange(null)}
-        className={cn(chip, value === null ? "border-white/30 bg-white/10 text-foreground" : "border-white/10 text-muted-foreground hover:text-foreground")}
+        className={cn(
+          "inline-flex min-h-9 shrink-0 items-center rounded-full px-3 text-xs font-medium transition-colors",
+          value === null ? "text-muted-foreground" : "text-muted-foreground/60 underline underline-offset-4 hover:text-muted-foreground",
+        )}
       >
         Everyone
       </button>

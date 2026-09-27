@@ -1,4 +1,4 @@
-import { getCluster, type ClusterId } from "./clusters";
+import { getCluster } from "./clusters";
 import { meParty, myPrimaryCluster, WORLD } from "./mock-world";
 import { dominantCluster } from "./song-layer";
 import { reasonFor } from "./texture";
@@ -11,8 +11,9 @@ import type { Song } from "./types";
  */
 export type ClusterListener = { id: string; name: string; isMe: boolean; reason: string; daysAgo: number };
 export type ClusterSong = { song: Song; meaning: string; listeners: ClusterListener[]; mine: boolean; isNew: boolean };
+/** `id` is a plain string, not `ClusterId`: real-mode clusters aren't one of the five mock ones. */
 export type ClusterDetail = {
-  id: ClusterId;
+  id: string;
   label: string;
   listeners: number;
   songCount: number;
@@ -22,7 +23,8 @@ export type ClusterDetail = {
 
 const NEW_WITHIN_DAYS = 7;
 
-export function buildClusterDetail(id: ClusterId): ClusterDetail {
+/** Mock-only: `id` is always one of the five mock `ClusterId`s in practice, since it only ever reads `WORLD`. */
+export function buildClusterDetail(id: string): ClusterDetail {
   const members = WORLD.filter((u) => u.primary === id).map((u) => ({ id: u.id, name: u.name, isMe: false, songs: u.songs }));
   if (myPrimaryCluster() === id) {
     const me = meParty();
