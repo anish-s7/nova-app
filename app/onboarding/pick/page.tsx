@@ -26,10 +26,39 @@ const MAX = 10;
 export default function PickSongsPage() {
   // The picks-in-progress live in browser storage, so render only once it's loaded (no SSR mismatch).
   const hydrated = useHydrated();
-  return hydrated ? <PickSongs /> : <main className="flex-1" />;
+  return hydrated ? <PickSongsGate /> : <main className="flex-1" />;
 }
 
-function PickSongs() {
+function PickSongsGate() {
+  const router = useRouter();
+  const managing = new URLSearchParams(window.location.search).get("mode") === "manage";
+  const mine = useSWR(["my-songs"], getMySongs);
+  const alreadyOnboarded = (mine.data?.length ?? 0) > 0;
+
+  useEffect(() => {
+    if (!managing && alreadyOnboarded) router.replace("/me");
+  }, [alreadyOnboarded, managing, router]);
+
+  if (mine.error) {
+    return (
+      <main className="flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
+        <p className="font-serif text-xl italic">We couldn&apos;t check your songs.</p>
+        <Button className="h-11 rounded-full px-6" disabled={mine.isValidating} onClick={() => void mine.mutate()}>
+          Try again
+        </Button>
+      </main>
+    );
+  }
+
+  // Do not reveal the first-time picker until persisted picks have been checked. A replace redirect
+  // also keeps the bare onboarding URL out of browser history for returning users. Waiting through
+  // revalidation matters after browser Back: SWR may still have the pre-onboarding empty list cached.
+  if (!mine.data || (!managing && (mine.isValidating || alreadyOnboarded))) return <main className="flex-1" />;
+
+  return <PickSongs mine={mine.data} />;
+}
+
+function PickSongs({ mine }: { mine: Awaited<ReturnType<typeof getMySongs>> }) {
   const router = useRouter();
   // Coming back from the feel step: keep this run's picks. A finished (saved) run starts fresh,
   // so "Add songs" from Profile doesn't resurrect old or removed songs.
@@ -44,10 +73,9 @@ function PickSongs() {
   const searching = deferred.length >= (REAL_DATA ? 2 : 1);
   const tray = useRef<HTMLUListElement>(null);
   // Songs you've already saved: marked in the list, and picking one again updates it instead of adding a copy.
-  const { data: mine } = useSWR(["my-songs"], getMySongs);
-  const yours = (song: Song) => mine?.some((m) => sameSong(m.song, song)) ?? false;
+  const yours = (song: Song) => mine.some((m) => sameSong(m.song, song));
   // First time through you need a handful to be read; adding later, even one is fine.
-  const min = mine?.length ? 1 : MIN;
+  const min = mine.length ? 1 : MIN;
 
   const count = picked.length;
   const full = count >= MAX;
@@ -74,7 +102,7 @@ function PickSongs() {
       <ScreenHeader
         backHref="/"
         title="Pick your songs"
-        subtitle={mine?.length ? "Add songs, or pick one of yours to update it" : `Choose ${MIN} to ${MAX} you actually reach for`}
+        subtitle={mine.length ? "Add songs, or pick one of yours to update it" : `Choose ${MIN} to ${MAX} you actually reach for`}
         trailing={
           <span className="text-sm tabular-nums text-muted-foreground" aria-live="polite">
             <span className={cn("font-semibold", count >= min ? "text-primary" : "text-foreground")}>{count}</span>/{MAX}

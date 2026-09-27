@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, type KeyboardEvent, type PointerEvent } from "react";
 import { clampEmotionValue } from "@/lib/emotion";
 import { cn } from "@/lib/utils";
 
@@ -15,6 +15,10 @@ function clampToCircle(valence: number, energy: number): Mood {
   const scale = r > 1 ? 1 / r : 1;
   const round = (v: number) => Math.round(clampEmotionValue(v * scale) * 100) / 100;
   return { valence: round(valence), energy: round(energy) };
+}
+
+function pointTransform(mood: Mood, size: number) {
+  return `translate(-50%, -50%) translate(${mood.valence * size / 2}px, ${-mood.energy * size / 2}px)`;
 }
 
 function word(v: number, low: string, high: string, mid: string) {
@@ -47,22 +51,51 @@ export function MoodCircle({
   size?: number;
 }) {
   const ref = useRef<HTMLDivElement>(null);
+  const pointRef = useRef<HTMLSpanElement>(null);
+  const boundsRef = useRef<DOMRect | null>(null);
+  const pendingRef = useRef<Mood>(value);
+  const frameRef = useRef<number | null>(null);
+
+  const paint = (mood: Mood) => {
+    if (pointRef.current) pointRef.current.style.transform = pointTransform(mood, size);
+  };
+
+  const schedulePaint = (mood: Mood) => {
+    pendingRef.current = mood;
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      paint(pendingRef.current);
+    });
+  };
 
   const fromPointer = (e: PointerEvent<HTMLDivElement>) => {
-    const rect = ref.current?.getBoundingClientRect();
+    const rect = boundsRef.current;
     if (!rect) return;
     const x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
     const y = ((e.clientY - rect.top) / rect.height) * 2 - 1;
-    onChange(clampToCircle(x, -y));
+    schedulePaint(clampToCircle(x, -y));
   };
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
+    boundsRef.current = e.currentTarget.getBoundingClientRect();
     e.currentTarget.setPointerCapture(e.pointerId);
     fromPointer(e);
   };
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
     if (e.currentTarget.hasPointerCapture(e.pointerId)) fromPointer(e);
+  };
+
+  const commitPointer = (e?: PointerEvent<HTMLDivElement>) => {
+    if (e) fromPointer(e);
+    if (frameRef.current !== null) {
+      cancelAnimationFrame(frameRef.current);
+      frameRef.current = null;
+    }
+    paint(pendingRef.current);
+    onChange(pendingRef.current);
+    boundsRef.current = null;
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
@@ -79,8 +112,18 @@ export function MoodCircle({
     onChange(clampToCircle(value.valence + move[0], value.energy + move[1]));
   };
 
-  const left = `${((value.valence + 1) / 2) * 100}%`;
-  const top = `${((1 - value.energy) / 2) * 100}%`;
+  useEffect(() => {
+    const next = { valence: value.valence, energy: value.energy };
+    pendingRef.current = next;
+    if (pointRef.current && !boundsRef.current) pointRef.current.style.transform = pointTransform(next, size);
+  }, [value.valence, value.energy, size]);
+
+  useEffect(
+    () => () => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    },
+    [],
+  );
 
   return (
     <div className="flex flex-col items-center">
@@ -102,6 +145,8 @@ export function MoodCircle({
           aria-valuemax={1}
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
+          onPointerUp={commitPointer}
+          onPointerCancel={() => commitPointer()}
           onKeyDown={onKeyDown}
           className="absolute left-8 top-5 cursor-crosshair touch-none select-none rounded-full border border-white/10 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-primary"
           style={{
@@ -115,11 +160,12 @@ export function MoodCircle({
           <span className="pointer-events-none absolute top-1/2 left-3 right-3 h-px -translate-y-1/2 bg-white/10" aria-hidden />
           <span className="pointer-events-none absolute inset-[18%] rounded-full border border-dashed border-white/[0.07]" aria-hidden />
           <span
+            ref={pointRef}
             className={cn(
-              "pointer-events-none absolute size-6 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 transition-[left,top] duration-75",
+              "pointer-events-none absolute left-1/2 top-1/2 size-6 rounded-full border-2 will-change-transform",
               placed ? "border-primary bg-primary shadow-[0_0_24px_4px_var(--primary)]" : "border-white/40 bg-white/10 motion-safe:animate-pulse",
             )}
-            style={{ left, top }}
+            style={{ transform: pointTransform(value, size) }}
             aria-hidden
           />
         </div>
