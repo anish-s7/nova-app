@@ -62,9 +62,11 @@ export function ModeToggle({ value, onChange }: { value: "people" | "songs"; onC
     >
       <span
         ref={indicatorRef as RefObject<HTMLSpanElement>}
-        className="pointer-events-none absolute left-0 top-0 rounded-full bg-white/[0.14] opacity-0 transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.3,0.7,0.2,1)]"
+        className="pointer-events-none absolute left-0 top-0 opacity-0 transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.3,0.7,0.2,1)]"
         aria-hidden
-      />
+      >
+        <span className="block size-full rounded-full bg-white/[0.14]" />
+      </span>
       {(["people", "songs"] as const).map((m) => (
         <button
           key={m}

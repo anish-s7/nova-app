@@ -361,9 +361,9 @@ export default function GalaxyPage() {
         <p className="pointer-events-none relative z-10 mx-4 mt-2 text-xs text-muted-foreground">{mode === "songs" ? "Every star is a song. Brighter means more people share it." : "Drag to explore, pinch to zoom, tap a person."}</p>
       ) : null}
 
-      <div className="pointer-events-none relative z-10 mt-auto flex items-end gap-2 p-4 lg:pb-24">
+      <div className="pointer-events-none relative z-10 mt-auto flex items-end gap-2 p-4 lg:px-5 lg:pb-5">
         {data && mode === "songs" ? (
-          <section aria-labelledby="songs-heading" className="pointer-events-auto min-w-0 flex-1 border border-white/10 bg-background/90 px-3 pb-2 pt-2.5 lg:w-[420px] lg:flex-none lg:bg-background/75 lg:backdrop-blur">
+          <section aria-labelledby="songs-heading" className="pointer-events-auto min-w-0 flex-1 border border-white/10 bg-background/90 px-3 pb-2 pt-2.5 lg:w-[min(420px,calc(50%-290px))] lg:flex-none lg:rounded-2xl lg:bg-background/60 lg:backdrop-blur-xl">
             <h2 id="songs-heading" className="px-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               {themeState ? themeState.theme.short : "Most shared right now"}
             </h2>
@@ -385,7 +385,7 @@ export default function GalaxyPage() {
             </ul>
           </section>
         ) : data ? (
-          <section aria-labelledby="closest-heading" className="pointer-events-auto min-w-0 flex-1 border border-white/10 bg-background/90 px-3 pb-2 pt-2.5 lg:w-[420px] lg:flex-none lg:bg-background/75 lg:backdrop-blur">
+          <section aria-labelledby="closest-heading" className="pointer-events-auto min-w-0 flex-1 border border-white/10 bg-background/90 px-3 pb-2 pt-2.5 lg:w-[min(420px,calc(50%-290px))] lg:flex-none lg:rounded-2xl lg:bg-background/60 lg:backdrop-blur-xl">
             <h2 id="closest-heading" className="px-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               {focusCluster ? `Closest, ${getCluster(focusCluster).short.toLowerCase()}` : "Closest to you"}
             </h2>

@@ -38,9 +38,11 @@ export function BottomTabBar() {
         {/* The highlight: glides between tabs; its outline slowly travels around it. */}
         <span
           ref={indicatorRef as RefObject<HTMLSpanElement>}
-          className="duo-ring pointer-events-none absolute left-0 top-0 rounded-2xl bg-white/[0.07] opacity-0 transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.3,0.7,0.2,1)] lg:rounded-full"
+          className="pointer-events-none absolute left-0 top-0 opacity-0 transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.3,0.7,0.2,1)]"
           aria-hidden
-        />
+        >
+          <span className="duo-ring relative block size-full rounded-2xl bg-white/[0.07] lg:rounded-full" />
+        </span>
         {TABS.map(({ href, label, icon: Icon }, i) => {
           const active = i === activeIndex;
           return (
