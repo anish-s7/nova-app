@@ -78,6 +78,58 @@ Mutations check same-origin browser metadata and call service-role RPCs after de
 the profile from the signed-in session. The optional Next.js `after()` kick improves
 latency, while `scripts/sync-listening.ts` is the durable, host-independent consumer.
 
+### Private taste snapshots (migration `20261003000000`)
+
+- `taste_snapshots` is an immutable, owner-scoped publication record keyed by input
+  revision, algorithm version, selected connection generation, computation time and
+  timezone. It stores explicit coverage/count fields and distinguishes empty, short,
+  and established evidence.
+- `taste_interests` stores bounded artist-led groups with stable normalized-artist
+  keys, recent/core weights, confidence, evidence-day counts and representative
+  private track references. Labels come from observed artist credits; they are not
+  generated moods or genres.
+- `listening_preferences.active_taste_snapshot_id` points to the last complete
+  snapshot. The previous pointer remains usable while a replacement is calculated.
+- A new dirty-date trigger advances the selected source's input revision once per
+  newly affected date. `rebuild_listening_daily_tracks` reconstructs all retained
+  local dates using the selected IANA timezone. `publish_taste_snapshot` locks and
+  rechecks revision, source ownership/generation, and absence of active sync work
+  before inserting interests and swapping the pointer in one transaction.
+
+The version-1 pure scorer applies `log1p(min(daily plays, 5))`, 7-day recent and
+60-day core half-lives, separate song/artist normalization, and a 40% artist
+dominance cap. Rolling last-seven and previous-seven play counts remain separate
+from decayed affinity. A completed sync recomputes even when it imported zero new
+events, so elapsed time changes the snapshot without mislabeling stale sync as
+inactivity. `GET /api/listening/summary` is private/no-store and reports snapshot
+freshness separately from provider sync state.
+
+### Private discovery (migration `20261004000000`)
+
+- `listening_preferences.discovery_feedback_revision` versions fast-changing
+  recommendation state independently of the slower taste snapshot.
+- `discovery_batches` pins a taste snapshot, optional visible anchor song,
+  exploration mode, algorithm version, public-catalog watermark, feedback revision,
+  and six-hour expiry. At most 24 candidates are published; only the newest eight
+  batches per profile are retained.
+- `discovery_candidates` stores one ranked catalog song per batch, its pool and
+  interest key, normalized component scores, a typed evidence object, and factual
+  source attribution. It never stores private listener history from another user.
+- `discovery_events` records validated, idempotent actions against an owned
+  candidate. Strong actions advance the feedback revision. `discovery_saves` is a
+  private collection and is deliberately separate from authored `song_picks`.
+
+`discovery_catalog_candidates` is service-role-only, requires the caller's active
+taste snapshot, accepts at most 300 result paths, and derives candidates from public
+picks plus the caller's own catalog-linked rediscovery history. Public-overlap paths
+are capped at five songs per contributing profile. `publish_discovery_batch` locks
+and rechecks snapshot and feedback revisions before atomically inserting the batch.
+`record_discovery_feedback` proves candidate ownership, deduplicates the client key,
+and applies saves/revision changes in the same transaction. All discovery tables are
+owner-selectable but browser clients have no mutation grants. Before serializing a
+cached recommendation, the service rechecks every contributing pick is still public
+and drops candidates with malformed or revoked evidence.
+
 ### `profiles`
 | column | type | notes |
 |---|---|---|

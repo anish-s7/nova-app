@@ -1,9 +1,10 @@
-import type { NextRequest } from "next/server";
+import { after, type NextRequest } from "next/server";
 import { listeningEnabled } from "@/lib/listening/config";
 import { isListeningProvider } from "@/lib/listening/types";
 import { jsonObject, mutationAllowed, privateJson } from "@/lib/listening/routes";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
+import { recomputeTasteSnapshot } from "@/lib/taste/snapshots";
 
 export async function PATCH(request: NextRequest) {
   const profileId = await getCurrentProfileId();
@@ -30,5 +31,14 @@ export async function PATCH(request: NextRequest) {
     p_exploration_setting: exploration,
   });
   if (error) return privateJson({ error: error.message.includes("timezone") ? "Invalid timezone" : "Unable to update preferences" }, { status: 400 });
+  if (connectionId) {
+    after(async () => {
+      try {
+        await recomputeTasteSnapshot({ client: supabase, profileId, connectionId });
+      } catch (tasteError) {
+        console.error("Taste recomputation after preference change failed", tasteError);
+      }
+    });
+  }
   return privateJson({ updated: true });
 }

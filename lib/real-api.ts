@@ -36,8 +36,36 @@ import type {
   User,
   WanderEntry,
 } from "./types";
+import type { DiscoveryMode, DiscoverySongDto } from "./discovery/types";
 
 const DEFAULT_CLUSTER = "quiet_company";
+
+export type DiscoveryView = {
+  status: "ready" | "not_ready";
+  batchId: string | null;
+  snapshotId: string | null;
+  feedbackRevision: number;
+  mode: DiscoveryMode;
+  expiresAt: string | null;
+  songs: DiscoverySongDto[];
+};
+
+export async function getDiscovery(anchorSongId: string, mode: DiscoveryMode): Promise<DiscoveryView> {
+  const params = new URLSearchParams({ anchorSongId, mode });
+  const response = await fetch(`/api/discovery?${params}`, { credentials: "same-origin" });
+  if (!response.ok) throw new ApiError(response.status === 404 ? "Discovery is not available yet." : "Discoveries didn't load.");
+  return response.json() as Promise<DiscoveryView>;
+}
+
+export async function sendDiscoveryFeedback(candidateId: string, action: "save" | "dismiss" | "not_now" | "more_like" | "hide_artist") {
+  const response = await fetch("/api/discovery/feedback", {
+    method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ candidateId, action, clientIdempotencyKey: crypto.randomUUID() }),
+  });
+  const body = await response.json().catch(() => ({})) as { error?: string; feedbackRevision?: number };
+  if (!response.ok) throw new ApiError(body.error ?? "That feedback didn't save.");
+  return body;
+}
 
 // --- small mappers ----------------------------------------------------------
 

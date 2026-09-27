@@ -11,6 +11,7 @@ import { AvatarCustomizerSheet } from "@/components/avatar-customizer-sheet";
 import { ClusterStar } from "@/components/cluster-star";
 import { EmptyState } from "@/components/empty-state";
 import { SourceSettings } from "@/components/listening/source-settings";
+import { WeeklySummary } from "@/components/listening/weekly-summary";
 import { MotivationCard } from "@/components/motivation-card";
 import { ReachQuestion } from "@/components/reach-question";
 import { ReasonSpectrum } from "@/components/reason-spectrum";
@@ -118,6 +119,7 @@ export default function MePage() {
           </>
         )}
 
+        <WeeklySummary />
         <SourceSettings />
 
         <section className="mt-8" aria-labelledby="settings-heading">

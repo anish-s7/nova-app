@@ -1,7 +1,8 @@
 "use client";
 
 import { useMemo, useState, type CSSProperties } from "react";
-import { ChevronLeft, Network } from "lucide-react";
+import useSWR from "swr";
+import { Bookmark, Check, ChevronLeft, Network, Plus, X } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
 import { PreviewButton } from "@/components/preview-button";
 import { bridgeOpener, whySummary } from "@/lib/bridge-opener";
@@ -12,6 +13,9 @@ import { REASON_LABEL, reasonLine, songConnections, type ReasonKind, type SongCo
 import { cn } from "@/lib/utils";
 import { ListenerList } from "./cluster-sheet";
 import { ClusterStar } from "@/components/cluster-star";
+import { getDiscovery, REAL_DATA, sendDiscoveryFeedback } from "@/lib/api";
+import type { DiscoveryMode, DiscoverySongDto } from "@/lib/discovery/types";
+import { useSession } from "@/lib/session";
 
 /** One song star, opened: what it means, the moments it belongs to, and everyone who has it. */
 export function SongSheetContent({
@@ -107,12 +111,97 @@ export function SongSheetContent({
         })}
       </div>
 
+      {REAL_DATA ? <DiscoveryPanel anchorSongId={star.id} onAddMeaning={onAddYours} /> : null}
+
       {mine ? null : (
         <button type="button" onClick={() => onAddYours(star.id)} className="min-h-11 border border-white/15 px-4 text-sm font-medium hover:bg-white/5">
           This one&apos;s mine too
         </button>
       )}
     </div>
+  );
+}
+
+function DiscoveryPanel({ anchorSongId, onAddMeaning }: { anchorSongId: string; onAddMeaning: (songId: string) => void }) {
+  const session = useSession();
+  const capabilities = useSWR<{ discovery: boolean }>("/api/capabilities", async (url: string) => {
+    const response = await fetch(url, { credentials: "same-origin" });
+    if (!response.ok) throw new Error("Capabilities unavailable");
+    return response.json() as Promise<{ discovery: boolean }>;
+  }, { shouldRetryOnError: false });
+  const [mode, setMode] = useState<DiscoveryMode>("close");
+  const [serverVersion, setServerVersion] = useState("unknown");
+  const [busy, setBusy] = useState<string | null>(null);
+  const discovery = useSWR(
+    capabilities.data?.discovery ? ["discovery", session.version, anchorSongId, mode, serverVersion] : null,
+    () => getDiscovery(anchorSongId, mode),
+    {
+      keepPreviousData: false,
+      onSuccess(data) {
+        const next = `${data.snapshotId ?? "none"}:${data.feedbackRevision}`;
+        if (serverVersion !== next) setServerVersion(next);
+      },
+    },
+  );
+  if (!capabilities.data?.discovery) return null;
+  const songs = discovery.data?.songs ?? [];
+
+  async function feedback(song: DiscoverySongDto, action: "save" | "dismiss") {
+    setBusy(song.candidateId);
+    try {
+      await sendDiscoveryFeedback(song.candidateId, action);
+      await discovery.mutate();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <section className="mt-2 border-t border-white/10 pt-4" aria-labelledby="discover-from-song">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h3 id="discover-from-song" className="text-sm font-semibold">Discover from this song</h3>
+          <p className="text-xs text-muted-foreground">Public-pick paths shaped by your private listening interests.</p>
+        </div>
+        <div className="flex border border-white/10 p-0.5" aria-label="Discovery distance">
+          {(["close", "explore"] as const).map((value) => (
+            <button key={value} type="button" aria-pressed={mode === value} onClick={() => { setMode(value); setServerVersion("unknown"); }} className={cn("min-h-7 px-2 text-[11px] capitalize", mode === value ? "bg-white/10 text-foreground" : "text-muted-foreground")}>{value}</button>
+          ))}
+        </div>
+      </div>
+      {discovery.isLoading ? <p className="py-4 text-sm text-muted-foreground">Following the public paths…</p> : null}
+      {discovery.error ? <p className="py-4 text-sm text-muted-foreground">Discoveries aren&apos;t available right now.</p> : null}
+      {!discovery.isLoading && !discovery.error && discovery.data?.status === "not_ready" ? <p className="py-4 text-sm text-muted-foreground">Your first listening summary needs to finish before discoveries can branch from it.</p> : null}
+      {!discovery.isLoading && discovery.data?.status === "ready" && songs.length === 0 ? <p className="py-4 text-sm text-muted-foreground">No unfamiliar public picks connect here yet.</p> : null}
+      {songs.length ? (
+        <ul className="mt-3 space-y-1">
+          {songs.slice(0, 5).map((item) => {
+            const song = { id: item.song.id, title: item.song.title, artist: item.song.artist, albumArtUrl: item.song.albumArtUrl ?? undefined, spotifyId: item.song.spotifyId ?? undefined, source: item.song.spotifyId ? "spotify" as const : "manual" as const };
+            return (
+              <li key={item.candidateId} className="border border-white/10 p-3">
+                <div className="flex items-center gap-3">
+                  <AlbumArt song={song} size={44} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{song.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">{song.artist}</p>
+                  </div>
+                  <PreviewButton song={song} />
+                </div>
+                <p className="mt-2 text-xs leading-relaxed text-foreground/80">{item.reason}</p>
+                <p className="mt-1 text-[10px] uppercase tracking-wide text-muted-foreground">{item.sourceAttribution}</p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <button type="button" disabled={busy === item.candidateId || item.saved} onClick={() => void feedback(item, "save")} className="inline-flex min-h-8 items-center gap-1.5 border border-white/10 px-2.5 text-xs disabled:opacity-60">
+                    {item.saved ? <Check className="size-3.5" aria-hidden /> : <Bookmark className="size-3.5" aria-hidden />}{item.saved ? "Saved" : "Save"}
+                  </button>
+                  <button type="button" onClick={() => onAddMeaning(song.id)} className="inline-flex min-h-8 items-center gap-1.5 border border-white/10 px-2.5 text-xs"><Plus className="size-3.5" aria-hidden />Add meaning</button>
+                  <button type="button" disabled={busy === item.candidateId} onClick={() => void feedback(item, "dismiss")} className="inline-flex min-h-8 items-center gap-1.5 px-2.5 text-xs text-muted-foreground"><X className="size-3.5" aria-hidden />Dismiss</button>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
+    </section>
   );
 }
 
