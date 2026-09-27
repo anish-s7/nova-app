@@ -1,6 +1,6 @@
 -- Phase 1 (data model) of moving clusters off a hard-coded 5-value enum:
--- a real topic_clusters table, and profiles.primary_cluster (text, DB-level
--- check constraint) becomes profiles.primary_topic_cluster_id (uuid, FK).
+-- a real topic_clusters table, and profiles.primary_topic_cluster_id (uuid, FK) added next to
+-- profiles.primary_cluster (text, DB-level check constraint), which is kept for now (see below).
 -- Mirrors db/contract.md. `description` was added after Phase 1 landed, once
 -- Phase 2 (the recompute job, scripts/recompute-topic-clusters.ts) needed
 -- somewhere to put its Gemini-written cluster description — folded into this
@@ -61,8 +61,13 @@ update public.topic_clusters tc
     select count(*) from public.profiles p where p.primary_topic_cluster_id = tc.id
   );
 
-alter table public.profiles drop constraint profiles_primary_cluster_valid;
-alter table public.profiles drop column primary_cluster;
+-- Additive only (split 2026-09-27): profiles.primary_cluster and its check constraint STAY.
+-- The galaxy RPCs (galaxy_pool / galaxy_cluster_counts) and several app readers (galaxyWindow,
+-- findMatches, real-api, http-db) still read it, and lib/matching/refreshPrimaryCluster.ts keeps it
+-- current alongside primary_topic_cluster_id during the transition. Dropping it is a separate,
+-- later migration, written together with the app-wiring phase that moves those readers over:
+--   alter table public.profiles drop constraint profiles_primary_cluster_valid;
+--   alter table public.profiles drop column primary_cluster;
 
 alter table public.topic_clusters enable row level security;
 

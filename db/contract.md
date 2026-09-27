@@ -31,6 +31,7 @@ anything derived from one.
 | id | uuid, PK | = `auth.users.id` |
 | display_name | text | |
 | primary_topic_cluster_id | uuid, FK -> topic_clusters.id, nullable | replaces the old `primary_cluster` text column (migration `20260929000000`, data model only — see `topic_clusters` below). Null until someone has a pick |
+| primary_cluster | text, nullable, one of the five legacy ids | **kept during the transition** (the migration was split on 2026-09-27 to be additive): the galaxy RPCs and several app readers still use it, and `refreshPrimaryCluster` keeps it current with the tag vote. Dropped in a later migration together with the app-wiring phase |
 | created_at | timestamptz | default now() |
 
 No `embedding` column — matching lives entirely on `song_picks` now.
