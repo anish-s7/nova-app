@@ -1,6 +1,7 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, RefObject } from "react";
+import { useSlidingIndicator } from "@/hooks/use-sliding-indicator";
 import { THEME_THRESHOLD } from "@/lib/themes";
 import type { ThemeState } from "@/lib/song-layer";
 import { cn } from "@/lib/utils";
@@ -50,15 +51,28 @@ export function ThemeFilter({ themes, value, onChange, className }: { themes: Th
 }
 
 export function ModeToggle({ value, onChange }: { value: "people" | "songs"; onChange: (m: "people" | "songs") => void }) {
+  // A rounded switch whose highlight glides to the side you pick.
+  const { containerRef, indicatorRef } = useSlidingIndicator(value);
   return (
-    <div role="group" aria-label="What the galaxy shows" className="flex border border-white/15 text-xs font-medium">
+    <div
+      ref={containerRef as RefObject<HTMLDivElement>}
+      role="group"
+      aria-label="What the galaxy shows"
+      className="relative flex rounded-full border border-white/15 bg-background/40 p-0.5 text-xs font-medium backdrop-blur-md"
+    >
+      <span
+        ref={indicatorRef as RefObject<HTMLSpanElement>}
+        className="pointer-events-none absolute left-0 top-0 rounded-full bg-white/[0.14] opacity-0 transition-[transform,width,height] duration-300 ease-[cubic-bezier(0.3,0.7,0.2,1)]"
+        aria-hidden
+      />
       {(["people", "songs"] as const).map((m) => (
         <button
           key={m}
           type="button"
           aria-pressed={value === m}
+          data-indicator-active={value === m ? "true" : undefined}
           onClick={() => onChange(m)}
-          className={cn("min-h-8 px-3 capitalize transition-colors", value === m ? "bg-white/12 text-foreground" : "text-muted-foreground hover:text-foreground")}
+          className={cn("relative min-h-8 rounded-full px-3.5 capitalize transition-colors", value === m ? "text-foreground" : "text-muted-foreground hover:text-foreground")}
         >
           {m}
         </button>

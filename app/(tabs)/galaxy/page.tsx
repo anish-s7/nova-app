@@ -432,7 +432,7 @@ export default function GalaxyPage() {
           type="button"
           onClick={() => setAdding({ songId: null })}
           aria-label="Add a song"
-          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_8px_24px_-6px] shadow-primary/50 transition-transform duration-150 hover:brightness-110 active:scale-90"
+          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-primary/40 bg-primary/15 text-primary shadow-[0_8px_24px_-6px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150 transition-[transform,background-color] duration-150 hover:bg-primary/25 active:scale-90"
         >
           <Plus className="size-5" aria-hidden />
         </button>
