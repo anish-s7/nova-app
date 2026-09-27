@@ -12,6 +12,11 @@
   Built for HackGT — Meta Track: <em>Improving social connection using AI.</em>
 </p>
 
+<p align="center">
+  <a href="https://song-galaxy-nu.vercel.app"><strong>Live demo →</strong></a><br />
+  <sub>Requires an account — sign up with Google or any email. There's no anonymous browsing mode on the live site.</sub>
+</p>
+
 ---
 
 ## Overview
