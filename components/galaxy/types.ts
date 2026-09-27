@@ -45,6 +45,12 @@ export type GalaxyViewProps = {
   apiRef?: RefObject<GalaxyApi | null>;
   /** "dark" starts with only the user's star unlit, for the reveal. */
   initialPhase?: "explore" | "dark";
+  /**
+   * Build the galaxy out from you on its first render: you appear first, then everyone else fades
+   * in by their distance from you, rippling outward, and the connection lines fade in last.
+   * 3D view only (the SVG fallback, used for reduced motion, shows everything at once).
+   */
+  buildOut?: boolean;
   interactive?: boolean;
   onReady?: () => void;
   /** Dims every other cluster so one "why" stands out. */

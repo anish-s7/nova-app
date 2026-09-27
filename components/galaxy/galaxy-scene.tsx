@@ -213,6 +213,14 @@ const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v
 const PITCH_LIMIT = 1.3;
 /** Radians of turn per pixel dragged. */
 const ORBIT_SPEED = 0.006;
+/**
+ * Build-out intro (buildOut), in seconds: when you appear, how long the ripple takes to reach the
+ * farthest star (each star then fades in over 1.8s, see nodeVertex), and when the lines fade in.
+ */
+const BUILD_START = 0.15;
+const BUILD_SPAN = 2.4;
+const BUILD_LINES_AT = 1.4;
+const BUILD_LINES_FADE = 1.6;
 /** Wrap an angle into (-π, π] so tweens take the short way round. */
 const wrapAngle = (a: number) => a - Math.PI * 2 * Math.round(a / (Math.PI * 2));
 
@@ -225,6 +233,7 @@ function Scene({
   onSelect,
   apiRef,
   initialPhase = "explore",
+  buildOut = false,
   interactive = true,
   onReady,
   focusCluster = null,
@@ -252,6 +261,8 @@ function Scene({
   const now = () => (performance.now() - t0.current) / 1000;
   const births = useRef(new Map<string, number>());
   const known = useRef(new Set(layout.points.keys()));
+  /** Build-out: set once, on the first geometry, then ordinary births take over. */
+  const built = useRef(!buildOut);
 
   // Community members live in distant galaxies; "home" framing leaves them out.
   const memberIds = useMemo(() => new Set(nodes.filter((n) => n.destinationId).map((n) => n.userId)), [nodes]);
@@ -335,7 +346,7 @@ function Scene({
         transparent: true,
         depthWrite: false,
         blending: THREE.AdditiveBlending,
-        uniforms: { uOpacity: { value: initialPhase === "dark" ? 0 : 1 } },
+        uniforms: { uOpacity: { value: initialPhase === "dark" || buildOut ? 0 : 1 } },
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- initial phase only applies on mount
     [],
@@ -376,6 +387,20 @@ function Scene({
     const isMe = new Float32Array(n);
     const birth = new Float32Array(n);
     const c = new THREE.Color();
+    // Build-out: every star is born by its distance from you, so the galaxy ripples out from the
+    // center (you first). A small ease keeps the near neighbors quick and the far edge unhurried.
+    if (!built.current && ordered.length) {
+      built.current = true;
+      const me = ordered.find((node) => node.isMe);
+      const center = (me && points.get(me.userId)) ?? { x: 0, y: 0, z: 0 };
+      const dist = (id: string) => {
+        const p = points.get(id)!;
+        return Math.hypot(p.x - center.x, p.y - center.y, p.z - center.z);
+      };
+      const far = Math.max(1e-6, ...ordered.map((node) => dist(node.userId)));
+      const start = now() + BUILD_START;
+      for (const node of ordered) births.current.set(node.userId, node.isMe ? start : start + 0.2 + Math.pow(dist(node.userId) / far, 0.8) * BUILD_SPAN);
+    }
     ordered.forEach((node, i) => {
       const laid = points.get(node.userId)!;
       const flown = moved.current.get(node.userId);
@@ -823,8 +848,18 @@ function Scene({
       invalidate();
     });
 
+  // Build-out: the lines fade in once the ripple is well underway.
   useEffect(() => {
-    if (births.current.size) tween("birth", 2000, () => {});
+    if (!buildOut) return;
+    const t = setTimeout(() => fadeUniform(edgeMat.uniforms.uOpacity, 1, BUILD_LINES_FADE * 1000, "edges"), BUILD_LINES_AT * 1000);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on mount
+  }, []);
+
+  useEffect(() => {
+    // Keep frames coming until the last birth has finished fading in (build-out births lie ahead).
+    const last = Math.max(0, ...births.current.values()) - now();
+    if (births.current.size) tween("birth", Math.max(2000, (last + 2) * 1000), () => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps -- tween is stable in behavior
   }, [nodeGeo]);
 

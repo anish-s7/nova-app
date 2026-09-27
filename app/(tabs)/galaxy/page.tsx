@@ -36,6 +36,20 @@ import { cn } from "@/lib/utils";
 
 const MAX_HOPS = 4;
 
+const BUILD_OUT_KEY = "song-galaxy-built-out";
+
+/** First galaxy view this browser session, or ?intro in the address (replays it, for demos). */
+function shouldBuildOut() {
+  if (typeof window === "undefined") return false;
+  try {
+    return new URLSearchParams(window.location.search).has("intro") || !sessionStorage.getItem(BUILD_OUT_KEY);
+  } catch (err) {
+    // Storage blocked (e.g. some private modes): skip the intro rather than replay it every visit.
+    console.error("Couldn't check whether the galaxy intro was shown:", err);
+    return false;
+  }
+}
+
 export default function GalaxyPage() {
   const session = useSession();
   const version = session.version;
@@ -64,6 +78,16 @@ export default function GalaxyPage() {
   const [clusterOpen, setClusterOpen] = useState(false);
   const [wandering, setWandering] = useState(false);
   const [mode, setMode] = useState<"people" | "songs">("people");
+  // Build the galaxy out from you the first time you see it this session (or with ?intro, for demos).
+  // Read once on mount; marked seen afterwards so later visits open straight to the galaxy.
+  const [buildOut] = useState(shouldBuildOut);
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(BUILD_OUT_KEY, "1");
+    } catch (err) {
+      console.error("Couldn't remember the galaxy intro was shown:", err);
+    }
+  }, []);
   const [themeFocus, setThemeFocus] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ songId: string | null } | null>(null);
   const [celebrate, setCelebrate] = useState<{ title: string; body: string } | null>(null);
@@ -255,6 +279,7 @@ export default function GalaxyPage() {
       {data ? (
         <div className="absolute inset-0" onPointerDown={hint.dismiss}>
           <GalaxyCanvas
+            buildOut={buildOut}
             nodes={viewNodes}
             edges={data.edges}
             arrivals={arrivals}
