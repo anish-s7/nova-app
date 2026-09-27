@@ -4,6 +4,7 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { animate, splitText, stagger } from "animejs";
 import { LandingStarfield } from "@/components/landing-starfield";
+import { Logo } from "@/components/logo";
 import { buttonVariants } from "@/components/ui/button";
 import { useAnime } from "@/hooks/use-anime";
 import { useSession } from "@/lib/session";
@@ -26,7 +27,8 @@ export default function WelcomePage() {
       <LandingStarfield />
       <div className="sky-grain" />
 
-      <div className="relative z-10 flex items-center justify-end px-6 pt-5 lg:px-12 lg:pt-8">
+      <div className="relative z-10 flex items-center justify-between px-6 pt-5 lg:px-12 lg:pt-8">
+        <Logo />
         {demo ? <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-muted-foreground">Demo</span> : null}
       </div>
 
