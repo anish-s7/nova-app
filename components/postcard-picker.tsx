@@ -124,29 +124,31 @@ function Card({ id, selected, disabled, onToggle }: { id: string; selected: bool
   );
 }
 
-/** Unsplash credits for the illustrations on screen (their API guidelines ask for artist + Unsplash links). */
+/**
+ * Unsplash credits for the illustrations on screen. Their API terms (§9) require, every time a photo
+ * is displayed, the artist's name linked to their Unsplash profile, plus Unsplash; so this is always
+ * visible under the cards, never collapsed. Links carry Unsplash's required utm params.
+ */
 function Credits({ ids }: { ids: string[] }) {
-  const credited = ids.map((id) => ({ id, image: postcardImage(id) })).filter((c) => c.image);
+  const credited = ids.map((id) => postcardImage(id)).filter((image): image is NonNullable<typeof image> => !!image);
   if (!credited.length) return null;
-  const artists = [...new Map(credited.map((c) => [c.image!.artistUrl, c.image!])).values()];
+  const artists = [...new Map(credited.map((image) => [image.artistUrl, image])).values()];
   const utm = "utm_source=song_galaxy&utm_medium=referral";
   return (
-    <details className="mt-2 text-[11px] text-muted-foreground">
-      <summary className="cursor-pointer">Illustrations from Unsplash</summary>
-      <p className="mt-1 leading-relaxed">
-        {artists.map((a, i) => (
-          <span key={a.artistUrl}>
-            {i ? ", " : ""}
-            <a href={`${a.artistUrl}?${utm}`} target="_blank" rel="noreferrer" className="underline">
-              {a.artist}
-            </a>
-          </span>
-        ))}{" "}
-        on{" "}
-        <a href={`https://unsplash.com/?${utm}`} target="_blank" rel="noreferrer" className="underline">
-          Unsplash
-        </a>
-      </p>
-    </details>
+    <p className="mt-2 text-[11px] leading-relaxed text-muted-foreground">
+      Illustrations by{" "}
+      {artists.map((a, i) => (
+        <span key={a.artistUrl}>
+          {i === 0 ? "" : i === artists.length - 1 ? " and " : ", "}
+          <a href={`${a.artistUrl}?${utm}`} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+            {a.artist}
+          </a>
+        </span>
+      ))}{" "}
+      on{" "}
+      <a href={`https://unsplash.com/?${utm}`} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+        Unsplash
+      </a>
+    </p>
   );
 }
