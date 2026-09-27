@@ -72,15 +72,15 @@ begin
   where profile_id = p_profile_id and provider = p_provider for update;
 
   if found then
-    update public.listening_sync_jobs set state = 'cancelled', lease_token = null,
+    update public.listening_sync_jobs j set state = 'cancelled', lease_token = null,
       lease_expires_at = null, completed_at = v_now, updated_at = v_now
-    where connection_id = v_existing.id and state in ('queued', 'running', 'retry_wait');
+    where j.connection_id = v_existing.id and j.state in ('queued', 'running', 'retry_wait');
 
     if v_existing.canonical_username is distinct from btrim(p_canonical_username)
        or v_existing.status = 'disconnected' then
-      delete from public.listening_daily_tracks where connection_id = v_existing.id;
-      delete from public.listening_dirty_dates where connection_id = v_existing.id;
-      delete from public.listening_events where connection_id = v_existing.id;
+      delete from public.listening_daily_tracks d where d.connection_id = v_existing.id;
+      delete from public.listening_dirty_dates d where d.connection_id = v_existing.id;
+      delete from public.listening_events e where e.connection_id = v_existing.id;
       delete from public.listening_track_aliases where profile_id = p_profile_id and provider = p_provider;
       delete from public.listening_tracks t where t.profile_id = p_profile_id
         and not exists (select 1 from public.listening_events e where e.track_id = t.id);

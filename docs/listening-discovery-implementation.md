@@ -1,6 +1,7 @@
 # Listening, evolving taste, and music discovery
 
-Status: slice 1 implemented locally; migration not applied to hosted data.
+Status: slices 1–2 implemented locally; migrations not applied to hosted data and
+no live provider account was connected during automated verification.
 Prepared 2026-09-27 against the current checkout. Baseline `npx tsc --noEmit` passes.
 
 Slice 1 implementation (2026-09-27): added dependency-free adapter contracts,
@@ -12,8 +13,17 @@ collapse, version identity, and repository fencing arguments. A disposable local
 Supabase run applied the full migration chain and passed SQL integration checks for
 RLS, mutation grants, owner constraints, replay deduplication, lease recovery, and
 generation fencing. The migration remains local-only and was not applied to hosted
-data. Provider HTTP adapters, workers, routes, and UI remain slice 2 work; both
-feature flags default disabled.
+data.
+
+Slice 2 implementation (2026-09-27): added bounded Last.fm and ListenBrainz
+adapters, shared provider pacing, a resumable CLI/short `after()` worker, atomic
+connection/reconfiguration/disconnect operations, authenticated private routes,
+and Profile source settings that also render before a portrait exists. Fixture
+tests cover upstream error payloads, now-playing exclusion, fixed ranges,
+exclusive ListenBrainz pagination and same-second boundary recovery, worker
+interruption/retry, and disconnect generation fencing. Both feature flags still
+default disabled. Hosted migrations, provider credentials, scheduler setup, and
+the one-consenting-account-per-provider rollout gate remain operations work.
 
 ## Outcome and first release
 

@@ -36,8 +36,8 @@ export function createLastfmAdapter(options: LastfmAdapterOptions): ListeningAda
       }
       throw new ListeningProviderError({ code: "provider_unavailable", message: "Last.fm could not be reached", retryable: true, cause });
     }
-    const body = asRecord(await readJson(response));
     if (!response.ok) throw httpError(response, now());
+    const body = asRecord(await readJson(response));
     if (!body) throw malformed("Last.fm returned an unexpected response");
     if (typeof body.error === "number" || typeof body.error === "string") {
       const code = Number(body.error);

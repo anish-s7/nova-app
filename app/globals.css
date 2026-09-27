@@ -240,6 +240,20 @@
   animation-delay: var(--draw-delay, 0.5s);
 }
 
+@keyframes sky-fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* A drawn-in constellation dissolving away before its slot forms a new one (see landing-starfield). */
+@utility constellation-exit {
+  animation: sky-fade-out 1.4s ease-in both;
+}
+
 @keyframes star-twinkle {
   0%,
   100% {
