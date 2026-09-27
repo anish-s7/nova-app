@@ -10,7 +10,7 @@
  * Candidates are exactly what GET /api/match would consider (match_picks, same limit), each
  * unordered pair assessed once. Existing match cards, and pairs the last run dropped (remembered in
  * scripts/.reassess-state.json, gitignored), are skipped unless --force, so a re-run only retries
- * real failures (e.g. a quota error). Paced at ~13 requests/minute.
+ * real failures (e.g. a quota error). Lightly paced (~1 call/second; paid-tier key).
  */
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -20,7 +20,7 @@ import { alignCardEvidence } from "../lib/matching/alignCardEvidence";
 import { getPortraits, loadPublicPicks, upsertPortrait } from "../lib/matching/portraits";
 
 const MATCH_COUNT = 10; // findMatches' default candidate limit
-const MIN_GEMINI_INTERVAL_MS = 4500;
+const MIN_GEMINI_INTERVAL_MS = 1000;
 const force = process.argv.includes("--force");
 
 const STATE_FILE = join(__dirname, ".reassess-state.json");
@@ -79,7 +79,7 @@ async function main() {
   const haveCard = new Set((existing ?? []).filter((c) => c.card_json.kind !== "contrast").map((c) => `${c.user_a}:${c.user_b}`));
   const dropped = loadDropped();
   const todo = [...pairs].filter(([key]) => force || (!haveCard.has(key) && !dropped.has(key)));
-  console.log(`${pairs.size} candidate pairs (${haveCard.size} with cards, ${dropped.size} dropped before), ${todo.length} to assess (~${Math.ceil((todo.length * MIN_GEMINI_INTERVAL_MS) / 60000)} min)\n`);
+  console.log(`${pairs.size} candidate pairs (${haveCard.size} with cards, ${dropped.size} dropped before), ${todo.length} to assess (~${Math.ceil((todo.length * Math.max(MIN_GEMINI_INTERVAL_MS, 3000)) / 60000)} min; each call takes ~3s)\n`);
 
   const pickIds = [...new Set(todo.flatMap(([, p]) => [p.pickA, p.pickB]))];
   const { data: hintRows } = await supabase.from("song_picks").select("id, songs(title)").in("id", pickIds);

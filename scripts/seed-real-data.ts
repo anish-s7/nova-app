@@ -111,11 +111,10 @@ if (DEMO_PASSWORD.length < 12) {
   throw new Error("Set SEED_DEMO_PASSWORD (12+ characters) in .env.local before seeding.");
 }
 
-// Gemini's free tier caps gemini-flash-lite-latest at 15 requests/minute
-// (confirmed via a live 429 on 2026-09-26). This is a seed-script-only
-// concern — a real user's interactive traffic won't burst like a seed run
-// does — so the pacing lives here, not in lib/gemini/client.ts.
-const MIN_GEMINI_INTERVAL_MS = 4500;
+// The Gemini key is on the paid tier (billing enabled 2026-09-26), so this is light courtesy
+// pacing rather than the old free-tier 15 requests/minute (which needed ~4.5s). The backoff below
+// still handles a 429 if one happens.
+const MIN_GEMINI_INTERVAL_MS = 1000;
 let lastGeminiCallAt = 0;
 
 function sleep(ms: number) {
