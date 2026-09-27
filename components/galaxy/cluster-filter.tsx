@@ -104,7 +104,7 @@ export function ClusterFilter({
         <div
           role="dialog"
           aria-label="Filter by constellation"
-          className="absolute left-4 top-full z-50 mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-white/15 bg-background/95 p-1.5 backdrop-blur-2xl shadow-xl animate-in fade-in-0 zoom-in-95 duration-150"
+          className="pointer-events-auto absolute left-4 top-full z-50 mt-1.5 w-72 max-w-[calc(100vw-2rem)] rounded-xl border border-white/15 bg-background/95 p-1.5 backdrop-blur-2xl shadow-xl animate-in fade-in-0 zoom-in-95 duration-150"
         >
           <div className="mb-1 flex items-center justify-between px-2 pt-1 pb-1 border-b border-white/10">
             <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground/70">
