@@ -9,16 +9,22 @@ as a side effect of an unrelated architecture or code change — update
 `db/contract.md` and the code instead, and leave this file alone unless
 someone specifically asks for a CLAUDE.md update.
 
-Last full update: 2026-09-27 (night, `main` at `45121ca`). Since the previous one: a **laptop
-layout** (the app fills the window, the galaxy is the centerpiece) with **redesigned navigation**
-(frosted glass, a floating capsule, a gliding/squishing highlight with a moving gold-violet ring);
-a **full-screen landing page**; a **galaxy build-out intro**; **matte star icons** instead of
-cluster color dots; a **shared-feelings badge** instead of "0 songs in common"; the **"New"
-cluster race** fixed; Daniel's **cluster HUD**, **avatar customizer** and topic-cluster renames
-(plus a migration so the live labels match); James's **editable avatars** and **faster cards**;
-An's **onboarding guard, smooth mood circle and default song list** (with "Popular on Song
-Galaxy"); and Daniel's **listening-history import**, merged but **switched off** (its migrations
-are not applied).
+Last full update: 2026-09-28 (early morning, `main` at `5ce62b0`). Since the previous one: a
+**polish pass** (Anish) — the galaxy intro now plays on every sign-in, not just once per browser
+tab; a `/privacy` page (public, linked from welcome/login/signup, contact
+`anish.swaminathan101@gmail.com`); Connections and Messages fill the window on laptops (Messages
+is two panes, like iMessage on a Mac); the tab bar is **icons only**; the italic serif look is
+gone everywhere except the landing hero (headings are sans-serif and semibold instead); and the
+chat is restyled like iMessage (bubbles with tails, the system font, centered day/time stamps,
+"Delivered"). Right after, Connections was pulled back into one **centered column without the
+frame's edge lines** (it had briefly gone full-width and side-by-side, which read as too wide).
+An's **structured song swap snippets** merged: a swap now includes a 5–12s favorite-part clip
+picked from a waveform, playable from the chat. Daniel's **landing page night-sky animation**
+(cycling constellations, sequenced and de-duplicated) and, on top of his still-dormant listening
+import, **taste snapshots + a discovery feature** (`lib/taste/`, `lib/discovery/`, a "Discover
+from this song" panel in the song sheet, a private weekly-listening summary on Me) — both new
+migrations are **not applied** and both features stay behind the same disabled flags, so none of
+it is live.
 
 Earlier the same day: **100 fictional test users** (`scripts/seed-test-users.ts`); the star sheet
 shows a person's songs (`2c30568`); **Google sign-in** is live and the only social login (Apple removed,
@@ -40,13 +46,17 @@ one-pick-per-song + manage songs on Profile; Daniel's `/pitch` + 3D reading cons
 - **Daniel** — galaxy frontend (clusters, why-mix placement, galaxy window, hop, wander UI), the
   real-data wiring of `lib/api.ts` (`lib/http-db.ts`, `lib/real-api.ts`), cover art, the `/sim`
   demo, the 3D reading-constellation, `/pitch` (the scripted social-discovery-loop demo), the
-  cluster HUD, the avatar customizer, topic clusters, and the (dormant) listening-history import.
+  cluster HUD, the avatar customizer, topic clusters, the landing page's night-sky animation, and
+  the (dormant) listening-history import, now extended with taste snapshots and song discovery.
 - **Bao / An** (Nguyễn Quốc Bảo An) — floating backend/frontend (Gemini testing, early schema work,
-  the Spotify connect route, the onboarding guard, smooth mood circle and default song list).
+  the Spotify connect route, the onboarding guard, smooth mood circle, default song list, and
+  structured song swap snippets — a favorite-part clip picked from a waveform).
   Works in small branches (`An/…`, `An-…`); Anish reviews and merges them.
-- Anish also did the laptop layout, navigation redesign and galaxy intro (2026-09-27). UI work is
-  spread across the whole team now, so **UI files conflict easily**: before merging anything to
-  `main`, fetch, look at what teammates pushed, and check conflicts (see Working conventions).
+- Anish also did the laptop layout, navigation redesign, galaxy intro (2026-09-27) and the polish
+  pass (2026-09-28: intro-on-every-sign-in fix, `/privacy`, laptop Connections/Messages, icon-only
+  nav, no more italics, iMessage-style chat). UI work is spread across the whole team now, so
+  **UI files conflict easily**: before merging anything to `main`, fetch, look at what teammates
+  pushed, and check conflicts (see Working conventions).
 
 ## Tech stack
 | Layer | Technology |
@@ -55,7 +65,7 @@ one-pick-per-song + manage songs on Profile; Daniel's `/pitch` + 3D reading cons
 | Styling | Tailwind CSS |
 | Galaxy visualization | react-three-fiber (three.js) + d3-force-3d layout, SVG fallback |
 | UI components / motion | shadcn/ui (Base UI), lucide-react, anime.js; Web Animations API for the sliding nav highlight |
-| Layout | Phone-first. At `lg` (≥1024px) the app fills the window: the galaxy and landing run full width, other screens sit in a 720px centered column (`components/phone-frame.tsx`) |
+| Layout | Phone-first. At `lg` (≥1024px) the app fills the window: the galaxy, landing, Connections and Messages lay themselves out for it (Connections in one centered column with no frame lines, Messages as two panes), other screens sit in a 720px centered column with edge lines (`components/phone-frame.tsx`) |
 | Backend | Next.js Route Handlers (`app/api/`) |
 | Database | Supabase (Postgres) + pgvector |
 | Auth | Supabase Auth (cookie sessions via `@supabase/ssr`): email/password and **Google** (the only social login; Apple removed). Sessions are checked with `getClaims()` (local JWT verification) in the proxy and route handlers |
@@ -65,7 +75,7 @@ one-pick-per-song + manage songs on Profile; Daniel's `/pitch` + 3D reading cons
 | Song identity | MusicBrainz API (primary), Gemini (fallback only) — see below |
 | Song search + previews | Deezer search API (popularity-ranked), iTunes Search fallback — `GET /api/songs/search` (with 30s preview links), `GET /api/songs/preview`; no keys |
 | Music data (not in the UI) | Spotify Web API — OAuth top-tracks routes exist, but nothing links to them (see status) |
-| Listening history (off) | Last.fm / ListenBrainz import (Daniel), behind `LISTENING_ENABLED`; unset everywhere, migrations not applied (see status) |
+| Listening history (off) | Last.fm / ListenBrainz import + taste snapshots + song discovery (Daniel), behind `LISTENING_ENABLED`/`DISCOVERY_ENABLED`; unset everywhere, migrations not applied (see status) |
 | Package manager | **npm only** (`package-lock.json`). Never commit `pnpm-lock.yaml` / `pnpm-workspace.yaml` |
 | Hosting | **Vercel**, live at `https://song-galaxy-nu.vercel.app`. Every push to `main` deploys to production automatically; other branches get preview URLs |
 
@@ -107,7 +117,9 @@ app/onboarding/pick/         Search + check 5–10 songs (1+ once you have some)
                              PickSongsGate sends people who already have songs to the galaxy unless they came
                              from Profile (?mode=manage) or are mid-selection in this session
 app/onboarding/feel/         Per song: the valence/energy mood circle FIRST, then 1–3 feeling tags sorted by the dot
-app/(tabs)/                  galaxy, connections, messages, people/[id] (+ /card, /contrast), me
+app/(tabs)/                  galaxy, connections, messages (layout.tsx adds the laptop conversation
+                             pane, components/messages-pane.tsx), people/[id] (+ /card, /contrast), me
+app/privacy/                 Public privacy policy page (linked from welcome/login/signup; not gated by proxy.ts)
 app/proto/                   Prototype screens (pick-constellation, reading-constellation); not linked from the app.
                              reading-constellation renders 3D (react-three-fiber) when WebGL is available and motion
                              isn't reduced, via components/reading-constellation-scene.tsx; otherwise SVG.
@@ -120,15 +132,21 @@ app/sim/, lib/sim/           /sim demo ONLY — see "Demo simulation" below; nev
 components/                  UI components; components/galaxy/ holds the 3D scene + SVG fallback
 components/reading-constellation-scene.tsx  The 3D scene for app/proto/reading-constellation (see above)
 components/pitch/warp-overlay.tsx  Radial light-streak burst for app/pitch's travel beats (see above)
-components/phone-frame.tsx   Laptop layout: FULL_WIDTH routes (/galaxy, /) fill the window, PHONE_ONLY (/pitch, /sim,
-                             /proto) keep the phone frame, everything else is a 720px centered column
-components/bottom-tab-bar.tsx  Frosted docked bar on phones; a floating glass capsule at lg. Sliding highlight + DuoRing
+components/phone-frame.tsx   Laptop layout: FULL_WIDTH routes (/galaxy, /, /connections, /messages) fill the window and
+                             lay themselves out for it, PHONE_ONLY (/pitch, /sim, /proto) keep the phone frame,
+                             everything else is a 720px centered column with edge lines
+components/bottom-tab-bar.tsx  Icons only (name is the link's aria-label + hover title). Frosted docked bar on
+                             phones; a floating glass capsule at lg, visible inside an open chat there too.
+                             Sliding highlight + DuoRing
+lib/galaxy-intro.ts           shouldPlayGalaxyIntro()/markGalaxyIntroSeen()/replayGalaxyIntro(): the intro plays on
+                             the first galaxy view after signing in/up or opening a tab, not once per browser tab
 hooks/use-sliding-indicator.ts  Glides a highlight to the [data-indicator-active] child (transform/size written to
                              style; squish keyframes on its first child; skips ResizeObserver's first report)
 components/duo-ring.tsx      Gold/violet SVG outline that travels around its parent (static with reduced motion)
 components/cluster-star.tsx  Matte four-point star in a cluster's color (`hollow` for forming themes); used everywhere a
                              cluster color used to be a dot
-components/landing-starfield.tsx  The welcome page's starfield: a wide SVG on laptops (Daniel's WIDE_SLOTS + animations)
+components/landing-starfield.tsx  The welcome page's starfield: a wide SVG on laptops (Daniel's WIDE_SLOTS), with a
+                             sequenced, de-duplicated night-sky animation (cycling constellations, slower line-draw)
 components/overlap-badge.tsx What two people share: songs, else artists, else their top 3 shared feelings
 components/avatar-customizer-sheet.tsx  Daniel: tabbed profile-icon customizer (Profile → "Customize avatar")
 components/galaxy/cluster-filter.tsx  Daniel's cluster HUD: a glass capsule that opens a constellation popover
@@ -137,6 +155,14 @@ components/mood-circle.tsx   The circular valence/energy control (drag, tap, arr
 components/tag-picker.tsx    1–3 feelings in five rows (one per listening reason), sorted by the mood dot; older
                              picks' original tags shown under "From before"
 components/preview-button.tsx  Play/pause a song's 30s preview (lib/preview-player.ts)
+components/snippet-selector.tsx  An: pick a 5–12s favorite-part clip from a song's preview waveform (drag the
+                             handles, tap to move, optional label) for a Song Swap; lib/preview-player.ts's
+                             togglePreviewRange/resolvePreviewUrl play just that range, in the composer and the card
+components/song-swap-card.tsx, song-swap-composer.tsx  Swaps are structured messages (`kind: "song_swap"`,
+                             `messages.payload`, `SongSwapPayloadV1` in lib/types.ts), not plain text; the card plays
+                             the sender's chosen snippet. Album art in a payload is kept only from the cover-art
+                             hosts next/image allows (app/api/messages/route.ts), everything else falls back to the
+                             generated sleeve
 components/song-feeling-sheet.tsx  Profile → edit one song's feelings or remove it (James)
 proxy.ts                     Next 16's middleware: refreshes the session cookie, gates app screens; on Vercel, missing
                              Supabase keys → 503 (fails closed) instead of the open demo
@@ -179,6 +205,16 @@ lib/matching/assignTopicCluster.ts, topicClusterVector.ts, hdbscan.ts  Daniel's 
 lib/gemini/nameTopicCluster.ts  Names a new/drifted topic cluster from a sample of its members' picks
 lib/listening/, tests/listening/, supabase/tests/  Daniel's listening import (adapters, worker, config) + its tests
                              (`npm test`, `npm run listening:sync`); docs/listening-discovery-implementation.md
+lib/taste/                   Daniel: turns imported listening history into `TasteScore` (track/artist affinities,
+                             recent-vs-core weight, coverage) and named `TasteInterest`s; snapshots.ts writes
+                             `taste_snapshots`. Dormant with the listening import (see status)
+lib/discovery/               Daniel: "songs you don't have yet, from people whose public picks overlap your private
+                             taste" — candidates.ts (paths: shared pick, same artist, public overlap, rediscovery),
+                             rank.ts, diversify.ts, evidence.ts, service.ts. Behind `LISTENING_ENABLED` AND
+                             `DISCOVERY_ENABLED` (app/api/discovery/, app/api/discovery/feedback/); the song sheet's
+                             "Discover from this song" panel and Me's weekly summary
+                             (components/listening/weekly-summary.tsx) both no-op via GET /api/capabilities when
+                             either flag is off. Dormant (see status)
 lib/avatar.ts                James: the illustrated face options (profiles.avatar) + sanitizeFace; null = name-generated
 lib/matching/rejectedPairs.ts  James: in-memory set of pairs the AI dropped (keyed by both pick counts), shared by
                              /api/match and /api/cards so a non-match answers instantly the second time
@@ -306,7 +342,8 @@ See `db/contract.md` for exact table shapes and every RPC.
   `http://localhost:3000`; the Client ID/secret live only in Supabase (Authentication → Providers →
   Google), never in `.env.local` or Vercel. **The Google app is in "Testing"**: only Google accounts
   on its Test users list can use "Continue with Google" (email signup works for everyone). Publishing
-  it needs a homepage URL and a **privacy policy URL** on the Branding page (no privacy page yet).
+  it needs a homepage URL and a **privacy policy URL** on the Branding page — `/privacy` exists now
+  (see Next up) but isn't wired into Google's Branding page yet, so the app is still in "Testing".
   A Google login with the same email as an existing confirmed account links to it (Supabase's
   automatic identity linking). Before redirecting to Google, the form clears the browser's local
   session state, as email signup does.
@@ -406,7 +443,7 @@ building user profiles. Practical rule for this codebase:
   `NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= npm run dev`.
   (`NEXT_PUBLIC_DATA_SOURCE=mock` also forces demo data, but login is still required.)
 
-## Implementation status (2026-09-27)
+## Implementation status (2026-09-28)
 
 ### Deployment
 - **Live on Vercel** at `https://song-galaxy-nu.vercel.app` (Hobby plan, project `song-galaxy`),
@@ -445,11 +482,14 @@ building user profiles. Practical rule for this codebase:
   needed because he'd edited the already-applied migration instead), and
   `20260930000000_profile_avatars.sql` (James: `profiles.avatar`, `profiles.avatar_url`, the public
   `avatars` bucket; saving an icon verified live).
-- **Not applied on purpose:** `20261001000000_listening_foundations.sql` and
-  `20261002000000_listening_import_operations.sql` (Daniel's listening import). The code is on
-  `main` but off (`LISTENING_ENABLED` unset, so its settings UI is hidden and its routes return
-  404; it also reads `DISCOVERY_ENABLED` and `LASTFM_API_KEY`, none of them set anywhere).
-  Don't apply them or set the flag until Daniel says it's ready; then migrations first, flag last.
+- **Not applied on purpose:** `20261001000000_listening_foundations.sql`,
+  `20261002000000_listening_import_operations.sql` (Daniel's listening import),
+  `20261003000000_taste_snapshots.sql` and `20261004000000_discovery.sql` (Daniel's taste
+  snapshots + song discovery, built on top). The code is on `main` but off
+  (`LISTENING_ENABLED`/`DISCOVERY_ENABLED`/`LASTFM_API_KEY` unset everywhere, checked via
+  `GET /api/capabilities`), so every gated route 404s and every gated UI piece (settings, the song
+  sheet's discovery panel, Me's weekly summary) renders nothing. Don't apply any of these four or
+  set either flag until Daniel says it's ready; then migrations first, flags last.
 - **Accounts (2026-09-27):** all of the team's own accounts (Anish, Daniel, James, An/Bao/Jason
   and their `+alias` test accounts) and Marcella Yang's were deleted. Then **100 test users** were
   seeded. Now: **113 profiles** = 100 test users + the 6 demo personas + 3 outside testers
@@ -577,6 +617,21 @@ real feelings/mood (stored vector = unit-length song part + mood × 0.7), `GET /
   gate), the mood circle drags smoothly, and the picker opens on a list before you type. Anish
   added the community list ("Popular on Song Galaxy") ahead of the charts, and kept search results
   on screen while a new query loads (`keepPreviousData`).
+- **Polish pass** (Anish, 2026-09-28): the galaxy intro plays on every sign-in/sign-up/sign-out and
+  new tab, not just the first time ever in a browser tab (`lib/galaxy-intro.ts`); `/privacy`
+  exists and is linked from welcome/login/signup; Connections and Messages are laptop-native
+  (Messages as two panes, `app/(tabs)/messages/layout.tsx` + `components/messages-pane.tsx`); the
+  tab bar is icons only; italic serif text is gone app-wide except the landing hero (headings are
+  sans-serif and semibold); the chat is iMessage-style (bubbles with tails via `--bubble-theirs`
+  and the `bubble-tail-*` CSS utilities, the system font via `--font-chat`, centered day/time
+  stamps, "Delivered"). Connections was then pulled back from full-width/side-by-side into one
+  centered column with no frame lines, matching how it looked before the laptop layout work.
+- **Structured song swaps** (An, merged): a swap is a `kind: "song_swap"` message with a versioned
+  JSON payload (`SongSwapPayloadV1`), not plain text, so it round-trips exactly instead of a
+  human-readable fallback string. Composing one now includes picking a 5–12s favorite-part clip
+  from the song's preview waveform (`components/snippet-selector.tsx`); the swap card in chat
+  plays just that clip. `lib/preview-player.ts` gained `togglePreviewRange`/`resolvePreviewUrl` to
+  support it. Migration `20260930010000_structured_song_swap_messages.sql` is applied.
 - Motivation feedback (confirm/reject/private) on the why/Me screens is still session-only.
 - Album art is populated (Cover Art Archive → iTunes → Deezer, or a Spotify `i.scdn.co` URL).
 
@@ -597,28 +652,28 @@ real feelings/mood (stored vector = unit-length song part + mood × 0.7), `GET /
 - **AI portraits + whole-profile assessment — done** (`docs/plans/ai-portraits.md`).
 - **Deployment — done** (Vercel, fail-closed proxy, seed password out of the repo).
 - **Google OAuth — done** (Google only; the app is still in Google's "Testing" mode).
-- **Laptop layout, navigation redesign, galaxy intro — done** (2026-09-27).
+- **Laptop layout, navigation redesign, galaxy intro — done** (2026-09-27); **polish pass and
+  Connections re-centered — done** (2026-09-28, see Frontend above).
 - **`docs/plans/swaps-bonds-stardust.md`**: 1. previews — done; 2. song-specific tags — replaced
-  by feeling tags; 3. real swaps + bonds — **on hold** (Anish, 2026-09-27); 4. Stardust —
+  by feeling tags; 3. real swaps — **done** (structured payload + favorite-part snippet, An); bonds
+  (brighter galaxy links as two people keep swapping) — **still on hold**; 4. Stardust —
   **stretch** (backburner).
+- **Daniel's taste snapshots + song discovery — built, not enabled** (see status above).
 
 ### Next up (in order)
-1. **Real song swaps + bonds — on hold until Anish picks it back up.** A `song_swaps` table
-   (sender, recipient, catalog song, note, the swap it answers) written by the chat's swap screen
-   and "swap back". **The chat must let you preview/play a swapped song** (reuse
-   `PreviewButton`). Bond levels in one config; the galaxy link between two people gets brighter
-   as the bond grows. Replaces today's browser-only "bonded" celebration. **Open question:** does
-   the bond count every swap, or only completed exchanges (A swaps, B swaps back)? Ask before
-   building.
-2. **Publish the Google app** so anyone can use Google sign-in: write a plain-language **privacy
-   policy** page (`/privacy`: what's stored, what goes to Gemini, hosting, deletion), then on the
-   Google Auth Platform's Branding page add the homepage URL, the privacy URL and the authorized
-   domain `song-galaxy-nu.vercel.app`, and click Publish app (basic scopes: no review).
+1. **Song swap bonds.** Real swaps are done (see Frontend); bond strength (completed exchanges —
+   A swaps, B swaps back) still needs levels in one config and a brighter galaxy link as the bond
+   grows, replacing today's browser-only "bonded" celebration. **Open question, still unanswered:**
+   does the bond count every swap, or only completed exchanges? Ask before building.
+2. **Publish the Google app** so anyone can use Google sign-in: `/privacy` is done (contact
+   `anish.swaminathan101@gmail.com`) — on the Google Auth Platform's Branding page add the
+   homepage URL, the privacy URL and the authorized domain `song-galaxy-nu.vercel.app`, then on
+   the Audience page click Publish app (basic scopes: no review needed).
 3. **Finish the topic-cluster transition** (Daniel): run `scripts/recompute-topic-clusters.ts`
    once, move the legacy `primary_cluster` readers over, drop the column in a new migration,
    remove the bridge in `refreshPrimaryCluster`.
-   Also Daniel's: the **listening-history import**; when he says it's ready, apply its two
-   migrations, then set the env vars in Vercel and redeploy.
+   Also Daniel's: the **listening-history import and its taste snapshots + discovery extension**;
+   when he says it's ready, apply all four migrations, then set the env vars in Vercel and redeploy.
 4. Smaller, when there's room: show people in the galaxy for **accounts with no songs** yet (with
    an "add your songs" prompt); previews on saved songs; consider making Vercel's production
    branch `production` so pushes to `main` stop going live immediately.
