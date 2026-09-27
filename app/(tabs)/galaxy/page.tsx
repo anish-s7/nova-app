@@ -274,7 +274,9 @@ export default function GalaxyPage() {
         <GalaxySkeleton label="Arranging everyone by why they listen…" />
       )}
 
-      <header className="relative z-10 border-b border-white/10 bg-background/90">
+      {/* Laptops: the galaxy is the centerpiece, so the header fades into it instead of covering it, and
+          clicks on its empty space reach the galaxy (only its buttons and links catch them). */}
+      <header className="relative z-10 border-b border-white/10 bg-background/90 lg:pointer-events-none lg:border-b-0 lg:bg-transparent lg:bg-gradient-to-b lg:from-background/85 lg:via-background/40 lg:to-transparent lg:pb-6 lg:[&_a]:pointer-events-auto lg:[&_button]:pointer-events-auto">
         <div className="flex items-center justify-between gap-3 px-4 py-3">
           <Logo />
           <div className="flex items-center gap-3">
@@ -361,7 +363,7 @@ export default function GalaxyPage() {
 
       <div className="pointer-events-none relative z-10 mt-auto flex items-end gap-2 p-4">
         {data && mode === "songs" ? (
-          <section aria-labelledby="songs-heading" className="pointer-events-auto min-w-0 flex-1 border border-white/10 bg-background/90 px-3 pb-2 pt-2.5">
+          <section aria-labelledby="songs-heading" className="pointer-events-auto min-w-0 flex-1 border border-white/10 bg-background/90 px-3 pb-2 pt-2.5 lg:w-[420px] lg:flex-none lg:bg-background/75 lg:backdrop-blur">
             <h2 id="songs-heading" className="px-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               {themeState ? themeState.theme.short : "Most shared right now"}
             </h2>
@@ -383,7 +385,7 @@ export default function GalaxyPage() {
             </ul>
           </section>
         ) : data ? (
-          <section aria-labelledby="closest-heading" className="pointer-events-auto min-w-0 flex-1 border border-white/10 bg-background/90 px-3 pb-2 pt-2.5">
+          <section aria-labelledby="closest-heading" className="pointer-events-auto min-w-0 flex-1 border border-white/10 bg-background/90 px-3 pb-2 pt-2.5 lg:w-[420px] lg:flex-none lg:bg-background/75 lg:backdrop-blur">
             <h2 id="closest-heading" className="px-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               {focusCluster ? `Closest, ${getCluster(focusCluster).short.toLowerCase()}` : "Closest to you"}
             </h2>
@@ -412,6 +414,8 @@ export default function GalaxyPage() {
         ) : (
           <span className="flex-1" />
         )}
+        {/* Laptops: the panel keeps its width, so push the buttons back to the right edge. */}
+        <span className="hidden flex-1 lg:block" />
         <button
           type="button"
           onClick={() => {
