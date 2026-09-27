@@ -251,7 +251,14 @@ Pick tags are the fixed feelings in `lib/tags.ts` (or the original tags on older
 | user_b | uuid | |
 | sender_id | uuid, FK -> profiles.id | |
 | body | text | |
+| kind | text | `text` (default) or `song_swap` |
+| payload | jsonb, nullable | Versioned structured data for `song_swap`; never contains a preview URL |
 | created_at | timestamptz | Supabase Realtime subscribes to this table directly |
+
+Song swaps use payload version 1 with a stable song snapshot/provider locator, the sender's
+reason, an optional 5–12 second snippet range and label, and an optional replied-to message id.
+The `body` column remains populated with a readable fallback for old clients and operational
+inspection. Existing rows remain `kind = 'text'` with a null payload.
 
 Reads: `GET /api/messages[?with=<profileId>]` returns the signed-in user's messages, oldest
 first, through the **session** client, so the "Participants can view messages" RLS policy

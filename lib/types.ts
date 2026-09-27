@@ -73,7 +73,7 @@ import type { CardThread } from "./portrait";
  *      main now aligns evidence to the row's user_a/user_b ordering before caching or
  *      returning a card (lib/matching/alignCardEvidence.ts). api.ts's existing "flip if
  *      I'm user_b" logic is still correct and needs no change.
- *   9. Song swaps (Message kind "swap", SongSwap) have no table; messages rows are text-only.
+ *   9. FIXED: messages can now persist versioned `song_swap` payloads alongside legacy text rows.
  *  10. No conversations table. ConversationSummary/Conversation come from messages grouped
  *      by (user_a, user_b); their cluster has no source (see 5). The contract no longer
  *      lists a `connections` table as an open question — it was dropped, not resolved.
@@ -284,6 +284,30 @@ export type SongSwap = {
   song: Song;
   reason: string;
   status: "pending" | "returned";
+  snippet?: SongSnippet;
+  replyToMessageId?: string;
+};
+
+export type SongSnippet = {
+  startSeconds: number;
+  endSeconds: number;
+  label?: string;
+};
+
+/** Persisted structured Song Swap payload. Preview URLs are temporary and never belong here. */
+export type SongSwapPayloadV1 = {
+  version: 1;
+  song: {
+    catalogId?: string;
+    provider?: "deezer" | "itunes";
+    providerTrackId?: string;
+    title: string;
+    artist: string;
+    albumArtUrl?: string;
+  };
+  reason: string;
+  snippet?: SongSnippet;
+  replyToMessageId?: string;
 };
 
 // App-level shapes returned by the mock route handlers.
@@ -431,11 +455,15 @@ export type MessageRow = {
   user_b: string;
   sender_id: string;
   body: string;
+  kind: "text" | "song_swap";
+  payload: SongSwapPayloadV1 | null;
   created_at: string;
 };
 
-/** Body for POST /api/messages on main. sender_id is derived from the session, not sent by the client. */
-export type MessageInsert = { otherProfileId: string; text: string };
+/** sender_id is derived from the session, never accepted from the client. */
+export type MessageInsert =
+  | { otherProfileId: string; kind?: "text"; text: string }
+  | { otherProfileId: string; kind: "song_swap"; payload: SongSwapPayloadV1 };
 
 /**
  * A single item from GET /api/match on main. Unlike the old match_profiles

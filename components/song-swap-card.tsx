@@ -1,15 +1,74 @@
+"use client";
+
 import Link from "next/link";
-import { ArrowUpRight, Check, Clock, Disc3, Reply } from "lucide-react";
-import type { Song, SongSwap } from "@/lib/types";
+import { useEffect, useState } from "react";
+import { Check, Clock, Disc3, Loader2, Pause, Play, Reply, VolumeX } from "lucide-react";
+import type { SongSwap } from "@/lib/types";
 import { AlbumArt } from "./album-art";
 import { cn } from "@/lib/utils";
+import { resolvePreviewUrl, stopPreview, stopPreviewIf, togglePreviewRange, usePreviewPlayback } from "@/lib/preview-player";
 
-/**
- * Opens the song on Spotify: the track itself when we have its id, a search otherwise. Just a
- * link, so no Spotify data is fetched or passed anywhere (see CLAUDE.md's Spotify rule).
- */
-function listenUrl(song: Song) {
-  return song.spotifyId ? `https://open.spotify.com/track/${song.spotifyId}` : `https://open.spotify.com/search/${encodeURIComponent(`${song.title} ${song.artist}`)}`;
+const formatTime = (seconds: number) => `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60).toString().padStart(2, "0")}`;
+
+function SnippetPlayback({ swap }: { swap: SongSwap }) {
+  const snippet = swap.snippet;
+  const playbackId = `swap:${swap.id}`;
+  const previewSongId = swap.song.id;
+  const previewTitle = swap.song.title;
+  const previewArtist = swap.song.artist;
+  const hasSnippet = Boolean(snippet);
+  const playback = usePreviewPlayback(playbackId);
+  const [url, setUrl] = useState<string | null>(null);
+  const [resolving, setResolving] = useState(Boolean(snippet));
+  const [unavailable, setUnavailable] = useState(false);
+  useEffect(() => {
+    let active = true;
+    if (hasSnippet) {
+      resolvePreviewUrl({ id: previewSongId, title: previewTitle, artist: previewArtist, source: "manual" }).then((fresh) => {
+        if (!active) return;
+        setUrl(fresh);
+        setUnavailable(!fresh);
+      }).catch(() => {
+        if (active) setUnavailable(true);
+      }).finally(() => {
+        if (active) setResolving(false);
+      });
+    }
+    return () => {
+      active = false;
+      stopPreviewIf(playbackId);
+    };
+  }, [hasSnippet, playbackId, previewArtist, previewSongId, previewTitle]);
+  if (!snippet) return null;
+
+  const toggle = async () => {
+    if (playback.status === "playing") return stopPreview();
+    let fresh = url;
+    if (!fresh) {
+      setResolving(true);
+      fresh = await resolvePreviewUrl(swap.song).catch(() => null);
+      setResolving(false);
+      if (!fresh) return setUnavailable(true);
+      setUrl(fresh);
+    }
+    await togglePreviewRange(playbackId, fresh, snippet.startSeconds, snippet.endSeconds);
+  };
+
+  return (
+    <div className="mx-4 mt-3 border-y border-white/[0.07] py-3">
+      {snippet.label ? <p className="mb-2 font-serif text-sm italic text-foreground/90">{snippet.label}</p> : null}
+      <div className="flex items-center gap-3">
+        <button type="button" onClick={() => void toggle()} disabled={unavailable || resolving} className="inline-flex size-10 shrink-0 items-center justify-center rounded-full border border-primary/40 text-primary disabled:border-white/10 disabled:text-muted-foreground" aria-label={playback.status === "playing" ? "Pause favorite snippet" : "Play favorite snippet"}>
+          {resolving || playback.status === "loading" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : unavailable || playback.status === "error" ? <VolumeX className="size-4" aria-hidden /> : playback.status === "playing" ? <Pause className="size-4" aria-hidden /> : <Play className="size-4" aria-hidden />}
+        </button>
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex justify-between text-xs tabular-nums text-muted-foreground"><span>Favorite part</span><span>{formatTime(snippet.startSeconds)}–{formatTime(snippet.endSeconds)}</span></div>
+          <div className="h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full bg-primary transition-[width] duration-75" style={{ width: `${playback.status === "playing" ? playback.progress * 100 : 0}%` }} /></div>
+        </div>
+      </div>
+      {unavailable || playback.status === "error" ? <p className="mt-2 text-xs text-muted-foreground">This preview isn’t available right now.</p> : null}
+    </div>
+  );
 }
 
 export function SongSwapCard({
@@ -43,12 +102,9 @@ export function SongSwapCard({
         <div className="min-w-0 flex-1">
           <p className="truncate font-semibold leading-tight">{swap.song.title}</p>
           <p className="truncate text-sm text-muted-foreground">{swap.song.artist}</p>
-          <a href={listenUrl(swap.song)} target="_blank" rel="noopener noreferrer" className="mt-1 inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground">
-            Listen on Spotify
-            <ArrowUpRight className="size-3" aria-hidden />
-          </a>
         </div>
       </div>
+      <SnippetPlayback swap={swap} />
       <blockquote className="mx-4 mb-4 mt-3 border-l-2 border-primary/60 pl-3 font-serif text-[15px] italic leading-relaxed text-foreground/90">
         {swap.reason ? <>&ldquo;{swap.reason}&rdquo;</> : <span className="text-muted-foreground">Your reason shows here.</span>}
       </blockquote>

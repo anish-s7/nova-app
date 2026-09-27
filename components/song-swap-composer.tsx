@@ -1,20 +1,21 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Search } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
 import { ScreenHeader } from "@/components/screen-header";
 import { SongSwapCard } from "@/components/song-swap-card";
+import { SnippetSelector } from "@/components/snippet-selector";
 import { SongTile } from "@/components/song-tile";
 import { Button } from "@/components/ui/button";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { getConversation, ME_ID, REAL_DATA, searchSongs, sendSongSwap } from "@/lib/api";
-import { songById, SONG_CATALOG } from "@/lib/music-context";
+import { getConversation, getMe, ME_ID, REAL_DATA, searchSongs, sendSongSwap } from "@/lib/api";
+import { songById } from "@/lib/music-context";
 import { effectiveSongs, getSession, useSession } from "@/lib/session";
 import { buildSongLayer } from "@/lib/song-layer";
-import type { Song } from "@/lib/types";
+import type { Song, SongSnippet } from "@/lib/types";
 
 const MAX_REASON = 160;
 /** Starting lines for the blank-box problem. Tapping one puts it in the box to finish. */
@@ -24,23 +25,40 @@ export function SongSwapComposer({ userId, replyToSwapId, initialSongId, initial
   const router = useRouter();
   const session = useSession();
   const { data: convo } = useSWR(["conversation", userId], ([, id]) => getConversation(id));
+  const { data: me } = useSWR(REAL_DATA ? ["song-swap-my-songs"] : null, () => getMe());
   const [query, setQuery] = useState("");
   const deferred = useDebouncedValue(query, REAL_DATA ? 350 : 0).trim();
   const { data: results } = useSWR(deferred ? ["songs", deferred] : null, ([, q]) => searchSongs(q), { keepPreviousData: true });
   // Arriving from a song in the galaxy: the song is already chosen, so the only thing left is why.
-  const [song, setSong] = useState<Song | null>(() => (initialSongId ? songById(initialSongId) : null));
+  // Real mode looks the song up among your own songs once they load (below).
+  const [song, setSong] = useState<Song | null>(() => (!REAL_DATA && initialSongId ? songById(initialSongId) : null));
+  const [snippet, setSnippet] = useState<SongSnippet | undefined>();
   // An opener from a bridge song arrives prefilled and editable; it is a starting line, not something sent for them.
   const [reason, setReason] = useState(initialReason ?? "");
   const [sending, setSending] = useState(false);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
+  const initialSongResolved = useRef(!REAL_DATA || !initialSongId);
 
   const name = convo?.user.name ?? "them";
   const incoming = replyToSwapId ? convo?.messages.find((m) => m.kind === "swap" && m.swap.id === replyToSwapId) : undefined;
   const theyHaveIt = song ? buildSongLayer(getSession().picks ?? []).stars.find((s) => s.id === song.id)?.listeners.some((l) => l.id === userId) : false;
-  const list = deferred ? (results ?? []) : effectiveSongs(session);
+  const list = deferred ? (results ?? []) : REAL_DATA ? (me?.songs ?? []) : effectiveSongs(session);
+
+  useEffect(() => {
+    if (initialSongResolved.current || song || !initialSongId || !me) return;
+    let active = true;
+    queueMicrotask(() => {
+      if (active) {
+        initialSongResolved.current = true;
+        setSong(me.songs.find((item) => item.id === initialSongId) ?? null);
+      }
+    });
+    return () => { active = false; };
+  }, [initialSongId, me, song]);
 
   const pick = (s: Song) => {
     setSong(s);
+    setSnippet(undefined);
     setQuery("");
     // Straight on to step 2.
     requestAnimationFrame(() => reasonRef.current?.focus());
@@ -60,7 +78,7 @@ export function SongSwapComposer({ userId, replyToSwapId, initialSongId, initial
     if (!song || !reason.trim() || sending) return;
     setSending(true);
     try {
-      await sendSongSwap(userId, song, reason.trim(), replyToSwapId);
+      await sendSongSwap(userId, song, reason.trim(), replyToSwapId, snippet);
       router.replace(`/messages/${userId}`);
     } finally {
       setSending(false);
@@ -89,7 +107,7 @@ export function SongSwapComposer({ userId, replyToSwapId, initialSongId, initial
           {song ? (
             <div className="mt-2 flex items-center gap-3 border border-white/10 bg-card/50 p-2 pr-3">
               <SongTile song={song} artSize={44} className="min-w-0 flex-1" />
-              <button type="button" onClick={() => setSong(null)} className="shrink-0 px-2 py-1 text-sm text-muted-foreground hover:text-foreground">
+              <button type="button" onClick={() => { setSong(null); setSnippet(undefined); }} className="shrink-0 px-2 py-1 text-sm text-muted-foreground hover:text-foreground">
                 Change
               </button>
             </div>
@@ -117,6 +135,11 @@ export function SongSwapComposer({ userId, replyToSwapId, initialSongId, initial
 
         {song ? (
           <>
+            <section className="mt-6" aria-labelledby="snippet-step">
+              <h2 id="snippet-step" className={stepLabel}>Choose your favorite part</h2>
+              <div className="mt-2"><SnippetSelector key={song.id} song={song} value={snippet} onChange={setSnippet} /></div>
+            </section>
+
             <section className="mt-6" aria-labelledby="reason-step">
               <h2 id="reason-step" className={stepLabel}>
                 Why this one, for {name}?
@@ -154,7 +177,7 @@ export function SongSwapComposer({ userId, replyToSwapId, initialSongId, initial
                 What {name} will see
               </h2>
               <div className="mt-2">
-                <SongSwapCard preview swap={{ id: "preview", fromUserId: ME_ID, toUserId: userId, song, reason: reason.trim(), status: "pending" }} mine otherName={name} otherId={userId} />
+                <SongSwapCard preview swap={{ id: "preview", fromUserId: ME_ID, toUserId: userId, song, reason: reason.trim(), status: "pending", snippet }} mine otherName={name} otherId={userId} />
               </div>
             </section>
           </>

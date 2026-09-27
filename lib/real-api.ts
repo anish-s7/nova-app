@@ -20,6 +20,7 @@ import { registerSong } from "./music-context";
 import { ME_ID } from "./mock-world";
 import type { Portrait } from "./portrait";
 import type { SongLayer, SongListener, SongStar } from "./song-layer";
+import { threadFrom } from "./thread";
 import type {
   AnalysisResult,
   Connection,
@@ -32,6 +33,8 @@ import type {
   Message,
   MessageRow,
   Song,
+  SongSnippet,
+  SongSwapPayloadV1,
   SongRow,
   User,
   WanderEntry,
@@ -80,7 +83,35 @@ async function picksOf(id: string): Promise<Song[]> {
 }
 
 function messageFromRow(row: MessageRow, myId: string): Message {
+  if (row.kind === "song_swap" && row.payload?.version === 1) {
+    const p = row.payload;
+    const id = p.song.catalogId ?? (p.song.provider && p.song.providerTrackId ? `${p.song.provider}:${p.song.providerTrackId}` : `swap:${row.id}`);
+    return {
+      id: row.id,
+      fromUserId: row.sender_id === myId ? ME_ID : row.sender_id,
+      sentAt: row.created_at,
+      kind: "swap",
+      swap: {
+        id: row.id,
+        fromUserId: row.sender_id === myId ? ME_ID : row.sender_id,
+        toUserId: row.sender_id === row.user_a ? row.user_b : row.user_a,
+        song: { id, title: p.song.title, artist: p.song.artist, albumArtUrl: p.song.albumArtUrl, source: "manual" },
+        reason: p.reason,
+        status: "pending",
+        snippet: p.snippet,
+        replyToMessageId: p.replyToMessageId,
+      },
+    };
+  }
   return { id: row.id, fromUserId: row.sender_id === myId ? ME_ID : row.sender_id, sentAt: row.created_at, kind: "text", text: row.body };
+}
+
+function messagesFromRows(rows: MessageRow[], myId: string): Message[] {
+  const returned = new Set(rows.flatMap((r) => (r.kind === "song_swap" && r.payload?.replyToMessageId ? [r.payload.replyToMessageId] : [])));
+  return rows.map((row) => {
+    const message = messageFromRow(row, myId);
+    return message.kind === "swap" && returned.has(message.id) ? { ...message, swap: { ...message.swap, status: "returned" as const } } : message;
+  });
 }
 
 /** Best guess at which pick a piece of card evidence is talking about: the one whose title it mentions. */
@@ -349,16 +380,18 @@ export async function getContrastCard(otherId: string): Promise<ContrastCard> {
 export async function getConversations(): Promise<ConversationSummary[]> {
   const myId = await getMyId();
   const rows = await httpDb.listMessages(myId);
-  const threads = new Map<string, Message[]>();
+  const threads = new Map<string, MessageRow[]>();
   for (const r of rows) {
     const other = r.user_a === myId ? r.user_b : r.user_a;
-    threads.set(other, [...(threads.get(other) ?? []), messageFromRow(r, myId)]);
+    threads.set(other, [...(threads.get(other) ?? []), r]);
   }
+  const mappedThreads = new Map([...threads].map(([other, threadRows]) => [other, messagesFromRows(threadRows, myId)]));
   const summaries = await Promise.all(
-    [...threads].map(async ([userId, msgs]): Promise<ConversationSummary[]> => {
+    [...mappedThreads].map(async ([userId, msgs]): Promise<ConversationSummary[]> => {
       try {
         const { profile } = await fetchProfile(userId);
-        return [{ userId, name: profile.display_name, cluster: profile.primary_cluster ?? DEFAULT_CLUSTER, lastMessage: msgs.at(-1), threadSongs: 0 }];
+        const thread = threadFrom(msgs, ME_ID);
+        return [{ userId, name: profile.display_name, cluster: profile.primary_cluster ?? DEFAULT_CLUSTER, lastMessage: msgs.at(-1), threadSongs: thread.entries.length, turn: thread.turn }];
       } catch (err) {
         console.error(`getConversations: skipping ${userId}`, err);
         return [];
@@ -383,7 +416,7 @@ export async function getConversation(userId: string): Promise<Conversation> {
     user: { id: profile.id, name: profile.display_name },
     cluster: profile.primary_cluster ?? DEFAULT_CLUSTER,
     sharedMotivation: match?.shared_why,
-    messages: rows.map((r) => messageFromRow(r, myId)),
+    messages: messagesFromRows(rows, myId),
     suggestedOpeners: match?.openers ?? [],
   };
 }
@@ -393,9 +426,25 @@ export async function sendMessage(userId: string, text: string): Promise<Message
   return messageFromRow(row, myId);
 }
 
-/** No swap table yet (backburner #3), so a swap goes out as a plain message the other person can read. */
-export function sendSongSwap(userId: string, song: Song, reason: string): Promise<Message> {
-  return sendMessage(userId, `Song swap: “${song.title}” by ${song.artist}${reason ? ` — ${reason}` : ""}`);
+/** Structured Song Swap message. Audio URLs stay transient; only stable identity and timing persist. */
+export async function sendSongSwap(userId: string, song: Song, reason: string, replyToMessageId?: string, snippet?: SongSnippet): Promise<Message> {
+  const providerMatch = /^(deezer|itunes):(\d+)$/.exec(song.id);
+  const catalogId = /^[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(song.id) ? song.id : undefined;
+  const payload: SongSwapPayloadV1 = {
+    version: 1,
+    song: {
+      ...(catalogId ? { catalogId } : {}),
+      ...(providerMatch ? { provider: providerMatch[1] as "deezer" | "itunes", providerTrackId: providerMatch[2] } : {}),
+      title: song.title,
+      artist: song.artist,
+      ...(song.albumArtUrl ? { albumArtUrl: song.albumArtUrl } : {}),
+    },
+    reason,
+    ...(snippet ? { snippet } : {}),
+    ...(replyToMessageId ? { replyToMessageId } : {}),
+  };
+  const [myId, row] = await Promise.all([getMyId(), httpDb.insertMessage({ otherProfileId: userId, kind: "song_swap", payload })]);
+  return messageFromRow(row, myId);
 }
 
 // --- song layer + cluster detail ----------------------------------------------------

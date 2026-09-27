@@ -4,6 +4,7 @@
  * schema is applied — keep the shape in sync with db/contract.md until then.
  */
 import type { CardThread, Portrait } from "../portrait";
+import type { SongSwapPayloadV1 } from "../types";
 
 export interface ConnectionCardJson {
   shared_why: string;
@@ -445,6 +446,8 @@ export interface Database {
           user_b: string;
           sender_id: string;
           body: string;
+          kind: "text" | "song_swap";
+          payload: SongSwapPayloadV1 | null;
           created_at: string;
         };
         Insert: {
@@ -452,9 +455,13 @@ export interface Database {
           user_b: string;
           sender_id: string;
           body: string;
+          kind?: "text" | "song_swap";
+          payload?: SongSwapPayloadV1 | null;
         };
         Update: Partial<{
           body: string;
+          kind: "text" | "song_swap";
+          payload: SongSwapPayloadV1 | null;
         }>;
         Relationships: [];
       };
