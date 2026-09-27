@@ -3,9 +3,10 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { Check, ChevronDown, ChevronRight, Eye, EyeOff, ListMusic, Orbit } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Eye, EyeOff, ListMusic, Orbit, Pencil } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
 import { AccountRow } from "@/components/auth/account-row";
+import { AvatarEditorSheet } from "@/components/avatar-editor-sheet";
 import { useAccount } from "@/components/auth/use-account";
 import { EmptyState } from "@/components/empty-state";
 import { MotivationCard } from "@/components/motivation-card";
@@ -32,6 +33,7 @@ export default function MePage() {
   // Your saved songs with how each one feels (real mode: your picks; mock: the session). One entry per song.
   const mine = useSWR(["my-songs", session.version], getMySongs);
   const [editing, setEditing] = useState<MySong | null>(null);
+  const [editingIcon, setEditingIcon] = useState(false);
   // Real mode, signed in somewhere new: this browser's session has no reading yet, but the stored portrait does.
   const needsPortrait = REAL_DATA && hydrated && !session.analysis;
   const stored = useSWR(needsPortrait ? ["portrait", session.version] : null, getStoredAnalysis);
@@ -65,7 +67,12 @@ export default function MePage() {
             {/* Who you are here, at a glance. */}
             <section className="px-5 pb-5 pt-6" style={{ "--tone": tone } as CSSProperties} aria-label="Your profile">
               <div className="flex items-center gap-4">
-                <UserAvatar name={account.name ?? "You"} cluster={primary?.cluster ?? ""} isMe size={64} ring />
+                <button type="button" onClick={() => setEditingIcon(true)} className="relative shrink-0 rounded-full" aria-label="Edit profile icon">
+                  <UserAvatar name={account.name ?? "You"} cluster={primary?.cluster ?? ""} isMe size={64} ring />
+                  <span className="absolute -bottom-0.5 -right-0.5 grid size-6 place-items-center rounded-full border border-white/15 bg-card text-foreground" aria-hidden>
+                    <Pencil className="size-3" />
+                  </span>
+                </button>
                 <div className="min-w-0">
                   <h1 className="truncate text-2xl font-semibold tracking-tight">{account.name ?? "You"}</h1>
                   {primary ? (
@@ -124,6 +131,7 @@ export default function MePage() {
           </ul>
         </section>
       </div>
+      <AvatarEditorSheet open={editingIcon} onClose={() => setEditingIcon(false)} name={account.name ?? "You"} />
       <SongFeelingSheet
         item={editing}
         onClose={() => setEditing(null)}

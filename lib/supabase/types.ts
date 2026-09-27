@@ -43,6 +43,10 @@ export interface Database {
           primary_cluster: string | null;
           /** Post-migration replacement for primary_cluster (not live on the hosted project yet). FK -> topic_clusters.id. Written by lib/matching/refreshPrimaryCluster.ts and scripts/recompute-topic-clusters.ts (service role). */
           primary_topic_cluster_id: string | null;
+          /** Illustrated-face settings (lib/avatar.ts Face), null = generated from the name. Migration 20260930000000 (may not be applied yet). */
+          avatar: unknown;
+          /** Public URL of an uploaded photo in the `avatars` bucket, overriding the face. Migration 20260930000000. */
+          avatar_url: string | null;
           created_at: string;
         };
         Insert: {
@@ -55,6 +59,8 @@ export interface Database {
           display_name: string;
           primary_cluster: string | null;
           primary_topic_cluster_id: string | null;
+          avatar: unknown;
+          avatar_url: string | null;
         }>;
         Relationships: [];
       };

@@ -14,6 +14,8 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "*.archive.org" },
       { protocol: "https", hostname: "*.mzstatic.com" },
       { protocol: "https", hostname: "cdn-images.dzcdn.net" },
+      // Profile photos (app/api/avatar/photo): the public `avatars` bucket only.
+      { protocol: "https", hostname: "*.supabase.co", pathname: "/storage/v1/object/public/avatars/**" },
     ],
   },
   async headers() {

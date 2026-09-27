@@ -24,7 +24,7 @@ import { UserAvatar } from "@/components/user-avatar";
 import { useGalaxyRealtime, type Arrival } from "@/hooks/use-galaxy-realtime";
 import { PreviewButton } from "@/components/preview-button";
 import { SongTile } from "@/components/song-tile";
-import { getConversations, getGalaxy, getGalaxyMore, getSongLayer, getUser, ME_ID, REAL_DATA } from "@/lib/api";
+import { getConversations, getGalaxy, getGalaxyMore, getSongLayer, getUser, ME_ID, prefetchConnectionCard, REAL_DATA } from "@/lib/api";
 import { getCluster } from "@/lib/clusters";
 import { useSession } from "@/lib/session";
 import { songConnections } from "@/lib/song-connections";
@@ -347,7 +347,7 @@ export default function GalaxyPage() {
 
       {mode === "people" && arrival && !dismissedArrival ? (
         <div role="status" className="relative z-10 mx-4 mt-2 flex items-center gap-2 border border-white/10 bg-background/90 py-1 pl-1 pr-1">
-          <UserAvatar name={arrival.name} cluster={arrival.cluster} size={32} />
+          <UserAvatar name={arrival.name} cluster={arrival.cluster} userId={arrival.userId} size={32} />
           <button type="button" onClick={() => select(arrival.userId)} className="min-h-10 min-w-0 flex-1 truncate text-left text-sm">
             <span className="font-medium">{arrival.name}</span> <span className="text-muted-foreground">just joined, close to you</span>
           </button>
@@ -403,7 +403,7 @@ export default function GalaxyPage() {
                     className={cn("flex w-14 flex-col items-center gap-0.5 py-1 transition-colors hover:bg-white/5", selectedId === node.userId && "bg-white/[0.07]")}
                   >
                     <SimilarityRing value={similarity} cluster={node.cluster} size={34}>
-                      <UserAvatar name={node.name} cluster={node.cluster} size={34} />
+                      <UserAvatar name={node.name} cluster={node.cluster} userId={node.userId} size={34} />
                     </SimilarityRing>
                     <span className="w-full truncate text-center text-[11px] text-foreground/85">{node.name}</span>
                   </button>
@@ -534,6 +534,10 @@ function HopTrail({ trail, onBack }: { trail: { id: string; name: string }[]; on
 
 function StarPreview({ node, traded, hop }: { node: GalaxyNode; traded: number; hop: HopControls }) {
   const { data } = useSWR(node.isMe ? null : ["user", node.userId], ([, id]) => getUser(id));
+  // Build "What you share" while they read the sheet, so the card opens ready.
+  useEffect(() => {
+    if (!node.isMe) prefetchConnectionCard(node.userId);
+  }, [node.isMe, node.userId]);
 
   if (node.isMe) {
     return (
@@ -562,7 +566,7 @@ function StarPreview({ node, traded, hop }: { node: GalaxyNode; traded: number; 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-3">
-        <UserAvatar name={node.name} cluster={node.cluster} size={48} ring />
+        <UserAvatar name={node.name} cluster={node.cluster} userId={node.userId} size={48} ring />
         <div className="min-w-0">
           <h2 className="truncate text-xl font-semibold">{node.name}</h2>
           {edge ? <OverlapBadge sharedSongs={edge.sharedSongs} sharedArtists={edge.sharedArtists} sharedFeelings={edge.sharedFeelings} variant="both" className="mt-1" /> : <Skeleton className="mt-1 h-5 w-40" />}

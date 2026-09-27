@@ -194,7 +194,9 @@ export async function assessConnection(
 ): Promise<AssessmentResult> {
   const hintLine = hint ? `\nVector search's closest pair (hint only): A's "${hint.songA}" and B's "${hint.songB}".` : "";
   const prompt = `${describePerson("Person A", a)}\n\n${describePerson("Person B", b)}${hintLine}`;
-  const { data } = await generateJson<RawAssessment>({ system: SYSTEM_INSTRUCTION, prompt, schema: SCHEMA });
+  // Someone is usually waiting on this card: if Flash is slow (it answers in ~2.5s, occasionally 6s+),
+  // Flash-Lite joins at 4s and the first answer wins.
+  const { data } = await generateJson<RawAssessment>({ system: SYSTEM_INSTRUCTION, prompt, schema: SCHEMA, hedgeAfterMs: 4000 });
 
   const rationale = data.rationale?.trim() ?? "";
   const rubric: Rubric = { specificity: data.specificity, evidence: data.evidence_strength, conversation: data.conversation };

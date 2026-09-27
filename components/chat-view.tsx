@@ -95,7 +95,7 @@ export function ChatView({ userId, initialDraft }: { userId: string; initialDraf
         title={
           data ? (
             <Link href={`/people/${userId}`} className="inline-flex items-center gap-2.5 py-1 pr-2 hover:opacity-80">
-              <UserAvatar name={data.user.name} cluster={data.cluster} size={32} />
+              <UserAvatar name={data.user.name} cluster={data.cluster} userId={data.user.id} size={32} />
               <span className="min-w-0">
                 <span className="block truncate font-semibold leading-tight">{data.user.name}</span>
                 {data.sharedMotivation ? (
@@ -130,7 +130,7 @@ export function ChatView({ userId, initialDraft }: { userId: string; initialDraf
           </div>
         ) : data.messages.length === 0 ? (
           <div className="flex flex-col items-center pb-2 pt-8 text-center">
-            <UserAvatar name={data.user.name} cluster={data.cluster} size={64} ring />
+            <UserAvatar name={data.user.name} cluster={data.cluster} userId={data.user.id} size={64} ring />
             <p className="mt-3 font-semibold">{data.user.name}</p>
             {data.sharedMotivation ? (
               <>
@@ -165,7 +165,7 @@ export function ChatView({ userId, initialDraft }: { userId: string; initialDraf
                     </li>
                   ) : null}
                   <li className={cn("mt-2 flex items-end gap-2", mine ? "justify-end" : "justify-start")}>
-                    {mine ? null : <UserAvatar name={data.user.name} cluster={data.cluster} size={26} className="mb-5" />}
+                    {mine ? null : <UserAvatar name={data.user.name} cluster={data.cluster} userId={data.user.id} size={26} className="mb-5" />}
                     <div className={cn("flex min-w-0 max-w-[82%] flex-col gap-1", mine ? "items-end" : "items-start")}>
                       {g.messages.map((m, mi) =>
                         m.kind === "swap" ? (

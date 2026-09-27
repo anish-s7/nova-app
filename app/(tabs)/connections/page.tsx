@@ -160,6 +160,7 @@ export default function ConnectionsPage() {
                         <UserAvatar
                           name={c.user.name}
                           cluster={c.cluster}
+                          userId={c.user.id}
                           size={40}
                         />
                         <div className="min-w-0 flex-1">

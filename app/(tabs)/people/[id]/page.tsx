@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import useSWR from "swr";
@@ -12,12 +13,14 @@ import { ThemeTag } from "@/components/theme-tag";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
-import { getUser } from "@/lib/api";
+import { getUser, prefetchConnectionCard } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 export default function PersonPage() {
   const { id } = useParams<{ id: string }>();
   const { data: user, error } = useSWR(["user", id], ([, uid]) => getUser(uid));
+  // "What you share" is this page's main button: build the card while they look at the profile.
+  useEffect(() => prefetchConnectionCard(id), [id]);
 
   return (
     <main className="flex min-h-0 flex-1 flex-col">
@@ -34,7 +37,7 @@ export default function PersonPage() {
         ) : (
           <>
             <section className="flex flex-col items-center pt-4 text-center">
-              <UserAvatar name={user.name} cluster={user.cluster} size={84} ring />
+              <UserAvatar name={user.name} cluster={user.cluster} userId={user.id} size={84} ring />
               <h1 className="mt-3 text-2xl font-semibold">{user.name}</h1>
               <ThemeTag cluster={user.cluster} className="mt-2" />
               <OverlapBadge sharedSongs={user.edge.sharedSongs} sharedArtists={user.edge.sharedArtists} sharedFeelings={user.edge.sharedFeelings} variant="both" className="mt-3" />

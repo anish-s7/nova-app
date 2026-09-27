@@ -1,17 +1,11 @@
+"use client";
+
 import type { CSSProperties } from "react";
+import Image from "next/image";
+import { FACE_BACKGROUNDS, FACE_HAIR, FACE_SHIRTS, FACE_SKIN, faceFromName, type Face } from "@/lib/avatar";
+import { useAvatar } from "@/lib/avatar-store";
 import { getCluster } from "@/lib/clusters";
 import { cn } from "@/lib/utils";
-
-const BACKGROUNDS = ["#3b3a52", "#4a3f45", "#33474a", "#4d4536", "#3e4a3a", "#48384f", "#3a4257", "#503f3a"];
-const SKIN = ["#f1c9a5", "#e0a97f", "#c68a5e", "#a06a44", "#7a4b2e", "#5a3520"];
-const HAIR = ["#1f1a17", "#3a2a1e", "#5b3a22", "#8a5a2b", "#c9a15a", "#8c8c94", "#7a2f2f", "#2e3a5c"];
-const SHIRTS = ["#d8c7a3", "#c7d1cf", "#d9b8b0", "#bfc8a6", "#c4b9d6", "#e0d2b4", "#7f9bb5", "#b5787f"];
-
-function hash(str: string) {
-  let h = 2166136261;
-  for (let i = 0; i < str.length; i++) h = Math.imul(h ^ str.charCodeAt(i), 16777619);
-  return h >>> 0;
-}
 
 /** Hair drawn behind the head (long styles) and on top of it. */
 function hairBack(style: number, c: string) {
@@ -42,16 +36,15 @@ function hairFront(style: number, c: string) {
   }
 }
 
-/** A small generative portrait, stable per person and independent of their cluster color. */
-function Portrait({ name }: { name: string }) {
-  const h = hash(name);
-  const bg = BACKGROUNDS[h % BACKGROUNDS.length];
-  const skin = SKIN[(h >>> 3) % SKIN.length];
-  const hair = HAIR[(h >>> 6) % HAIR.length];
-  const shirt = SHIRTS[(h >>> 9) % SHIRTS.length];
-  const style = (h >>> 12) % 6;
-  const glasses = (h >>> 16) % 4 === 0;
-  const smile = (h >>> 18) % 3;
+/** The illustrated face (lib/avatar.ts): someone's saved settings, or the ones generated from their name. */
+export function FacePortrait({ face }: { face: Face }) {
+  const bg = FACE_BACKGROUNDS[face.background];
+  const skin = FACE_SKIN[face.skin];
+  const hair = FACE_HAIR[face.hair];
+  const shirt = FACE_SHIRTS[face.shirt];
+  const style = face.hairStyle;
+  const glasses = face.glasses;
+  const smile = face.expression;
   const shade = "#00000026";
   return (
     <svg viewBox="0 0 40 40" className="size-full">
@@ -84,9 +77,15 @@ function Portrait({ name }: { name: string }) {
   );
 }
 
+/**
+ * Someone's profile icon: their uploaded photo, else their saved face, else the face generated from
+ * their name. `userId` looks up their saved icon (lib/avatar-store.ts); without it, or before it
+ * loads, the generated face shows. Mine (`isMe`) shows "You" until I've set an icon of my own.
+ */
 export function UserAvatar({
   name,
   cluster,
+  userId,
   isMe = false,
   size = 44,
   ring = false,
@@ -94,23 +93,34 @@ export function UserAvatar({
 }: {
   name: string;
   cluster: string;
+  userId?: string;
   isMe?: boolean;
   size?: number;
   ring?: boolean;
   className?: string;
 }) {
+  const saved = useAvatar(isMe ? "me" : userId);
+  const custom = !!(saved?.photoUrl || saved?.face);
   return (
     <span
       aria-hidden
       style={{ "--tone": getCluster(cluster).color, width: size, height: size, fontSize: size * 0.3 } as CSSProperties}
       className={cn(
-        "inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold",
-        isMe && "bg-primary text-primary-foreground",
+        "relative inline-flex shrink-0 items-center justify-center overflow-hidden rounded-full font-semibold",
+        isMe && !custom && "bg-primary text-primary-foreground",
         ring && "ring-2 ring-[color-mix(in_oklch,var(--tone)_60%,transparent)] ring-offset-2 ring-offset-background",
         className,
       )}
     >
-      {isMe ? "You" : <Portrait name={name} />}
+      {saved?.photoUrl ? (
+        <Image src={saved.photoUrl} alt="" fill sizes={`${size}px`} className="object-cover" />
+      ) : saved?.face ? (
+        <FacePortrait face={saved.face} />
+      ) : isMe ? (
+        "You"
+      ) : (
+        <FacePortrait face={faceFromName(name)} />
+      )}
     </span>
   );
 }

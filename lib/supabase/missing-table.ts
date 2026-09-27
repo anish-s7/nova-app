@@ -7,3 +7,8 @@
 export function isMissingTable(error: { code?: string } | null | undefined): boolean {
   return error?.code === "PGRST205" || error?.code === "42P01";
 }
+
+/** True when the error means a column doesn't exist yet (PGRST204 on writes, 42703 on reads). */
+export function isMissingColumn(error: { code?: string } | null | undefined): boolean {
+  return error?.code === "PGRST204" || error?.code === "42703";
+}

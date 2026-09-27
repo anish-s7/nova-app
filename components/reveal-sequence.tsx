@@ -104,7 +104,7 @@ export function RevealSequence() {
         {step >= 3 && match && edge ? (
           <section aria-live="polite" className="pointer-events-auto rounded-3xl border border-white/10 bg-background/85 p-5 shadow-2xl shadow-black/50 backdrop-blur-xl motion-safe:animate-rise-in">
             <div className="flex items-center gap-3">
-              <UserAvatar name={match.name} cluster={match.cluster} size={52} ring />
+              <UserAvatar name={match.name} cluster={match.cluster} userId={match.userId} size={52} ring />
               <div className="min-w-0">
                 <p className="text-xs uppercase tracking-wider text-muted-foreground">Your closest match</p>
                 <h2 className="truncate text-2xl font-semibold">{match.name}</h2>

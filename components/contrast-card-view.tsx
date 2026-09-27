@@ -22,7 +22,7 @@ export function ContrastCardView({ card, me, other }: { card: ContrastCard; me: 
         <div className="flex items-center justify-center gap-3">
           <UserAvatar name="You" cluster={me.cluster} isMe size={56} ring />
           <AlbumArt song={card.song} size={72} className="rounded-xl" />
-          <UserAvatar name={other.name} cluster={other.cluster} size={56} ring />
+          <UserAvatar name={other.name} cluster={other.cluster} userId={other.id} size={56} ring />
         </div>
         <p className="mt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Same song</p>
         <p className="mt-1 text-balance font-serif text-xl italic">{card.song.title}</p>

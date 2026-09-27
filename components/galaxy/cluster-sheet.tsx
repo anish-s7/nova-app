@@ -119,7 +119,7 @@ export function ListenerList({
       <ul className="flex flex-col gap-2.5">
         {listeners.map((l) => (
           <li key={l.id} className="flex items-start gap-2.5">
-            <UserAvatar name={l.name} cluster={cluster} isMe={l.isMe} size={30} />
+            <UserAvatar name={l.name} cluster={cluster} userId={l.id} isMe={l.isMe} size={30} />
             <div className="min-w-0 flex-1">
               <p className="text-sm leading-snug">
                 <span className="font-medium">{l.name}</span>

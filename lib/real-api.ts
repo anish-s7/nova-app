@@ -10,6 +10,9 @@
  */
 
 import { ApiError } from "./api-error";
+import type { AvatarInfo, Face } from "./avatar";
+import { squarePhoto } from "./avatar-photo";
+import { forgetAvatars, getKnownAvatar, setAvatar } from "./avatar-store";
 import { getCluster } from "./clusters";
 import type { ClusterDetail, ClusterSong } from "./cluster-songs";
 import { cached, fetchProfile, forgetMe, generatePortrait, getMyId, getPortrait, httpDb } from "./http-db";
@@ -231,13 +234,31 @@ export async function getConnections(): Promise<Connection[]> {
 
 // --- cards ------------------------------------------------------------------
 
-/** Cached card, else generate one. "Not enough evidence" is a normal outcome, shown as a message, not a crash. */
-async function cardJsonFor(otherId: string): Promise<{ json: ConnectionCardJson; iAmA: boolean }> {
-  const [myId, stored] = await Promise.all([getMyId(), httpDb.getConnectionCard(otherId)]);
-  if (stored) return { json: stored.card_json, iAmA: stored.user_a === myId };
-  const generated = await httpDb.generateConnectionCard(otherId);
-  if (generated.status !== "match") throw new ApiError("There isn't a strong enough thread between you two yet.");
-  return { json: generated.card, iAmA: myId < otherId };
+/**
+ * The pair's card in one request: POST /api/cards returns the saved card, or assesses the pair (a
+ * Gemini call, ~2-3s) and saves one. Shared through the read cache, so a warm-up started by
+ * prefetchConnectionCard and the card screen itself use the same request. "Not enough evidence" is a
+ * normal outcome, shown as a message, not a crash (and not cached here; the server remembers it).
+ */
+const CARD_JSON_TTL_MS = 60_000;
+
+function cardJsonFor(otherId: string): Promise<{ json: ConnectionCardJson; iAmA: boolean }> {
+  return cached(`cardjson:${otherId}`, CARD_JSON_TTL_MS, async () => {
+    const [myId, res] = await Promise.all([getMyId(), httpDb.generateConnectionCard(otherId)]);
+    if (res.status !== "match") throw new ApiError("There isn't a strong enough thread between you two yet.");
+    // Row order: user_a is the smaller id (alignCardEvidence).
+    return { json: res.card, iAmA: myId < otherId };
+  });
+}
+
+/**
+ * Starts building the card for someone before their card is opened (their profile or galaxy sheet is
+ * showing), so "What you share" usually opens on a finished card. Costs at most one Gemini call per
+ * pair: saved cards and remembered rejections come back without one.
+ */
+export function prefetchConnectionCard(otherId: string) {
+  // Not a match, or it failed: the card screen asks again and shows its own message.
+  void cardJsonFor(otherId).catch((err) => console.info(`Card warm-up for ${otherId} didn't produce a card:`, err instanceof Error ? err.message : err));
 }
 
 export async function getConnectionCard(otherId: string): Promise<ConnectionCard> {
@@ -441,8 +462,44 @@ export async function getClusterDetail(id: string): Promise<ClusterDetail> {
   return { id: cluster.id, label: cluster.label, listeners: members.size, songCount: songs.length, newThisWeek: songs.filter((s) => s.isNew).length, songs };
 }
 
+// --- profile icon -----------------------------------------------------------------
+
+async function avatarRequest<T>(path: string, init: RequestInit): Promise<T> {
+  const res = await fetch(path, { credentials: "same-origin", ...init });
+  const body = (await res.json().catch(() => null)) as (T & { error?: string }) | null;
+  if (!res.ok || !body) throw new ApiError(res.status === 401 ? "Sign in to continue." : (body?.error ?? "That didn't save. Try again."));
+  return body;
+}
+
+/** Shows my new icon everywhere right away (under "me" and my real id). */
+async function showMine(patch: Partial<AvatarInfo>) {
+  const current = getKnownAvatar("me") ?? { face: null, photoUrl: null };
+  setAvatar(["me", await getMyId()], { ...current, ...patch });
+}
+
+/** Saves my illustrated face (null: back to the one generated from my name). */
+export async function saveAvatarFace(face: Face | null) {
+  await avatarRequest("/api/avatar", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ face }) });
+  await showMine({ face });
+}
+
+/** Uploads a photo (resized and cropped first); it replaces my face everywhere. Returns its URL. */
+export async function uploadAvatarPhoto(file: File): Promise<string> {
+  const form = new FormData();
+  form.append("photo", await squarePhoto(file), "avatar.jpg");
+  const { photoUrl } = await avatarRequest<{ photoUrl: string }>("/api/avatar/photo", { method: "POST", body: form });
+  await showMine({ photoUrl });
+  return photoUrl;
+}
+
+export async function removeAvatarPhoto() {
+  await avatarRequest("/api/avatar/photo", { method: "DELETE" });
+  await showMine({ photoUrl: null });
+}
+
 /** Sign-in/out: drop anything cached about who "me" is. */
 export function resetRealWorld() {
   forgetMe();
+  forgetAvatars();
   similarityOf.clear();
 }

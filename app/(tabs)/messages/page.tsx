@@ -82,7 +82,7 @@ export default function MessagesPage() {
                 <li key={c.userId} className="border-b border-white/[0.06] last:border-b-0">
                   <Link href={`/messages/${c.userId}`} className="flex min-h-[72px] items-center gap-3 px-4 py-2.5 transition-colors hover:bg-white/[0.03]">
                     <span className="relative shrink-0">
-                      <UserAvatar name={c.name} cluster={c.cluster} size={48} />
+                      <UserAvatar name={c.name} cluster={c.cluster} userId={c.userId} size={48} />
                       {unread ? <span className="absolute -right-0.5 -top-0.5 size-3 rounded-full bg-primary ring-2 ring-background" aria-label="Unread" /> : null}
                     </span>
                     <div className="min-w-0 flex-1">
@@ -132,7 +132,7 @@ function StartConversation({ people }: { people: Connection[] }) {
                 style={{ "--tone": tone } as CSSProperties}
                 className="flex h-full flex-col gap-2 border border-white/10 bg-card/40 p-3 transition-colors hover:border-[color-mix(in_oklch,var(--tone)_50%,transparent)]"
               >
-                <UserAvatar name={p.user.name} cluster={p.cluster} size={40} />
+                <UserAvatar name={p.user.name} cluster={p.cluster} userId={p.user.id} size={40} />
                 <p className="truncate text-sm font-medium">{p.user.name}</p>
                 <p className="line-clamp-2 flex-1 text-xs leading-snug text-muted-foreground">
                   <span className="mr-1 inline-block size-1.5 rounded-full bg-[var(--tone)] align-middle" aria-hidden />

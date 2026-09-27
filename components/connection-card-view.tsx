@@ -42,11 +42,12 @@ export function ConnectionCardView({ card, me, other }: { card: ConnectionCard; 
     const tl = createTimeline({ defaults: { ease: "outQuart" } })
       .add("[data-avatar=me]", { translateX: [-28, 0], opacity: [0, 1], ease: spring({ bounce: 0.3, duration: 800 }) }, 0)
       .add("[data-avatar=other]", { translateX: [28, 0], opacity: [0, 1], ease: spring({ bounce: 0.3, duration: 800 }) }, 0)
-      .add("[data-link]", { scaleX: [0, 1], opacity: [0, 1], duration: 600 }, 350)
-      .add("[data-count]", { opacity: [0, 1], translateY: [8, 0], duration: 600 }, 600)
-      .add(words, { translateY: ["110%", "0%"], duration: 800, delay: stagger(60), ease: "outExpo" }, 900)
-      .add("[data-card-section]", { opacity: [0, 1], translateY: [16, 0], duration: 700, delay: stagger(110) }, 1100);
-    animate("[data-spark]", { left: ["0%", "100%"], opacity: [0, 1, 1, 0], duration: 1800, delay: 1200, loop: true, loopDelay: 1600, ease: "inOutSine" });
+      // Compressed so the card is readable fast: sections start at 0.45s, everything is in by ~1.3s (was ~2.4s).
+      .add("[data-link]", { scaleX: [0, 1], opacity: [0, 1], duration: 500 }, 200)
+      .add("[data-count]", { opacity: [0, 1], translateY: [8, 0], duration: 500 }, 300)
+      .add(words, { translateY: ["110%", "0%"], duration: 600, delay: stagger(40), ease: "outExpo" }, 400)
+      .add("[data-card-section]", { opacity: [0, 1], translateY: [16, 0], duration: 500, delay: stagger(70) }, 450);
+    animate("[data-spark]", { left: ["0%", "100%"], opacity: [0, 1, 1, 0], duration: 1800, delay: 700, loop: true, loopDelay: 1600, ease: "inOutSine" });
     return () => tl.revert();
   });
 
@@ -65,7 +66,7 @@ export function ConnectionCardView({ card, me, other }: { card: ConnectionCard; 
             />
           </span>
           <span data-avatar="other">
-            <UserAvatar name={other.name} cluster={other.cluster} size={48} ring />
+            <UserAvatar name={other.name} cluster={other.cluster} userId={other.id} size={48} ring />
           </span>
         </div>
         <p data-count className="mt-4 text-3xl font-semibold tabular-nums tracking-tight">{sharedSongs}</p>

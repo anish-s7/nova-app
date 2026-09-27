@@ -489,7 +489,7 @@ export type Db = {
   getMatches(limit?: number): Promise<ConfirmedMatchRow[]>;
   /** Cached card for (me, otherProfileId), or null if none exists yet. */
   getConnectionCard(otherProfileId: string): Promise<ConnectionCardRow | null>;
-  /** Generates (and caches) a card for (me, otherProfileId) on demand. Can come back as insufficient evidence instead of a card. */
+  /** The saved card for (me, otherProfileId), else generates (and caches) one. Can come back as insufficient evidence instead of a card. */
   generateConnectionCard(
     otherProfileId: string,
   ): Promise<{ status: "match"; card: ConnectionCardJson } | { status: "insufficient_evidence" }>;

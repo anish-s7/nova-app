@@ -32,9 +32,17 @@ anything derived from one.
 | display_name | text | |
 | primary_topic_cluster_id | uuid, FK -> topic_clusters.id, nullable | replaces the old `primary_cluster` text column (migration `20260929000000`, data model only — see `topic_clusters` below). Null until someone has a pick |
 | primary_cluster | text, nullable, one of the five legacy ids | **kept during the transition** (the migration was split on 2026-09-27 to be additive): the galaxy RPCs and several app readers still use it, and `refreshPrimaryCluster` keeps it current with the tag vote. Dropped in a later migration together with the app-wiring phase |
+| avatar | jsonb, nullable | profile icon: illustrated-face settings (`Face` in `lib/avatar.ts`: color/style indexes, glasses, expression). Null = the face generated from `display_name`. Written only by `PATCH /api/avatar` (service role, validated by `sanitizeFace`). Migration `20260930000000` |
+| avatar_url | text, nullable | public URL of an uploaded photo in the `avatars` storage bucket (`<profile id>.jpg`, with a `?v=` version); overrides `avatar` wherever icons show. Written only by `POST/DELETE /api/avatar/photo` (service role). Migration `20260930000000` |
 | created_at | timestamptz | default now() |
 
 No `embedding` column — matching lives entirely on `song_picks` now.
+
+Both icon columns are readable by any signed-in user (the existing profiles select policy), since icons are
+shown to everyone; `authenticated` still may only update `display_name`. Storage bucket `avatars`
+(same migration): public read, JPEG only, 1 MB limit, no user write policies — uploads and deletes go
+through the route with the service role. Until the migration is applied, `GET /api/avatar` returns
+everyone's default face and the save routes answer 503.
 
 ### `topic_clusters` (migration `20260929000000`) — replaces the hard-coded 5-value cluster enum
 | column | type | notes |

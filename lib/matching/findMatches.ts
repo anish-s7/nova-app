@@ -2,6 +2,7 @@ import { createServerClient } from "../supabase/server";
 import { assessConnection } from "../gemini/assessConnection";
 import { alignCardEvidence } from "./alignCardEvidence";
 import { getPortraits, loadPublicPicks, upsertPortrait } from "./portraits";
+import { rejectionKey, rememberRejection, wasRejected } from "./rejectedPairs";
 import type { ConnectionCardJson } from "../supabase/types";
 
 export interface MatchSong {
@@ -29,12 +30,6 @@ export interface ConfirmedMatch {
 const MAX_NEW_ASSESSMENTS = 5;
 /** How many of those run at once (paid-tier key). Each takes ~2-3s, so 5 finish in ~2 rounds. */
 const ASSESS_CONCURRENCY = 3;
-
-/**
- * Pairs the AI already turned down, keyed by both pick counts so a new pick on either side earns a
- * fresh look. In-memory only (rejections aren't stored), so a restart just re-asks.
- */
-const rejected = new Set<string>();
 
 function orderedPair(a: string, b: string): [string, string] {
   return a < b ? [a, b] : [b, a];
@@ -133,8 +128,8 @@ export async function findMatches(profileId: string, limit = 10): Promise<Confir
     const batch = toAssess
       .map((candidate) => ({ candidate, theirPicks: picksOf.get(candidate.profile_id) ?? [] }))
       .filter(({ theirPicks }) => me.picks.length > 0 && theirPicks.length > 0)
-      .map((c) => ({ ...c, rejectKey: `${orderedPair(profileId, c.candidate.profile_id).join(":")}:${me.picks.length}:${c.theirPicks.length}` }))
-      .filter(({ rejectKey }) => !rejected.has(rejectKey))
+      .map((c) => ({ ...c, rejectKey: rejectionKey(profileId, c.candidate.profile_id, me.picks.length, c.theirPicks.length) }))
+      .filter(({ rejectKey }) => !wasRejected(rejectKey))
       .slice(0, MAX_NEW_ASSESSMENTS);
 
     const assessOne = async ({ candidate, theirPicks, rejectKey }: (typeof batch)[number]) => {
@@ -152,7 +147,7 @@ export async function findMatches(profileId: string, limit = 10): Promise<Confir
         return;
       }
       if (assessment.status !== "match") {
-        rejected.add(rejectKey);
+        rememberRejection(rejectKey);
         return;
       }
 

@@ -60,7 +60,7 @@ export function WanderSheetContent() {
           {data.map(({ user, card }) => (
             <li key={user.id}>
               <Link href={`/people/${user.id}/contrast`} className="flex items-center gap-3 border-b border-white/5 py-3 hover:bg-white/[0.03]">
-                <UserAvatar name={user.name} cluster={user.cluster} size={44} ring />
+                <UserAvatar name={user.name} cluster={user.cluster} userId={user.id} size={44} ring />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium">
                     {user.name} <span className="font-normal text-muted-foreground">· {card.song.title}</span>

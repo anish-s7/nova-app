@@ -16,6 +16,9 @@
 
 import { CLUSTER_IDS, getCluster } from "./clusters";
 import { ApiError } from "./api-error";
+import type { Face } from "./avatar";
+import { squarePhoto } from "./avatar-photo";
+import { getKnownAvatar, setAvatar } from "./avatar-store";
 import { REAL_DATA } from "./data-source";
 import { httpDb } from "./http-db";
 import * as real from "./real-api";
@@ -593,6 +596,34 @@ function evidenceSongs(mine: Song[], theirs: Song[], max = 4): Song[] {
   const same = theirs.filter((s) => ids.has(s.id));
   const sameArtist = theirs.filter((s) => !ids.has(s.id) && artists.has(s.artist));
   return [...same, ...sameArtist].slice(0, max);
+}
+
+// --- profile icon: real mode saves to the profile; demo mode only changes this page's view ---------
+
+/** Saves my illustrated face (null: back to the one generated from my name). */
+export async function saveAvatarFace(face: Face | null) {
+  if (REAL_DATA) return real.saveAvatarFace(face);
+  setAvatar(["me"], { ...(getKnownAvatar("me") ?? { photoUrl: null }), face });
+}
+
+/** Uploads a profile photo; it replaces my face everywhere. */
+export async function uploadAvatarPhoto(file: File): Promise<void> {
+  if (REAL_DATA) {
+    await real.uploadAvatarPhoto(file);
+    return;
+  }
+  const url = URL.createObjectURL(await squarePhoto(file));
+  setAvatar(["me"], { ...(getKnownAvatar("me") ?? { face: null }), photoUrl: url });
+}
+
+export async function removeAvatarPhoto() {
+  if (REAL_DATA) return real.removeAvatarPhoto();
+  setAvatar(["me"], { ...(getKnownAvatar("me") ?? { face: null }), photoUrl: null });
+}
+
+/** Real mode: start building the pair's card in the background (see real-api). Mock mode has nothing to warm. */
+export function prefetchConnectionCard(otherId: string) {
+  if (REAL_DATA && otherId !== ME_ID) real.prefetchConnectionCard(otherId);
 }
 
 export async function getConnectionCard(otherId: string): Promise<ConnectionCard> {
