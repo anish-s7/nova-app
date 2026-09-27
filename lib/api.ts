@@ -499,6 +499,31 @@ export async function getGalaxyMore(cluster: string, have: number, step = 40, li
   return { arrivals, remaining: Math.max(0, order.length - have - arrivals.length) };
 }
 
+export type SceneSummary = { id: string; label: string; description: string | null };
+export type SceneGatewayInfo = { profileId: string; displayName: string; cluster: string; songTitle: string; songArtist: string; similarity: number };
+export type SceneNovelSong = { songId: string; title: string; artist: string; contextSummary: string | null; relevance: string };
+export type SceneDetail = { scene: SceneSummary; gateway: SceneGatewayInfo | null; novelSong: SceneNovelSong | null; locked: boolean };
+
+/**
+ * docs/plans/galaxy-communities.md, Direction B: real, song-derived music communities — distinct from
+ * the five `primary_cluster` "whys". Not part of the mock world yet (real-data mode only); mock mode
+ * gets an empty list so the UI entry point just shows nothing to explore rather than erroring.
+ */
+export async function getScenes(): Promise<SceneSummary[]> {
+  if (!REAL_DATA) return [];
+  const res = await fetch("/api/scenes");
+  if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to continue." : "Scenes didn't load.");
+  return res.json();
+}
+
+/** One scene's gateway + novel song, for the "enter" sheet. Locked (no gateway) is a real state, not an error. */
+export async function getSceneDetail(id: string): Promise<SceneDetail> {
+  if (!REAL_DATA) throw new ApiError("Scenes aren't available in demo mode yet.");
+  const res = await fetch(`/api/scenes/${id}`);
+  if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to continue." : "That scene didn't load.");
+  return res.json();
+}
+
 /** NOT IN CONTRACT: clusters aren't stored yet (lib/types.ts #5). Songs + listeners inside one "why". */
 export async function getClusterDetail(id: string): Promise<ClusterDetail> {
   if (REAL_DATA) return real.getClusterDetail(id);

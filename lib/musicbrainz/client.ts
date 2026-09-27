@@ -104,7 +104,11 @@ export async function findCoverArtUrl(releaseIds: string[]): Promise<string | nu
     const url = `https://coverartarchive.org/release/${id}/front-250`;
     for (let attempt = 0; attempt < 4; attempt++) {
       try {
-        const res = await fetch(url, { method: "HEAD", redirect: "manual" });
+        const res = await fetch(url, {
+          method: "HEAD",
+          redirect: "manual",
+          headers: { "User-Agent": buildUserAgent() },
+        });
         if (res.status >= 300 && res.status < 400) return url;
         break; // a definite "no cover" answer; try the next release
       } catch (err) {

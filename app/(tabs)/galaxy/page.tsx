@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { Compass, LocateFixed, Plus, X } from "lucide-react";
+import { Compass, LocateFixed, Plus, Sparkles, X } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
 import { BottomSheet } from "@/components/bottom-sheet";
 import { GalaxyCanvas, GalaxySkeleton } from "@/components/galaxy/galaxy-canvas";
@@ -11,9 +11,11 @@ import type { GalaxyApi } from "@/components/galaxy/types";
 import { ClusterFilter } from "@/components/galaxy/cluster-filter";
 import { AddSongSheetContent, type AddedInfo } from "@/components/galaxy/add-song-sheet";
 import { ClusterSheetContent } from "@/components/galaxy/cluster-sheet";
+import { ScenesSheetContent, SceneDetailView } from "@/components/galaxy/scenes-sheet";
 import { SongSheetContent } from "@/components/galaxy/song-sheet";
 import { WanderSheetContent } from "@/components/galaxy/wander-sheet";
 import { ModeToggle, ThemeFilter } from "@/components/galaxy/theme-filter";
+import type { GalaxyBridge, GalaxyDestination } from "@/components/galaxy/types";
 import { Logo } from "@/components/logo";
 import { OverlapBadge } from "@/components/overlap-badge";
 import { SimilarityRing } from "@/components/similarity-ring";
@@ -22,8 +24,8 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { useGalaxyRealtime, type Arrival } from "@/hooks/use-galaxy-realtime";
-import { getConversations, getGalaxy, getGalaxyMore, getSongLayer, getUser, ME_ID } from "@/lib/api";
-import { getCluster } from "@/lib/clusters";
+import { getConversations, getGalaxy, getGalaxyMore, getScenes, getSceneDetail, getSongLayer, getUser, ME_ID, type SceneDetail } from "@/lib/api";
+import { getCluster, CLUSTERS } from "@/lib/clusters";
 import { useSession } from "@/lib/session";
 import { songConnections } from "@/lib/song-connections";
 import { isSongNode, songNodeId } from "@/lib/song-layer";
@@ -31,6 +33,9 @@ import { THEME_THRESHOLD } from "@/lib/themes";
 import { BOND_AT } from "@/lib/thread";
 import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+/** Distant scene discs cycle through the same hex palette the five "why" clusters use, just repurposed as identity colors for scenes rather than emotional meaning. */
+const DESTINATION_COLORS = Object.values(CLUSTERS).map((c) => c.color);
 
 const MAX_HOPS = 4;
 
@@ -61,6 +66,8 @@ export default function GalaxyPage() {
   const [focusCluster, setFocusCluster] = useState<string | null>(null);
   const [clusterOpen, setClusterOpen] = useState(false);
   const [wandering, setWandering] = useState(false);
+  const [scenesOpen, setScenesOpen] = useState(false);
+  const [selectedSceneId, setSelectedSceneId] = useState<string | null>(null);
   const [mode, setMode] = useState<"people" | "songs">("people");
   const [themeFocus, setThemeFocus] = useState<string | null>(null);
   const [adding, setAdding] = useState<{ songId: string | null } | null>(null);
@@ -77,6 +84,39 @@ export default function GalaxyPage() {
     () => (data ? (center ? data.nodes.map((n) => (n.userId === center ? { ...n, isMe: true } : n.isMe ? { ...n, isMe: false, name: "You" } : n)) : data.nodes) : []),
     [data, center],
   );
+  // Real music-community galaxies, distant from home (docs/plans/galaxy-communities.md) — only in your
+  // own galaxy, not while looking at someone else's hopped-into neighborhood. Each scene's gateway is
+  // fetched the same way the detail sheet does (getSceneDetail), so "reachable in the background" and
+  // "reachable when you tap it" can never disagree.
+  // Distant scenes only make sense for the people layer of your own galaxy — never while hopped (you're
+  // looking at someone else's neighborhood, not the universe), never in song mode. Unlike an earlier
+  // version of this, showing them does NOT swap the layout algorithm: computeLayout (the "whys" force
+  // layout everyone already sees) now accepts destinations directly, so your own constellation is
+  // unchanged — only the distant discs and their bridge lines are added on top.
+  const showUniverse = !center && mode === "people";
+  const { data: sceneList } = useSWR(showUniverse ? "scenes" : null, getScenes, { revalidateOnFocus: false });
+  const { data: sceneDetails } = useSWR(
+    showUniverse && sceneList?.length ? ["scene-universe", sceneList.map((s) => s.id).join(",")] : null,
+    () => Promise.all(sceneList!.map((s) => getSceneDetail(s.id).catch(() => null))),
+    { revalidateOnFocus: false },
+  );
+  const destinations: GalaxyDestination[] = useMemo(
+    () => (showUniverse ? (sceneList ?? []).map((s, i) => ({ id: s.id, name: s.label, color: DESTINATION_COLORS[i % DESTINATION_COLORS.length], distance: 0.5 })) : []),
+    [sceneList, showUniverse],
+  );
+  const reachableScenes = useMemo(() => (sceneDetails ?? []).filter((d): d is SceneDetail => !!d?.gateway), [sceneDetails]);
+  const sceneBridges: GalaxyBridge[] = useMemo(() => reachableScenes.map((d) => ({ personId: d.gateway!.profileId, destinationId: d.scene.id })), [reachableScenes]);
+  // A scene's gateway is guaranteed to be in the viewer's galaxy_pool, but not necessarily in this
+  // render's sampled/drawn subset of it — without adding them as a node here, computeHomeLayout has
+  // nothing to place inside the distant disc, and the bridge line above would point at nothing.
+  const sceneExtraNodes: GalaxyNode[] = useMemo(
+    () =>
+      reachableScenes
+        .filter((d) => !viewNodes.some((n) => n.userId === d.gateway!.profileId))
+        .map((d) => ({ userId: d.gateway!.profileId, name: d.gateway!.displayName, cluster: d.gateway!.cluster, topMotivations: [], isMe: false, destinationId: d.scene.id })),
+    [reachableScenes, viewNodes],
+  );
+
   const hop = (id: string, name: string) => {
     if (trail.length >= MAX_HOPS || id === center) return;
     setTrail([...trail, { id, name }]);
@@ -253,7 +293,7 @@ export default function GalaxyPage() {
       {data ? (
         <div className="absolute inset-0" onPointerDown={hint.dismiss}>
           <GalaxyCanvas
-            nodes={viewNodes}
+            nodes={[...viewNodes, ...sceneExtraNodes]}
             edges={data.edges}
             arrivals={arrivals}
             apiRef={apiRef}
@@ -266,6 +306,9 @@ export default function GalaxyPage() {
             focusSongIds={focusSongIds}
             connections={connectionLinks?.map((c) => ({ songId: c.star.id, score: c.score })) ?? null}
             hidden={hiddenNow}
+            destinations={destinations}
+            bridges={sceneBridges}
+            onSelectDestination={setSelectedSceneId}
           />
         </div>
       ) : (
@@ -424,6 +467,18 @@ export default function GalaxyPage() {
         </button>
         <button
           type="button"
+          onClick={() => {
+            setSelectedId(null);
+            setClusterOpen(false);
+            setScenesOpen(true);
+          }}
+          aria-label="Listening scenes: real musical communities beyond your own why"
+          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center border border-white/10 bg-background/90 hover:bg-background"
+        >
+          <Sparkles className="size-5" aria-hidden />
+        </button>
+        <button
+          type="button"
           onClick={() => setAdding({ songId: null })}
           aria-label="Add a song"
           className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center border border-primary/50 bg-primary/15 text-primary hover:bg-primary/25"
@@ -447,6 +502,29 @@ export default function GalaxyPage() {
 
       <BottomSheet open={wandering} onClose={() => setWandering(false)} label="Wander">
         {wandering ? <WanderSheetContent /> : null}
+      </BottomSheet>
+
+      <BottomSheet open={scenesOpen} onClose={() => setScenesOpen(false)} label="Listening scenes">
+        {scenesOpen ? (
+          <ScenesSheetContent
+            onSelectScene={(id) => {
+              setScenesOpen(false);
+              setSelectedSceneId(id);
+            }}
+          />
+        ) : null}
+      </BottomSheet>
+
+      <BottomSheet open={!!selectedSceneId} onClose={() => setSelectedSceneId(null)} label="Scene">
+        {selectedSceneId ? (
+          <SceneDetailView
+            sceneId={selectedSceneId}
+            onEnter={(profileId, name) => {
+              setSelectedSceneId(null);
+              hop(profileId, name);
+            }}
+          />
+        ) : null}
       </BottomSheet>
 
       <BottomSheet open={!!adding} onClose={() => setAdding(null)} label="Add a song">

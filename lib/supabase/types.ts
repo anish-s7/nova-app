@@ -60,6 +60,8 @@ export interface Database {
           album_art_url: string | null;
           context_summary: string | null;
           embedding: number[] | null;
+          /** Denormalized cache of the strongest song_scene_memberships row, for rendering only — never authoritative. */
+          primary_scene_id: string | null;
           created_at: string;
         };
         Insert: {
@@ -72,10 +74,12 @@ export interface Database {
           album_art_url?: string | null;
           context_summary?: string | null;
           embedding?: number[] | null;
+          primary_scene_id?: string | null;
         };
         Update: Partial<{
           context_summary: string | null;
           embedding: number[] | null;
+          primary_scene_id: string | null;
         }>;
         Relationships: [];
       };
@@ -161,6 +165,54 @@ export interface Database {
         }>;
         Relationships: [];
       };
+      song_scenes: {
+        Row: {
+          id: string;
+          label: string;
+          description: string | null;
+          status: "draft" | "reviewed" | "published";
+          centroid: number[] | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          label: string;
+          description?: string | null;
+          status?: "draft" | "reviewed" | "published";
+          centroid?: number[] | null;
+        };
+        Update: Partial<{
+          label: string;
+          description: string | null;
+          status: "draft" | "reviewed" | "published";
+          centroid: number[] | null;
+        }>;
+        Relationships: [];
+      };
+      song_scene_memberships: {
+        Row: {
+          song_id: string;
+          scene_id: string;
+          /** Higher = stronger membership (never a raw distance). */
+          weight: number;
+          source: "musicbrainz_tag" | "embedding_fallback" | "manual";
+          model_version: string | null;
+          created_at: string;
+        };
+        Insert: {
+          song_id: string;
+          scene_id: string;
+          weight: number;
+          source: "musicbrainz_tag" | "embedding_fallback" | "manual";
+          model_version?: string | null;
+        };
+        Update: Partial<{
+          weight: number;
+          source: "musicbrainz_tag" | "embedding_fallback" | "manual";
+          model_version: string | null;
+        }>;
+        Relationships: [];
+      };
       messages: {
         Row: {
           id: string;
@@ -221,6 +273,23 @@ export interface Database {
           target_pick_id: string;
           emotion_gap: number;
         }[];
+      };
+      scene_pool: {
+        Args: { target_profile_id: string; target_scene_id: string };
+        Returns: {
+          profile_id: string;
+          display_name: string;
+          similarity: number;
+          song_pick_id: string;
+          song_id: string;
+          song_title: string;
+          song_artist: string;
+          membership_weight: number;
+        }[];
+      };
+      scene_counts: {
+        Args: { target_profile_id: string };
+        Returns: { scene_id: string; people: number }[];
       };
     };
     Enums: Record<string, never>;

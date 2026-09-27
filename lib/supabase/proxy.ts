@@ -4,8 +4,10 @@ import type { Database } from "./types";
 
 /**
  * Refreshes the Supabase session cookie on every request and returns the
- * signed-in user (or null). Any response built from this must carry over the
- * cookies set here, or the refreshed session is lost.
+ * signed-in user (or null), plus the client for any further queries as that user.
+ * `response()` is a getter because a later query can refresh the session again and
+ * replace it. Any response built from this must carry over its cookies, or the
+ * refreshed session is lost.
  */
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -29,7 +31,7 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  return { response, user };
+  return { supabase, response: () => response, user };
 }
 
 /** Redirect that keeps any session cookies the refresh just set. */

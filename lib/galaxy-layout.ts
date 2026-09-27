@@ -5,13 +5,16 @@ import { topTwo } from "./why-mix";
 
 export type LayoutPoint = { id: string; x: number; y: number; z: number; cluster: string };
 export type DestinationPoint = { id: string; x: number; y: number; z: number; radius: number };
-/** `destinations`: distant community galaxies, home layout only. */
+/** `destinations`: distant community galaxies. computeLayout places them beyond the star field without
+ *  touching how people are arranged; computeHomeLayout additionally scatters scene members inside them. */
 export type Layout = { points: Map<string, LayoutPoint>; radius: number; destinations?: Map<string, DestinationPoint> };
 
 type N = SimNode & { cluster: string; ax: number; ay: number; az: number };
 type L = { source: string | N; target: string | N; similarity: number };
 
 const TARGET_RADIUS = 22;
+const DESTINATION_RADIUS = 6;
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 function seeded(seed: number) {
   return () => {
@@ -71,8 +74,11 @@ export function layoutKey(nodes: GalaxyNode[], edges: GalaxyEdge[]) {
  * Similarity edges in, 3D positions out. Runs a fixed 300 ticks synchronously and freezes;
  * there is no continuous physics. Results are cached by data so every screen shares one layout.
  */
-export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[]): Layout {
-  const key = layoutKey(nodes, edges);
+export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[], destinations: { id: string; distance: number }[] = []): Layout {
+  // Destinations don't affect a single person's position (unlike computeHomeLayout, this never moves
+  // anyone to "live inside" one — see the comment on bridge rendering in galaxy-scene.tsx), but they do
+  // change what's cached, so they're part of the key.
+  const key = `${layoutKey(nodes, edges)}::${destinations.map((d) => `${d.id}:${d.distance.toFixed(2)}`).join(",")}`;
   const hit = cache.get(key);
   if (hit) return hit;
 
@@ -114,7 +120,19 @@ export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[]): Layout 
   const points = new Map<string, LayoutPoint>();
   for (const n of simNodes) points.set(n.id, { id: n.id, cluster: n.cluster, x: n.x! * k, y: n.y! * k, z: n.z! * k });
 
-  const layout = { points, radius: TARGET_RADIUS };
+  // Placed well beyond the star field so they read as distant background, not part of the constellation
+  // itself — the same ring-around-the-edge idea computeHomeLayout uses, just outside a bigger radius.
+  let destPoints: Map<string, DestinationPoint> | undefined;
+  if (destinations.length) {
+    destPoints = new Map();
+    destinations.forEach((d, i) => {
+      const a = (i / destinations.length) * Math.PI * 2 + 0.4;
+      const r = TARGET_RADIUS * (1.7 + clamp01(d.distance) * 0.6);
+      destPoints!.set(d.id, { id: d.id, x: Math.cos(a) * r, y: Math.sin(a) * r, z: Math.sin(a * 3) * 8, radius: DESTINATION_RADIUS });
+    });
+  }
+
+  const layout: Layout = { points, radius: TARGET_RADIUS, destinations: destPoints };
   cache.set(key, layout);
   return layout;
 }
@@ -122,7 +140,6 @@ export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[]): Layout 
 const INNER_ORBIT = 4.5;
 const OUTER_ORBIT = 9;
 const NEARBY_RING = 13;
-const DESTINATION_RADIUS = 6;
 
 /** A star's fixed bearing around you. Per id, so moving to a closer orbit never swings anyone around. */
 function bearing(id: string) {
@@ -136,8 +153,6 @@ export function homeOrbitPoint(node: Pick<GalaxyNode, "userId" | "cluster" | "or
   // A slight tilt so the disc has depth when you turn it.
   return { id: node.userId, cluster: node.cluster, x: Math.cos(a) * r, y: Math.sin(a) * r, z: Math.sin(a * 2) * 1.5 };
 }
-
-const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 /**
  * The home galaxy: you at the center, connected people on orbits around you, suggestions faint
