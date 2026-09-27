@@ -98,10 +98,12 @@ export function rememberSimilarities(edges: GalaxyEdge[]) {
 
 type SearchSong = { id: string; title: string; artist: string; albumArtUrl: string | null; previewUrl: string | null };
 
-/** Real catalog search (GET /api/songs/search). Under 2 characters there's nothing to search. */
+/** Real catalog search and empty-query discovery (GET /api/songs/search). */
 export async function searchSongs(q: string): Promise<Song[]> {
-  if (q.trim().length < 2) return [];
-  const res = await fetch(`/api/songs/search?q=${encodeURIComponent(q.trim())}`, { credentials: "same-origin" });
+  const query = q.trim();
+  if (query.length === 1) return [];
+  const path = query ? `/api/songs/search?q=${encodeURIComponent(query)}` : "/api/songs/search";
+  const res = await fetch(path, { credentials: "same-origin" });
   if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to search." : "Song search isn't responding right now.");
   const { songs } = (await res.json()) as { songs: SearchSong[] };
   return songs.map((s) => ({

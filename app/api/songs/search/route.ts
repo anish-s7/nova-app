@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
 
 /**
- * Song search for picking songs and swaps: the real catalog, not the demo list. Deezer first (no
- * key, popularity-ranked, so "holocene" finds Bon Iver before covers; album art included), iTunes
- * Search if Deezer fails. Results are display candidates
+ * Song search and empty-query discovery for picking songs and swaps: real provider data, not the
+ * demo list. Deezer first (search or chart), then the matching iTunes provider endpoint if Deezer
+ * fails or returns no songs. Results are display candidates
  * only: the song's identity is still resolved through MusicBrainz once, when a pick is saved
  * (POST /api/picks), so this never touches MusicBrainz's 1 req/s limit. Neither source is
  * Spotify data.
@@ -14,6 +14,7 @@ import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
 export type SearchSong = { id: string; title: string; artist: string; albumArtUrl: string | null; previewUrl: string | null };
 
 const LIMIT = 20;
+const DISCOVERY_LIMIT = 10;
 // Deezer preview links in results expire ~15 minutes after the search; stay well inside that.
 const TTL_MS = 5 * 60 * 1000;
 const MAX_CACHED = 500;
@@ -46,6 +47,39 @@ async function searchDeezer(q: string): Promise<SearchSong[]> {
   }));
 }
 
+async function discoverDeezer(): Promise<SearchSong[]> {
+  const res = await fetch(`https://api.deezer.com/chart/0/tracks?${new URLSearchParams({ limit: String(DISCOVERY_LIMIT) })}`, {
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`Deezer discovery ${res.status}`);
+  const data = (await res.json()) as { data?: { id: number; title: string; artist: { name: string }; album?: { cover_medium?: string }; preview?: string }[] };
+  return (data.data ?? []).map((r) => ({
+    id: `deezer:${r.id}`,
+    title: r.title,
+    artist: r.artist.name,
+    albumArtUrl: r.album?.cover_medium ?? null,
+    previewUrl: r.preview || null,
+  }));
+}
+
+async function discoverITunes(): Promise<SearchSong[]> {
+  const res = await fetch(`https://rss.marketingtools.apple.com/api/v2/us/music/most-played/${DISCOVERY_LIMIT}/songs.json`, {
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!res.ok) throw new Error(`iTunes discovery ${res.status}`);
+  const data = (await res.json()) as {
+    feed?: { results?: { id: string; name: string; artistName: string; artworkUrl100?: string }[] };
+  };
+  return (data.feed?.results ?? []).map((r) => ({
+    id: `itunes:${r.id}`,
+    title: r.name,
+    artist: r.artistName,
+    albumArtUrl: r.artworkUrl100?.replace("100x100bb", "300x300bb") ?? null,
+    // The chart feed has no clip URL. PreviewButton refreshes one by id or title/artist on demand.
+    previewUrl: null,
+  }));
+}
+
 /** Same song on several albums (single, album, deluxe) shows once. */
 function dedupe(songs: SearchSong[]) {
   const seen = new Set<string>();
@@ -63,21 +97,24 @@ export async function GET(req: NextRequest) {
   }
 
   const q = (req.nextUrl.searchParams.get("q") ?? "").trim().slice(0, 100);
-  if (q.length < 2) return NextResponse.json({ songs: [] });
+  if (q.length === 1) return NextResponse.json({ songs: [] });
 
-  const key = q.toLowerCase();
+  const discovering = q.length === 0;
+  const key = discovering ? "__discovery__" : q.toLowerCase();
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL_MS) return NextResponse.json({ songs: hit.songs });
 
   let songs: SearchSong[];
   try {
-    songs = dedupe(await searchDeezer(q));
+    songs = dedupe(discovering ? await discoverDeezer() : await searchDeezer(q));
+    // An empty provider response is not useful discovery/search; give the fallback a chance.
+    if (songs.length === 0) throw new Error(`Deezer ${discovering ? "discovery" : "search"} returned no songs`);
   } catch (err) {
-    console.error("Deezer search failed, trying iTunes:", err);
+    console.error(`Deezer ${discovering ? "discovery" : "search"} failed, trying iTunes:`, err);
     try {
-      songs = dedupe(await searchITunes(q));
+      songs = dedupe(discovering ? await discoverITunes() : await searchITunes(q));
     } catch (err2) {
-      console.error("iTunes search failed too:", err2);
+      console.error(`iTunes ${discovering ? "discovery" : "search"} failed too:`, err2);
       return NextResponse.json({ error: "Song search isn't responding right now." }, { status: 502 });
     }
   }

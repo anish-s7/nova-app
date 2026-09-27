@@ -40,7 +40,7 @@ function PickSongs() {
   const [query, setQuery] = useState("");
   // Real mode searches the whole catalog over the network, so wait for a pause in typing.
   const deferred = useDebouncedValue(query, REAL_DATA ? 350 : 0).trim();
-  const { data: results, isLoading, error: searchError } = useSWR(["songs", deferred], ([, q]) => searchSongs(q), { keepPreviousData: true });
+  const { data: results, isLoading, error: searchError } = useSWR(["songs", deferred], ([, q]) => searchSongs(q));
   const searching = deferred.length >= (REAL_DATA ? 2 : 1);
   const tray = useRef<HTMLUListElement>(null);
   // Songs you've already saved: marked in the list, and picking one again updates it instead of adding a copy.
@@ -51,10 +51,10 @@ function PickSongs() {
 
   const count = picked.length;
   const full = count >= MAX;
-  const isPicked = (id: string) => picked.some((s) => s.id === id);
+  const isPicked = (song: Song) => picked.some((s) => sameSong(s, song));
 
   const toggle = (song: Song) =>
-    setPicked((p) => (p.some((s) => s.id === song.id) ? p.filter((s) => s.id !== song.id) : p.length >= MAX ? p : [...p, { ...song, source: "manual" }]));
+    setPicked((p) => (p.some((s) => sameSong(s, song)) ? p.filter((s) => !sameSong(s, song)) : p.length >= MAX ? p : [...p, { ...song, source: "manual" }]));
 
   // Leaving the screen stops any preview that's playing.
   useEffect(() => stopPreview, []);
@@ -101,9 +101,16 @@ function PickSongs() {
           </label>
         </div>
 
-        <ul className={cn("flex flex-col transition-opacity", isLoading && "opacity-60")} aria-busy={isLoading} aria-label="Songs">
-          {(searching || !REAL_DATA ? (results ?? []) : []).map((song) => {
-            const on = isPicked(song.id);
+        {!deferred && REAL_DATA ? (
+          <div className="pb-3 pt-4">
+            <p className="font-medium">Not sure where to start?</p>
+            <p className="mt-1 text-sm text-muted-foreground">Pick something familiar, or search for any song.</p>
+          </div>
+        ) : null}
+
+        <ul className={cn("flex flex-col transition-opacity", isLoading && "opacity-60")} aria-busy={isLoading} aria-label={deferred ? "Search results" : "Songs to discover"}>
+          {(!deferred || searching || !REAL_DATA ? (results ?? []) : []).map((song) => {
+            const on = isPicked(song);
             return (
               <li key={song.id} className="flex items-center gap-1">
                 {/* Real search results carry a ~30s clip; the button sits beside the pick button, not in it. */}
@@ -133,8 +140,10 @@ function PickSongs() {
           })}
           {searchError ? (
             <li className="py-8 text-center text-sm text-muted-foreground">{searchError instanceof Error ? searchError.message : "Search isn't responding right now."}</li>
-          ) : REAL_DATA && !searching ? (
-            <li className="py-8 text-center text-sm text-muted-foreground">Search for any song or artist you actually reach for.</li>
+          ) : REAL_DATA && deferred.length === 1 ? (
+            <li className="py-8 text-center text-sm text-muted-foreground">Type one more character to search.</li>
+          ) : REAL_DATA && !deferred && isLoading ? (
+            <li className="py-8 text-center text-sm text-muted-foreground">Finding a few familiar songs…</li>
           ) : results && results.length === 0 && searching && !isLoading ? (
             <li className="py-8 text-center text-sm text-muted-foreground">No songs match &ldquo;{deferred}&rdquo;.</li>
           ) : null}
