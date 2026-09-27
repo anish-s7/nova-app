@@ -2,16 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Loader2, Search } from "lucide-react";
-import { mutate } from "swr";
+import useSWR, { mutate } from "swr";
 import { AlbumArt } from "@/components/album-art";
 import { MoodCircle, type Mood } from "@/components/mood-circle";
 import { TagPicker } from "@/components/tag-picker";
-import { addSong, REAL_DATA, getSongLayer } from "@/lib/api";
+import { useDebouncedValue } from "@/hooks/use-debounced-value";
+import { addSong, getSongTags, REAL_DATA, getSongLayer } from "@/lib/api";
+import { LEGACY_SONG_TAGS } from "@/lib/cluster-assign";
 import { getCluster } from "@/lib/clusters";
 import { SONG_CATALOG } from "@/lib/music-context";
 import { addPick, effectiveSongs, getSession, useSession } from "@/lib/session";
 import { describePick, type SongLayer, type SongPick } from "@/lib/song-layer";
-import type { Tag } from "@/lib/tags";
 import { THEME_THRESHOLD, THEMES, type ThemeId } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +30,7 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [reason, setReason] = useState("");
-  const [tags, setTags] = useState<Tag[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   const [mood, setMood] = useState<Mood>({ valence: 0, energy: 0 });
   const [placed, setPlaced] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -37,6 +38,16 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
   const titleRef = useRef<HTMLInputElement>(null);
   useEffect(() => titleRef.current?.focus({ preventScroll: true }), []);
 
+  // The song's own tags, once a title and artist are typed (and typing has paused).
+  const named = useDebouncedValue(`${title.trim()}\n${artist.trim()}`, 600);
+  const [tagTitle, tagArtist] = named.split("\n");
+  const { data: songTags, error: tagError } = useSWR(tagTitle && tagArtist ? ["song-tags", tagTitle, tagArtist] : null, () => getSongTags({ title: tagTitle, artist: tagArtist }), {
+    revalidateOnFocus: false,
+  });
+  // A different song means different tags: drop choices that aren't this song's.
+  useEffect(() => {
+    if (songTags) setTags((t) => t.filter((x) => songTags.some((o) => o.label === x)));
+  }, [songTags]);
   const ready = title.trim() && artist.trim() && tags.length > 0;
 
   const submit = async () => {
@@ -65,7 +76,11 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
       <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Song title" aria-label="Song title" disabled={busy} className={field} />
       <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" aria-label="Artist" disabled={busy} className={field} />
 
-      <TagPicker value={tags} onChange={setTags} label={`Tags for ${title.trim() || "this song"}`} />
+      {tagTitle && tagArtist ? (
+        <TagPicker value={tags} onChange={setTags} label={`Tags for ${title.trim() || "this song"}`} options={tagError ? LEGACY_SONG_TAGS : songTags} />
+      ) : (
+        <p className="text-sm text-muted-foreground">Type the song and artist to see its tags.</p>
+      )}
       <MoodCircle
         value={mood}
         placed={placed}

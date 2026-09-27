@@ -1,13 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import useSWR from "swr";
 import { Loader2, Trash2 } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
 import { BottomSheet } from "@/components/bottom-sheet";
 import { MoodCircle } from "@/components/mood-circle";
 import { TagPicker } from "@/components/tag-picker";
 import { Button } from "@/components/ui/button";
-import { removeSong, updateSongFeeling, type MySong } from "@/lib/api";
+import { getSongTags, removeSong, updateSongFeeling, type MySong } from "@/lib/api";
+import { LEGACY_SONG_TAGS } from "@/lib/cluster-assign";
 import type { Feeling } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +28,8 @@ export function SongFeelingSheet({ item, onClose, onChanged }: { item: MySong | 
 
 function Editor({ item, onClose, onChanged }: { item: MySong; onClose: () => void; onChanged: () => void }) {
   const [feeling, setFeeling] = useState<Feeling>(item.feeling);
+  // This song's own tags; the ones already on the pick stay visible (TagPicker keeps them).
+  const { data: songTags, error: tagError } = useSWR(["song-tags", item.song.title, item.song.artist], () => getSongTags(item.song), { revalidateOnFocus: false });
   const [busy, setBusy] = useState<"save" | "remove" | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [error, setError] = useState("");
@@ -61,7 +65,12 @@ function Editor({ item, onClose, onChanged }: { item: MySong; onClose: () => voi
       </div>
 
       <div className="-mx-5 mt-4 min-h-0 flex-1 overflow-y-auto px-5">
-        <TagPicker value={feeling.tags} onChange={(tags) => setFeeling((f) => ({ ...f, tags }))} label={`Tags for ${item.song.title}`} />
+        <TagPicker
+          value={feeling.tags}
+          onChange={(tags) => setFeeling((f) => ({ ...f, tags }))}
+          label={`Tags for ${item.song.title}`}
+          options={tagError ? LEGACY_SONG_TAGS : songTags}
+        />
         <div className="mt-6 flex justify-center">
           <MoodCircle
             value={{ valence: feeling.valence, energy: feeling.energy }}

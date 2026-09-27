@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import useSWR from "swr";
+import useSWR, { preload } from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AudioLines, Check } from "lucide-react";
@@ -11,9 +11,9 @@ import { MoodCircle, type Mood } from "@/components/mood-circle";
 import { ScreenHeader } from "@/components/screen-header";
 import { TagPicker } from "@/components/tag-picker";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { getMySongs, sameSong, saveSongs } from "@/lib/api";
+import { getMySongs, getSongTags, sameSong, saveSongs } from "@/lib/api";
+import { LEGACY_SONG_TAGS } from "@/lib/cluster-assign";
 import { setSession, useHydrated, useSession, type Feeling } from "@/lib/session";
-import type { Tag } from "@/lib/tags";
 import type { Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -124,6 +124,14 @@ function DescribeSongs({ songs, feelings, fromSpotify }: { songs: Song[]; feelin
     setSession((s) => ({ feelings: { ...s.feelings, [song.id]: existing.feeling } }));
   }, [existing, song.id, feelings]);
   const ready = feeling.tags.length > 0;
+  // Each song's own tags. Fetch them all up front, so moving to the next song doesn't wait; a song
+  // nobody has described yet takes one short Gemini call, then it's instant for everyone.
+  const tagKey = (s: Song) => ["song-tags", s.title, s.artist] as const;
+  useEffect(() => {
+    for (const s of songs) void preload(tagKey(s), () => getSongTags(s)).catch((err) => console.error(`Tags for "${s.title}" didn't load:`, err));
+  }, [songs]);
+  const { data: songTags, error: tagError } = useSWR(tagKey(song), () => getSongTags(song), { revalidateOnFocus: false });
+  const tagOptions = tagError ? LEGACY_SONG_TAGS : songTags;
 
   const update = (patch: Partial<Feeling>) =>
     setSession((s) => ({ feelings: { ...s.feelings, [song.id]: { ...(s.feelings?.[song.id] ?? EMPTY_FEELING), ...patch } } }));
@@ -172,7 +180,7 @@ function DescribeSongs({ songs, feelings, fromSpotify }: { songs: Song[]; feelin
           {existing ? <p className="mt-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">Already in your songs. Your answers here replace the old ones.</p> : null}
 
           <div className="mt-6">
-            <TagPicker value={feeling.tags} onChange={(tags: Tag[]) => update({ tags })} label={`Tags for ${song.title}`} />
+            <TagPicker value={feeling.tags} onChange={(tags) => update({ tags })} label={`Tags for ${song.title}`} options={tagOptions} />
           </div>
 
           <div className="mt-8">

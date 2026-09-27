@@ -15,7 +15,8 @@
  */
 
 import { CLUSTER_IDS, getCluster } from "./clusters";
-import type { Tag } from "./tags";
+import type { SongTag } from "./tags";
+import { LEGACY_SONG_TAGS } from "./cluster-assign";
 import { ApiError } from "./api-error";
 import { REAL_DATA } from "./data-source";
 import { httpDb } from "./http-db";
@@ -176,6 +177,14 @@ function byTime(messages: Message[]) {
 // demo catalog. There's no Spotify import in the UI: Spotify's development mode only admits a
 // handful of allowlisted accounts, so everyone picks their own songs.
 
+/**
+ * The tags to choose from for a song on the feel step, "+" and the edit sheet. Real mode: written
+ * for that song (song_tags); demo mode: the original fixed tags.
+ */
+export async function getSongTags(song: { title: string; artist: string }): Promise<SongTag[]> {
+  return REAL_DATA ? real.getSongTags(song) : LEGACY_SONG_TAGS;
+}
+
 export async function searchSongs(q: string): Promise<Song[]> {
   if (REAL_DATA) return real.searchSongs(q);
   await delay(180);
@@ -273,7 +282,7 @@ export async function saveSongs() {
  * no more placeholder tags/valence/energy. Slow: MusicBrainz, cover art and, for a new song, Gemini
  * all run inside the request.
  */
-export async function addSong(input: { title: string; artist: string; tags: Tag[]; valence: number; energy: number; reason?: string }) {
+export async function addSong(input: { title: string; artist: string; tags: string[]; valence: number; energy: number; reason?: string }) {
   await db.insertPick({
     title: input.title,
     artist: input.artist,
@@ -310,7 +319,7 @@ export async function getMySongs(): Promise<MySong[]> {
   return rows.map((r) => ({
     pickId: r.id,
     song: songFromRow(r.song),
-    feeling: { tags: r.tags as Tag[], valence: r.valence, energy: r.energy, placed: r.tags.length > 0 || r.valence !== 0 || r.energy !== 0 },
+    feeling: { tags: r.tags, valence: r.valence, energy: r.energy, placed: r.tags.length > 0 || r.valence !== 0 || r.energy !== 0 },
   }));
 }
 

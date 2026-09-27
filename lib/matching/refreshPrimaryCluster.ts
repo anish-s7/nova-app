@@ -9,7 +9,7 @@ import type { Database } from "../supabase/types";
  */
 export async function refreshPrimaryCluster(supabase: SupabaseClient<Database>, profileId: string): Promise<string | null> {
   const [{ data: picks, error }, { data: profile }] = await Promise.all([
-    supabase.from("song_picks").select("tags, valence, energy").eq("profile_id", profileId),
+    supabase.from("song_picks").select("tags, tag_whys, valence, energy").eq("profile_id", profileId),
     supabase.from("profiles").select("primary_cluster").eq("id", profileId).maybeSingle(),
   ]);
   if (error) throw new Error(`refreshPrimaryCluster failed to load picks: ${error.message}`);

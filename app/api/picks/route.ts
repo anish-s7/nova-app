@@ -6,7 +6,8 @@ import { findCover } from "@/lib/cover-art";
 import { resolveSong } from "@/lib/musicbrainz/client";
 import { clampEmotionValue } from "@/lib/emotion";
 import { buildPickEmbedding } from "@/lib/matching/pickEmbedding";
-import { isValidTag } from "@/lib/tags";
+import { MAX_PICK_TAGS } from "@/lib/tags";
+import { resolvePickTags } from "@/lib/matching/songTags";
 import { refreshPrimaryCluster } from "@/lib/matching/refreshPrimaryCluster";
 import { parseVector } from "@/lib/supabase/vector";
 
@@ -50,15 +51,18 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const invalidTags = tags.filter((t) => !isValidTag(t));
-  if (invalidTags.length > 0) {
-    return NextResponse.json(
-      { error: `Invalid tags: ${invalidTags.join(", ")}` },
-      { status: 400 }
-    );
+  if (tags.length > MAX_PICK_TAGS) {
+    return NextResponse.json({ error: `At most ${MAX_PICK_TAGS} tags` }, { status: 400 });
   }
 
   const supabase = createServerClient();
+
+  // Tags must be this song's own (song_tags, fetched on the feel step by the same title/artist) or
+  // one of the original fixed tags. Checked before any MusicBrainz/Gemini work.
+  const checked = await resolvePickTags(supabase, [{ title, artist }], tags);
+  if ("invalid" in checked) {
+    return NextResponse.json({ error: `Invalid tags: ${checked.invalid.join(", ")}` }, { status: 400 });
+  }
 
   // Song identity: MusicBrainz first, Gemini only as a fallback when it
   // can't confidently resolve the typed title/artist. See CLAUDE.md.
@@ -127,6 +131,7 @@ export async function POST(req: NextRequest) {
   // newest feelings win and no duplicate is created (unique index, 20260928000000_one_pick_per_song.sql).
   const feelings = {
     tags,
+    tag_whys: checked.tagWhys,
     valence: clampedValence,
     energy: clampedEnergy,
     embedding: pickEmbedding,
@@ -154,7 +159,7 @@ export async function POST(req: NextRequest) {
 }
 
 type Supabase = ReturnType<typeof createServerClient>;
-type Feelings = { tags: string[]; valence: number; energy: number; embedding: number[]; reason_text: string | null; is_public: boolean; updated_at: string };
+type Feelings = { tags: string[]; tag_whys: string[]; valence: number; energy: number; embedding: number[]; reason_text: string | null; is_public: boolean; updated_at: string };
 
 /** Updates the profile's existing pick for this song, or inserts one. Retries as an update if a concurrent save won the insert. */
 async function savePick(supabase: Supabase, profileId: string, songId: string, feelings: Feelings) {
@@ -188,21 +193,32 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { id, tags, valence, energy } = (await req.json()) as { id?: string; tags?: string[]; valence?: number; energy?: number };
-  if (!id || !Array.isArray(tags) || tags.length === 0 || tags.length > 3) {
-    return NextResponse.json({ error: "id and 1-3 tags are required" }, { status: 400 });
-  }
-  const invalidTags = tags.filter((t) => !isValidTag(t));
-  if (invalidTags.length > 0) {
-    return NextResponse.json({ error: `Invalid tags: ${invalidTags.join(", ")}` }, { status: 400 });
+  if (!id || !Array.isArray(tags) || tags.length === 0 || tags.length > MAX_PICK_TAGS) {
+    return NextResponse.json({ error: `id and 1-${MAX_PICK_TAGS} tags are required` }, { status: 400 });
   }
 
   const supabase = createServerClient();
   // Scoped to the caller's own picks: someone else's pick id simply isn't found.
-  const { data: existing, error: findError } = await supabase.from("song_picks").select("id, song_id").eq("id", id).eq("profile_id", profileId).maybeSingle();
+  const { data: existing, error: findError } = await supabase
+    .from("song_picks")
+    .select("id, song_id, tags, tag_whys")
+    .eq("id", id)
+    .eq("profile_id", profileId)
+    .maybeSingle();
   if (findError) return NextResponse.json({ error: findError.message }, { status: 500 });
   if (!existing) return NextResponse.json({ error: "Pick not found" }, { status: 404 });
-  const { data: song } = await supabase.from("songs").select("embedding").eq("id", existing.song_id).maybeSingle();
+  const { data: song } = await supabase.from("songs").select("title, artist, embedding").eq("id", existing.song_id).maybeSingle();
   if (!song?.embedding) return NextResponse.json({ error: "Catalog song is missing an embedding" }, { status: 500 });
+
+  // Tags the pick already has stay valid (the catalog's official title can differ a little from the
+  // one searched when it was saved); new ones must be the song's own or the original fixed tags.
+  const kept = new Map(existing.tags.map((t, i) => [t, existing.tag_whys?.[i] ?? ""]));
+  const checked = await resolvePickTags(supabase, [{ title: song.title, artist: song.artist }], tags.filter((t) => !kept.has(t)));
+  if ("invalid" in checked) {
+    return NextResponse.json({ error: `Invalid tags: ${checked.invalid.join(", ")}` }, { status: 400 });
+  }
+  const newWhys = new Map(tags.filter((t) => !kept.has(t)).map((t, i) => [t, checked.tagWhys[i]]));
+  const tagWhys = tags.map((t) => (kept.has(t) ? kept.get(t)! : newWhys.get(t)!));
 
   const clampedValence = clampEmotionValue(valence ?? 0);
   const clampedEnergy = clampEmotionValue(energy ?? 0);
@@ -210,6 +226,7 @@ export async function PATCH(req: NextRequest) {
     .from("song_picks")
     .update({
       tags,
+      tag_whys: tagWhys,
       valence: clampedValence,
       energy: clampedEnergy,
       embedding: buildPickEmbedding(parseVector(song.embedding), clampedValence, clampedEnergy),

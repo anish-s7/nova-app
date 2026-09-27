@@ -40,6 +40,7 @@ export interface GalaxySongs {
 type PickJoin = {
   profile_id: string;
   tags: string[];
+  tag_whys: string[] | null;
   valence: number;
   energy: number;
   reason_text: string | null;
@@ -56,7 +57,7 @@ export async function getGalaxySongs(profileId: string): Promise<GalaxySongs> {
   const supabase = createServerClient();
   const { data, error } = await supabase
     .from("song_picks")
-    .select("profile_id, tags, valence, energy, reason_text, created_at, is_public, songs(id, title, artist, album_art_url, spotify_track_id, context_summary)")
+    .select("profile_id, tags, tag_whys, valence, energy, reason_text, created_at, is_public, songs(id, title, artist, album_art_url, spotify_track_id, context_summary)")
     .in("profile_id", ids);
   if (error) throw new Error(`getGalaxySongs failed: ${error.message}`);
 

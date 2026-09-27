@@ -4,6 +4,7 @@
  * schema is applied — keep the shape in sync with db/contract.md until then.
  */
 import type { CardThread, Portrait } from "../portrait";
+import type { SongTag } from "../tags";
 
 export interface ConnectionCardJson {
   shared_why: string;
@@ -87,6 +88,8 @@ export interface Database {
           profile_id: string;
           song_id: string;
           tags: string[];
+          /** Listening reason per tag (song_tags); "" for the original fixed tags. */
+          tag_whys: string[];
           valence: number;
           energy: number;
           embedding: number[];
@@ -100,6 +103,7 @@ export interface Database {
           profile_id: string;
           song_id: string;
           tags: string[];
+          tag_whys?: string[];
           valence: number;
           energy: number;
           embedding: number[];
@@ -109,6 +113,7 @@ export interface Database {
         };
         Update: Partial<{
           tags: string[];
+          tag_whys: string[];
           valence: number;
           energy: number;
           embedding: number[];
@@ -161,6 +166,25 @@ export interface Database {
           model: string;
           updated_at: string;
         }>;
+        Relationships: [];
+      };
+      song_tags: {
+        Row: {
+          song_key: string;
+          title: string;
+          artist: string;
+          tags: SongTag[];
+          model: string;
+          created_at: string;
+        };
+        Insert: {
+          song_key: string;
+          title: string;
+          artist: string;
+          tags: SongTag[];
+          model: string;
+        };
+        Update: Record<string, never>;
         Relationships: [];
       };
       messages: {
