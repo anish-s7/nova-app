@@ -15,8 +15,23 @@ begin;
 alter table public.profiles add column if not exists avatar jsonb;
 alter table public.profiles add column if not exists avatar_url text;
 
-alter table public.profiles
-  add constraint profiles_avatar_json_object check (avatar is null or jsonb_typeof(avatar) = 'object');
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profiles_avatar_json_object'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_avatar_json_object
+      check (
+        avatar is null
+        or jsonb_typeof(avatar) = 'object'
+      );
+  end if;
+end
+$$;
 
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 values ('avatars', 'avatars', true, 1048576, array['image/jpeg'])
