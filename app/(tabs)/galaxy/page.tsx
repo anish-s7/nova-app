@@ -22,14 +22,16 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { useGalaxyRealtime, type Arrival } from "@/hooks/use-galaxy-realtime";
-import { getConversations, getGalaxy, getGalaxyMore, getSongLayer, getUser, ME_ID } from "@/lib/api";
+import { PreviewButton } from "@/components/preview-button";
+import { SongTile } from "@/components/song-tile";
+import { getConversations, getGalaxy, getGalaxyMore, getSongLayer, getUser, ME_ID, REAL_DATA } from "@/lib/api";
 import { getCluster } from "@/lib/clusters";
 import { useSession } from "@/lib/session";
 import { songConnections } from "@/lib/song-connections";
 import { isSongNode, songNodeId } from "@/lib/song-layer";
 import { THEME_THRESHOLD } from "@/lib/themes";
 import { BOND_AT } from "@/lib/thread";
-import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
+import type { GalaxyEdge, GalaxyNode, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const MAX_HOPS = 4;
@@ -576,6 +578,9 @@ function StarPreview({ node, traded, hop }: { node: GalaxyNode; traded: number; 
               {moment.when}
             </p>
           </>
+        ) : data ? (
+          // Real mode has no "listening moment" (it's demo-only texture): show their songs instead.
+          <TheirSongs userId={node.userId} songs={data.songs} />
         ) : (
           <>
             <Skeleton className="h-4 w-56" />
@@ -617,6 +622,30 @@ function StarPreview({ node, traded, hop }: { node: GalaxyNode; traded: number; 
           What you share
         </Link>
       </div>
+    </div>
+  );
+}
+
+const SHEET_SONGS = 4;
+
+/** A person's songs in the star sheet: the first few, each playable, and a link to the rest. */
+function TheirSongs({ userId, songs }: { userId: string; songs: Song[] }) {
+  if (!songs.length) return <p className="text-sm text-muted-foreground">No songs shared yet.</p>;
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">Their songs</p>
+      <ul className="mt-1.5 flex flex-col">
+        {songs.slice(0, SHEET_SONGS).map((song) => (
+          <li key={song.id}>
+            <SongTile song={song} artSize={40} className="min-h-12" trailing={REAL_DATA ? <PreviewButton song={song} className="-mr-2" /> : null} />
+          </li>
+        ))}
+      </ul>
+      {songs.length > SHEET_SONGS ? (
+        <Link href={`/people/${userId}`} className="mt-1 inline-block text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground">
+          See all {songs.length} songs
+        </Link>
+      ) : null}
     </div>
   );
 }
