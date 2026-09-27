@@ -53,7 +53,7 @@ update public.profiles set primary_topic_cluster_id = case primary_cluster
   when 'somewhere_else' then '00000000-0000-4000-8000-000000000004'
   when 'old_selves' then '00000000-0000-4000-8000-000000000005'
   else null
-end
+end::uuid  -- the literals above are text; the column is uuid
 where primary_cluster is not null;
 
 update public.topic_clusters tc
