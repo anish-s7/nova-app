@@ -623,7 +623,7 @@ export async function getContrastCard(otherId: string): Promise<ContrastCard> {
 }
 
 // ---------------------------------------------------------------------------
-// Messages. Text messages are contract rows; song swaps are NOT IN CONTRACT (lib/types.ts #9).
+// Messages. Both text and versioned Song Swap payloads are contract rows in real mode.
 
 function mockSwaps(otherId?: string): [string, Message][] {
   return [...conversations.entries()]
@@ -682,9 +682,9 @@ export async function sendMessage(userId: string, text: string): Promise<Message
   return messageFromRow(await db.insertMessage({ otherProfileId: userId, text }));
 }
 
-/** NOT IN CONTRACT: no song-swap table. */
-export async function sendSongSwap(userId: string, song: Song, reason: string, replyToSwapId?: string): Promise<Message> {
-  if (REAL_DATA) return real.sendSongSwap(userId, song, reason);
+/** Mock equivalent of the real structured message path; no separate song-swap table is needed. */
+export async function sendSongSwap(userId: string, song: Song, reason: string, replyToSwapId?: string, snippet?: import("./types").SongSnippet): Promise<Message> {
+  if (REAL_DATA) return real.sendSongSwap(userId, song, reason, replyToSwapId, snippet);
   await delay(300);
   const list = (conversations.get(userId) ?? []).map((m) =>
     m.kind === "swap" && m.swap.id === replyToSwapId ? { ...m, swap: { ...m.swap, status: "returned" as const } } : m,
@@ -694,7 +694,7 @@ export async function sendSongSwap(userId: string, song: Song, reason: string, r
     fromUserId: ME_ID,
     sentAt: new Date().toISOString(),
     kind: "swap",
-    swap: { id: `sw-${Date.now()}`, fromUserId: ME_ID, toUserId: userId, song, reason, status: "pending" },
+    swap: { id: `sw-${Date.now()}`, fromUserId: ME_ID, toUserId: userId, song, reason, status: "pending", snippet, replyToMessageId: replyToSwapId },
   };
   conversations.set(userId, [...list, msg]);
   scheduleReply(userId);

@@ -77,7 +77,7 @@ function mockMatchCard(otherProfileId: string): ConnectionCardRow | null {
 
 function messageRow(otherId: string, m: Extract<Message, { kind: "text" }>): MessageRow {
   const [user_a, user_b] = pair(ME_ID, otherId);
-  return { id: m.id, user_a, user_b, sender_id: m.fromUserId, body: m.text, created_at: m.sentAt };
+  return { id: m.id, user_a, user_b, sender_id: m.fromUserId, body: m.text, kind: "text", payload: null, created_at: m.sentAt };
 }
 
 export function resetMockDb() {
@@ -187,9 +187,11 @@ export const mockDb: Db = {
       );
   },
 
-  async insertMessage({ otherProfileId, text }) {
+  async insertMessage(input) {
+    const { otherProfileId } = input;
+    const text = input.kind === "song_swap" ? `Song swap: “${input.payload.song.title}” by ${input.payload.song.artist} — ${input.payload.reason}` : input.text;
     const [user_a, user_b] = pair(ME_ID, otherProfileId);
-    const row: MessageRow = { id: `m-${Date.now()}`, user_a, user_b, sender_id: ME_ID, body: text, created_at: new Date().toISOString() };
+    const row: MessageRow = { id: `m-${Date.now()}`, user_a, user_b, sender_id: ME_ID, body: text, kind: input.kind === "song_swap" ? "song_swap" : "text", payload: input.kind === "song_swap" ? input.payload : null, created_at: new Date().toISOString() };
     conversations.set(otherProfileId, [...(conversations.get(otherProfileId) ?? []), { id: row.id, fromUserId: ME_ID, sentAt: row.created_at, kind: "text", text }]);
     scheduleReply(otherProfileId);
     return row;
