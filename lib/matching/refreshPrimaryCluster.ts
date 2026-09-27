@@ -1,6 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { primaryClusterFor } from "../cluster-assign";
 import { assignNearestCluster } from "./assignTopicCluster";
 import { topicVectorFor } from "./topicClusterVector";
+import { isMissingTable } from "../supabase/missing-table";
 import { parseVector } from "../supabase/vector";
 import type { Database } from "../supabase/types";
 
@@ -12,14 +14,28 @@ import type { Database } from "../supabase/types";
  * HDBSCAN would call noise into some nearby cluster anyway — that's scripts/recompute-topic-clusters.ts,
  * a separate batch job. Returns the assigned cluster id, or null (no picks yet, or no
  * topic_clusters row has a centroid yet — i.e. always, until that job has run once).
+ *
+ * Until migration 20260929000000 is applied, topic_clusters doesn't exist and profiles still has
+ * the old text primary_cluster column (which the galaxy RPCs read): then it falls back to the
+ * previous tag/slider vote over the five static clusters and writes primary_cluster.
  */
 export async function refreshPrimaryCluster(supabase: SupabaseClient<Database>, profileId: string): Promise<string | null> {
   const [{ data: picks, error: picksError }, { data: profile }, { data: clusterRows, error: clustersError }] = await Promise.all([
-    supabase.from("song_picks").select("embedding").eq("profile_id", profileId),
-    supabase.from("profiles").select("primary_topic_cluster_id").eq("id", profileId).maybeSingle(),
+    supabase.from("song_picks").select("tags, valence, energy, embedding").eq("profile_id", profileId),
+    // "*" so the same read works before (primary_cluster) and after (primary_topic_cluster_id) the migration.
+    supabase.from("profiles").select("*").eq("id", profileId).maybeSingle(),
     supabase.from("topic_clusters").select("id, centroid").is("superseded_by", null).not("centroid", "is", null),
   ]);
   if (picksError) throw new Error(`refreshPrimaryCluster failed to load picks: ${picksError.message}`);
+
+  if (isMissingTable(clustersError)) {
+    const cluster = primaryClusterFor(picks ?? [], profileId);
+    if (cluster && cluster !== profile?.primary_cluster) {
+      const { error: updateError } = await supabase.from("profiles").update({ primary_cluster: cluster }).eq("id", profileId);
+      if (updateError) throw new Error(`refreshPrimaryCluster failed to write: ${updateError.message}`);
+    }
+    return cluster;
+  }
   if (clustersError) throw new Error(`refreshPrimaryCluster failed to load topic clusters: ${clustersError.message}`);
 
   const vector = topicVectorFor((picks ?? []).map((p) => parseVector(p.embedding)));

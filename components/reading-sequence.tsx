@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { animate, createDrawable, createMotionPath, createTimeline, splitText, stagger, utils } from "animejs";
+import { Loader2 } from "lucide-react";
 import { DemoSteps } from "@/components/demo-steps";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
@@ -228,8 +229,16 @@ export function ReadingSequence() {
       <main className="starfield flex flex-1 flex-col items-center justify-center gap-4 px-8 text-center">
         <p className="font-serif text-2xl italic">We couldn&apos;t get through your songs just now.</p>
         <p className="text-sm text-muted-foreground">Your songs are saved. Give it another try.</p>
+        {/* The error stays up while retrying, so the button itself has to show that something is happening. */}
         <Button className="mt-2 h-11 rounded-full px-6" disabled={isValidating} onClick={() => mutate()}>
-          Try again
+          {isValidating ? (
+            <>
+              <Loader2 className="size-4 animate-spin" aria-hidden />
+              Trying again…
+            </>
+          ) : (
+            "Try again"
+          )}
         </Button>
       </main>
     );
