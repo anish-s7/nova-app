@@ -9,11 +9,15 @@ as a side effect of an unrelated architecture or code change — update
 `db/contract.md` and the code instead, and leave this file alone unless
 someone specifically asks for a CLAUDE.md update.
 
-Last full update: 2026-09-27 (evening). Since the previous one: **Google sign-in** is live and
-the only social login (Apple removed, `9cd451b`); Daniel's **topic clusters** landed and their
-migration was applied in an additive form, with a transition bridge and James's missing-table
-fallbacks (`d66d3e2`); James's **latency pass** (`9850f56`); and **the team's test accounts were
-deleted** (only the demo personas and 4 outside testers remain).
+Last full update: 2026-09-27 (late evening). Since the previous one: **100 fictional test users**
+were seeded through the real pipeline (`scripts/seed-test-users.ts`, removable in one command); the
+galaxy's star sheet now **shows a person's songs with previews** in real mode (`2c30568`); James's
+reading screen keeps its 3D stars while songs save (`a50fd0e`).
+
+Earlier the same day: **Google sign-in** is live and the only social login (Apple removed,
+`9cd451b`); Daniel's **topic clusters** landed and their migration was applied in an additive
+form, with a transition bridge and James's missing-table fallbacks (`d66d3e2`); James's **latency
+pass** (`9850f56`); **the team's own accounts were deleted**.
 
 Before that: deployed on Vercel (`https://song-galaxy-nu.vercel.app`, auto-deploys `main`); feeling
 tags replaced the situation tags (`e3e7336`) and the demo personas were retagged by hand
@@ -146,6 +150,8 @@ lib/emotion.ts               EMOTION_WEIGHT + clampEmotionValue
 lib/safe-next.ts             safeNextPath(): the only allowed way to use an untrusted ?next= value
 supabase/migrations/         The real schema, applied in order via the SQL Editor (see status)
 supabase/seed.sql            Old fabricated-vector seed; superseded by scripts/seed-real-data.ts
+scripts/seed-test-users.ts   Seeds ~100 fictional test users (tester-NNN@test.song-galaxy.local) through the real
+                             pipeline; deterministic, idempotent. scripts/remove-test-users.ts deletes them all
 scripts/seed-real-data.ts    Seeds demo personas through the real MusicBrainz + Gemini pipeline (password from
                              SEED_DEMO_PASSWORD; re-running also re-applies it to existing personas)
 scripts/retag-demo-personas.ts  One-off (already run): personas' tags → hand-picked feelings per song
@@ -380,9 +386,19 @@ building user profiles. Practical rule for this codebase:
   backfilled; `primary_cluster` is **kept**. The original version dropped it, which would have broken
   the galaxy, and its backfill failed on a text→uuid cast; both fixed before applying).
 - **Accounts (2026-09-27):** all of the team's own accounts (Anish, Daniel, James, An/Bao/Jason
-  and their `+alias` test accounts) were deleted; the 6 demo personas and 4 outside testers
-  (Alisha Agrawal, Marcella Yang, Nivedha, Vidipta Roy) remain: 10 profiles, 43 picks, 18 match
-  cards, no messages. Teammates sign up again (email or Google) to use the app.
+  and their `+alias` test accounts) and Marcella Yang's were deleted. Then **100 test users** were
+  seeded. Now: **113 profiles** = 100 test users + the 6 demo personas + 3 outside testers
+  (Alisha Agrawal, Nivedha, Vidipta Roy) + James's new account (no songs yet); 610 picks, 175
+  catalog songs, 112 portraits. Teammates sign up again (email or Google) to use the app.
+- **Test users** (`scripts/seed-test-users.ts`, 2026-09-27): `tester-001` … `tester-100
+  @test.song-galaxy.local`, fictional names ("Maren K."), password `SEED_DEMO_PASSWORD`. Each leans
+  toward one or two listening reasons and picks 4–7 songs from a hand-built pool of ~100 well-known
+  songs (each with a plausible mood spot and fitting feelings), with personal variation; testers
+  001/002, 003/004 and 005/006 hold deliberate Wander pairs (Landslide, Mr. Brightside, Dreams).
+  Galaxy groups came out 31 / 24 / 22 / 20 / 15. Every tester has a portrait; **match cards are not
+  pre-generated** (they're assessed as people open Connections, 5 per load). A tester's galaxy
+  shows ~112 stars and ~138 links. Remove them all with `scripts/remove-test-users.ts --apply`
+  (only `@test.song-galaxy.local` accounts; catalog songs stay).
 - Demo personas (from `scripts/seed-real-data.ts`): Maya, Theo, Jordan, Amara, Noor, Sam
   (`<name>@song-galaxy.local`, password in `SEED_DEMO_PASSWORD`), 27 picks resolved through real
   MusicBrainz + Gemini, including a deliberate wander pair (Sam and Noor both picked
@@ -457,6 +473,10 @@ real feelings/mood (stored vector = unit-length song part + mood × 0.7), `GET /
 - **Songs are managed, not appended** (James, `song-tag-management`): Profile → tap a song to
   change how it feels or remove it; "Add or change songs" re-runs the picker, which marks songs
   you already have ("Yours"), needs only 1 song once you have some, and pre-fills the feel step.
+- **Star sheet shows songs** (`2c30568`, `app/(tabs)/galaxy/page.tsx` `StarPreview`/`TheirSongs`):
+  tapping a star used to wait forever on a "listening moment" that only the demo data has. In real
+  mode it now lists that person's first 4 songs with preview buttons and links to their profile
+  (`/people/[id]`, which already listed songs).
 - **Galaxy "you" fix** (James, `lib/matching/galaxyWindow.ts`): the center always gets its node,
   and your edges go to your top 12 by similarity, so new users no longer show zero connections.
 - **Spotify import is out of the UI.** Bao's `An/dev` connect route was merged and hardened
@@ -587,8 +607,9 @@ Roughly in priority order. None of these are in the active plan ("Next up" is).
    per person, cooldown, no reward for re-swapping a song), spent on customizing your own star
    (a store frame: items, owned, equipped). Depends on real swaps + bonds; a teammate is designing
    the star customizations. Scratched from the active plan 2026-09-27.
-3. **More demo personas** (on hold per Anish): 10–20 clearly fictional personas using feeling
-   tags so the galaxy isn't sparse; give Maya more songs. The seed writes portraits automatically.
+3. **Demo personas polish:** Maya (the main demo persona) still has only 1 song. The galaxy is no
+   longer sparse (100 test users), but those are bulk testers; hand-written personas read better
+   in a demo.
 4. **Realtime messages.** Chat polls `GET /api/messages` today; switch to a
    Supabase Realtime subscription (publication is already enabled on `messages`).
 5. **Repo reorganization** (lib/ and components/ into folders): only after the UI redesign lands,
@@ -642,12 +663,16 @@ NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_ANON_KEY= npm run dev
 ```
 
 Demo logins: `maya@song-galaxy.local`, `theo@song-galaxy.local`, `jordan@…`, `amara@…`,
-`noor@…`, `sam@…`, password = `SEED_DEMO_PASSWORD` (ask a teammate; it's not in the repo).
+`noor@…`, `sam@…`, and the test users `tester-001@test.song-galaxy.local` … `tester-100@…`;
+password = `SEED_DEMO_PASSWORD` for all (ask a teammate; it's not in the repo).
 
 Scripts (all read `.env.local`):
 ```bash
 # Seed demo personas through the real pipeline (safe to re-run; also re-applies SEED_DEMO_PASSWORD)
 node --env-file=.env.local node_modules/.bin/tsx scripts/seed-real-data.ts
+# ~100 fictional test users (idempotent; ~10 min the first time), and removing them all again
+node --env-file=.env.local node_modules/.bin/tsx scripts/seed-test-users.ts        # --count=N for a different size
+node --env-file=.env.local node_modules/.bin/tsx scripts/remove-test-users.ts      # dry run; add --apply to delete
 # Portraits for every profile with songs (skips up-to-date ones; --force regenerates all)
 node --env-file=.env.local node_modules/.bin/tsx scripts/generate-portraits.ts
 # Re-assess every candidate pair after changing judgment/scoring. First clear old cards in the SQL Editor:
