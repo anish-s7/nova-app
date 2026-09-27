@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { resetSession } from "@/lib/session";
 import { resetWorld } from "@/lib/api";
@@ -30,11 +31,8 @@ export function Logo({ className }: { className?: string }) {
       onContextMenu={(e) => e.preventDefault()}
       className={cn("inline-flex select-none items-center gap-2 text-sm font-semibold tracking-wide text-foreground/90 [-webkit-touch-callout:none]", className)}
     >
-      <span className="relative flex size-5 items-center justify-center" aria-hidden>
-        <span className="absolute size-5 rounded-full bg-primary/20 blur-[3px]" />
-        <span className="size-2 rounded-full bg-primary" />
-      </span>
-      Song Galaxy
+      <Image src="/nova-logo.png" alt="" width={301} height={215} className="h-6 w-auto shrink-0" priority aria-hidden />
+      Nova
     </span>
   );
 }
