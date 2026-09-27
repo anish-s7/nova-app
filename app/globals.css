@@ -214,6 +214,47 @@
   animation: orbit-pulse 3.2s ease-in-out infinite;
 }
 
+/* Welcome-page night sky: a hand-placed constellation drawing in behind the hero copy. */
+@utility sky-grain {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.05;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+@keyframes sky-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@utility draw-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: sky-draw 2.8s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation-delay: var(--draw-delay, 0.5s);
+}
+
+@keyframes star-twinkle {
+  0%,
+  100% {
+    opacity: var(--tw-base, 0.7);
+  }
+  50% {
+    opacity: calc(var(--tw-base, 0.7) * 0.3);
+  }
+}
+
+@utility twinkle {
+  animation: star-twinkle var(--tw-dur, 7s) ease-in-out infinite;
+  animation-delay: var(--tw-delay, 0s);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

@@ -61,8 +61,8 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
   return (
     <div className="flex flex-col gap-3">
       <h2 className="font-serif text-xl italic">Add a song to the galaxy</h2>
-      <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Song title" aria-label="Song title" disabled={busy} className={field} />
-      <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Artist" aria-label="Artist" disabled={busy} className={field} />
+      <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What's the song called?" aria-label="Song title" disabled={busy} className={field} />
+      <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Who made it?" aria-label="Artist" disabled={busy} className={field} />
 
       <MoodCircle
         value={mood}
@@ -163,7 +163,7 @@ function MockAddSongSheet({ layer, initialSongId, onAdded }: { layer: SongLayer;
               </button>
             </li>
           ))}
-          {results.length === 0 ? <li className="py-3 text-sm text-muted-foreground">Nothing here yet. Song search will use MusicBrainz once it&apos;s wired up.</li> : null}
+          {results.length === 0 ? <li className="py-3 text-sm text-muted-foreground">Nothing by that name in here yet. Try a different spelling, or the artist.</li> : null}
         </ul>
       </div>
     );
@@ -217,7 +217,7 @@ function MockAddSongSheet({ layer, initialSongId, onAdded }: { layer: SongLayer;
               >
                 <span className="size-1.5 rounded-full bg-[var(--tone)]" aria-hidden />
                 {theme.short}
-                {completes ? <span className="text-[var(--tone)]">would form it</span> : null}
+                {completes ? <span className="text-[var(--tone)]">one more makes it a place</span> : null}
               </button>
             );
           })}

@@ -73,14 +73,17 @@ Fields (fill the card fields only for a match):
 - status: "match" or "insufficient_evidence".
 - specificity, evidence_strength, conversation (above), and rationale: one sentence on why
   (internal, not shown).
-- threads: 1 or 2, strongest first. why: one sentence naming the shared use of
-  music. song_a / song_b: exact title from person A's / person B's list.
-  evidence_a / evidence_b: a few words on how that person's pick shows it.
-- shared_why: one sentence, the headline of the connection.
-- evidence: user_a / user_b, a short reference to each person's strongest pick.
-- difference: one meaningful difference between them, framed as something to discuss.
-- openers: 2 or 3 short first messages, specific to these songs, that either person
-  could send as-is.
+The card is read on a phone: keep every shown field short and plain, within the word limits.
+- threads: 1 or 2, strongest first. why: a short phrase (at most 7 words) naming the
+  shared use of music; it's shown as a label. song_a / song_b: exact title from person
+  A's / person B's list. evidence_a / evidence_b: at most 10 words on how that person's
+  pick shows it.
+- shared_why: one sentence of at most 14 words, the headline of the connection.
+- evidence: user_a / user_b, a short reference (at most 10 words) to each person's strongest pick.
+- difference: one meaningful difference between them, framed as something to discuss,
+  in one sentence of at most 18 words.
+- openers: 2 or 3 first messages of at most 15 words each, specific to these songs,
+  that either person could send as-is.
 - suggested_swap_prompt: one line suggesting which song each should play the other, and why.`;
 
 const SCHEMA: Schema = {

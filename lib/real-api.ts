@@ -10,9 +10,9 @@
  */
 
 import { ApiError } from "./api-error";
-import { CLUSTER_IDS, getCluster, type ClusterId } from "./clusters";
+import { getCluster } from "./clusters";
 import type { ClusterDetail, ClusterSong } from "./cluster-songs";
-import { fetchProfile, forgetMe, generatePortrait, getMyId, getPortrait, httpDb } from "./http-db";
+import { cached, fetchProfile, forgetMe, generatePortrait, getMyId, getPortrait, httpDb } from "./http-db";
 import { ME_ID } from "./mock-world";
 import type { Portrait } from "./portrait";
 import type { SongLayer, SongListener, SongStar } from "./song-layer";
@@ -202,9 +202,8 @@ export async function getConnections(): Promise<Connection[]> {
 
 /** Cached card, else generate one. "Not enough evidence" is a normal outcome, shown as a message, not a crash. */
 async function cardJsonFor(otherId: string): Promise<{ json: ConnectionCardJson; iAmA: boolean }> {
-  const myId = await getMyId();
-  const cached = await httpDb.getConnectionCard(otherId);
-  if (cached) return { json: cached.card_json, iAmA: cached.user_a === myId };
+  const [myId, stored] = await Promise.all([getMyId(), httpDb.getConnectionCard(otherId)]);
+  if (stored) return { json: stored.card_json, iAmA: stored.user_a === myId };
   const generated = await httpDb.generateConnectionCard(otherId);
   if (generated.status !== "match") throw new ApiError("There isn't a strong enough thread between you two yet.");
   return { json: generated.card, iAmA: myId < otherId };
@@ -349,25 +348,29 @@ type SongsResponse = {
 
 const NEW_WITHIN_DAYS = 7;
 
-async function fetchSongs(): Promise<SongsResponse> {
-  const res = await fetch("/api/galaxy/songs", { credentials: "same-origin" });
-  if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to see songs." : "The songs didn't load.");
-  return res.json() as Promise<SongsResponse>;
+/** Shared by the song layer and every cluster sheet opened soon after; cleared when my picks change. */
+const SONGS_TTL_MS = 30_000;
+
+function fetchSongs(): Promise<SongsResponse> {
+  return cached("galaxy-songs", SONGS_TTL_MS, async () => {
+    const res = await fetch("/api/galaxy/songs", { credentials: "same-origin" });
+    if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to see songs." : "The songs didn't load.");
+    return res.json() as Promise<SongsResponse>;
+  });
 }
 
-const asCluster = (c: string): ClusterId => (CLUSTER_IDS.includes(c as ClusterId) ? (c as ClusterId) : DEFAULT_CLUSTER);
 const songOf = (s: SongsResponse["songs"][number]): Song =>
   toSong({ id: s.id, title: s.title, artist: s.artist, album_art_url: s.albumArtUrl, spotify_track_id: s.spotifyId });
 
 export async function getSongLayer(): Promise<SongLayer> {
   const data = await fetchSongs();
-  const myCluster = asCluster(data.people.find((p) => p.id === data.meId)?.cluster ?? DEFAULT_CLUSTER);
+  const myCluster = data.people.find((p) => p.id === data.meId)?.cluster ?? DEFAULT_CLUSTER;
 
   const stars: SongStar[] = data.songs.map((s) => {
     const listeners: SongListener[] = s.listeners
-      .map((l) => ({ id: l.isMe ? ME_ID : l.id, name: l.name, isMe: l.isMe, reason: l.reason, daysAgo: l.daysAgo, why: asCluster(l.why) }))
+      .map((l) => ({ id: l.isMe ? ME_ID : l.id, name: l.name, isMe: l.isMe, reason: l.reason, daysAgo: l.daysAgo, why: l.why }))
       .sort((a, b) => Number(b.isMe) - Number(a.isMe) || a.daysAgo - b.daysAgo);
-    const counts = new Map<ClusterId, number>();
+    const counts = new Map<string, number>();
     for (const l of listeners) counts.set(l.why, (counts.get(l.why) ?? 0) + 1);
     const whyCounts = [...counts].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count);
     return {
@@ -391,7 +394,7 @@ export async function getSongLayer(): Promise<SongLayer> {
 export async function getClusterDetail(id: string): Promise<ClusterDetail> {
   const data = await fetchSongs();
   const cluster = getCluster(id);
-  const members = new Set(data.people.filter((p) => asCluster(p.cluster) === cluster.id).map((p) => p.id));
+  const members = new Set(data.people.filter((p) => p.cluster === cluster.id).map((p) => p.id));
 
   const songs: ClusterSong[] = data.songs
     .flatMap((s): ClusterSong[] => {

@@ -37,7 +37,7 @@ function Preview({ message }: { message?: Message }) {
 /** What the thread is waiting on, as a small status label. Nothing when there's nothing to do. */
 function TurnBadge({ turn }: { turn?: ConversationSummary["turn"] }) {
   if (turn === "mine") return <span className="shrink-0 border border-primary/60 px-1.5 py-0.5 text-[11px] font-medium text-primary">Your turn</span>;
-  if (turn === "theirs") return <span className="shrink-0 text-[11px] text-muted-foreground">Waiting</span>;
+  if (turn === "theirs") return <span className="shrink-0 text-[11px] text-muted-foreground">Their move</span>;
   return null;
 }
 
@@ -61,7 +61,7 @@ export default function MessagesPage() {
     <main className="flex min-h-0 flex-1 flex-col">
       <ScreenHeader
         title="Messages"
-        subtitle={data?.length ? (waitingOnYou ? `${waitingOnYou} waiting on you` : "You're all caught up") : undefined}
+        subtitle={data?.length ? (waitingOnYou ? (waitingOnYou === 1 ? "Someone's waiting on you" : `${waitingOnYou} people waiting on you`) : "You're all caught up") : undefined}
       />
       <div className="min-h-0 flex-1 overflow-y-auto pb-6">
         {!data ? (

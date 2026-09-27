@@ -17,3 +17,8 @@ export function cosineSimilarity(a: number[], b: number[]): number {
 
   return dot / (Math.sqrt(normA) * Math.sqrt(normB));
 }
+
+/** 1 - cosineSimilarity: 0 for the same direction, up to 2 for the opposite one. */
+export function cosineDistance(a: number[], b: number[]): number {
+  return 1 - cosineSimilarity(a, b);
+}

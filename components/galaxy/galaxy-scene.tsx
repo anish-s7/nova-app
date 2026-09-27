@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { getCluster } from "@/lib/clusters";
 import { isSongNode } from "@/lib/song-layer";
 import { topTwo } from "@/lib/why-mix";
-import { BOND_AT } from "@/lib/thread";
+import { BOND_AT, threadBoldness } from "@/lib/thread";
 import { homeOrbitPoint, type LayoutPoint } from "@/lib/galaxy-layout";
 import type { GalaxyNode } from "@/lib/types";
 import type { GalaxyApi, GalaxyViewProps } from "./types";
@@ -31,6 +31,7 @@ const nodeVertex = /* glsl */ `
   varying vec3 vColor;
   varying float vAlpha;
   varying float vRing;
+  varying float vMeRing;
   void main() {
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     float birth = aBirth < 0.0 ? 1.0 : smoothstep(0.0, 1.8, uTime - aBirth);
@@ -46,6 +47,7 @@ const nodeVertex = /* glsl */ `
     vColor = color;
     vAlpha = vis * dim * show * (0.75 + hl * 0.25 + aIsMe * 0.25);
     vRing = step(0.99, aHighlight) * vis;
+    vMeRing = aIsMe * vis;
   }
 `;
 
@@ -53,13 +55,18 @@ const nodeFragment = /* glsl */ `
   varying vec3 vColor;
   varying float vAlpha;
   varying float vRing;
+  varying float vMeRing;
   void main() {
     float d = length(gl_PointCoord - 0.5) * 2.0;
     if (d > 1.0) discard;
     float core = smoothstep(0.26, 0.0, d);
     float halo = pow(1.0 - d, 3.2) * 0.32;
+    // Cut the "you" star's halo off cleanly so a real gap opens up before its ring.
+    halo *= mix(1.0, smoothstep(0.5, 0.22, d), vMeRing);
     float ring = vRing * (1.0 - smoothstep(0.0, 0.04, abs(d - 0.86))) * 0.6;
-    vec3 c = vColor * (halo + core * 0.9 + ring) + vec3(core * 0.55 + ring * 0.25);
+    float meRing = vMeRing * (1.0 - smoothstep(0.0, 0.045, abs(d - 0.62))) * 0.85;
+    vec3 meColor = vec3(1.0, 0.93, 0.62);
+    vec3 c = vColor * (halo + core * 0.9 + ring) + vec3(core * 0.55 + ring * 0.25) + meColor * meRing;
     gl_FragColor = vec4(c * vAlpha, 1.0);
     #include <colorspace_fragment>
   }
@@ -383,7 +390,7 @@ function Scene({
         if (b) c.lerp(bridgeTo.set(getCluster(b.id).color), 1 - a.w);
       }
       col.set([c.r, c.g, c.b], i * 3);
-      sizeA[i] = node.isMe ? 3.4 : node.kind === "song" ? (1.5 + 0.3 * Math.min(6, node.weight ?? 1)) * (node.bridge ? 1.3 : 1) : node.far ? 1.6 : starSize(node);
+      sizeA[i] = node.isMe ? 4.2 : node.kind === "song" ? (1.5 + 0.3 * Math.min(6, node.weight ?? 1)) * (node.bridge ? 1.3 : 1) : node.far ? 1.6 : starSize(node);
       isMe[i] = node.isMe ? 1 : 0;
       if (!known.current.has(node.userId) && !births.current.has(node.userId)) births.current.set(node.userId, now());
       birth[i] = births.current.get(node.userId) ?? -1;
@@ -548,8 +555,8 @@ function Scene({
   }, [meId, selectedId, points, bondMat]);
   useEffect(() => () => bond?.geometry.dispose(), [bond]);
 
-  // Threads: a line from you to everyone you've traded songs with. Under BOND_AT it's a faint hairline;
-  // from BOND_AT it glows, beaded with soft light, and gets brighter the more you trade.
+  // Threads: a line from you to everyone you've traded songs with, bolder with every song traded
+  // (lib/thread.ts's threadBoldness). From BOND_AT it also glows, beaded with soft light.
   const threadGroup = useMemo(() => {
     const group = new THREE.Group();
     const a = meId ? points.get(meId) : undefined;
@@ -564,18 +571,18 @@ function Scene({
       const perp = new THREE.Vector3(-(vb.y - va.y), vb.x - va.x, 0).normalize().multiplyScalar(len * 0.14);
       const pts = new THREE.QuadraticBezierCurve3(va, mid.add(perp).setZ(mid.z + len * 0.1), vb).getPoints(48);
       const bonded = t.count >= BOND_AT;
-      const strength = bonded ? Math.min(1, 0.55 + (t.count - BOND_AT) * 0.1) : 0.14;
+      const boldness = threadBoldness(t.count);
       const color = new THREE.Color(getCluster(a.cluster).color).lerp(new THREE.Color(getCluster(b.cluster).color), 0.5);
       const line = new THREE.Line(
         new THREE.BufferGeometry().setFromPoints(pts),
-        new THREE.LineBasicMaterial({ color, transparent: true, opacity: bonded ? 0.55 + strength * 0.4 : strength, blending: THREE.AdditiveBlending, depthWrite: false }),
+        new THREE.LineBasicMaterial({ color, transparent: true, opacity: 0.14 + boldness * 0.81, blending: THREE.AdditiveBlending, depthWrite: false }),
       );
       group.add(line);
       if (!bonded) continue;
       for (let i = 4; i < pts.length - 3; i += 5) {
-        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: nebulaMap, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.22 + strength * 0.3 }));
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: nebulaMap, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.22 + boldness * 0.3 }));
         sp.position.copy(pts[i]);
-        sp.scale.setScalar(1.6 + strength * 1.2);
+        sp.scale.setScalar(1.6 + boldness * 1.2);
         group.add(sp);
       }
     }

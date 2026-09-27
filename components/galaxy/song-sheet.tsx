@@ -42,7 +42,7 @@ export function SongSheetContent({
             <span className="size-1.5 rounded-full bg-[var(--tone)]" aria-hidden />
             {star.isBridge ? whySummary(star.whyCounts) : `${cluster.short} · ${star.listeners.length === 1 ? "1 person" : `${star.listeners.length} people`}`}
           </p>
-          {star.isBridge ? <p className="mt-0.5 text-[11px] text-muted-foreground">A bridge: {star.listeners.length} people, more than one reason.</p> : null}
+          {star.isBridge ? <p className="mt-0.5 text-[11px] text-muted-foreground">{star.listeners.length} people, here for more than one reason.</p> : null}
         </div>
       </div>
 
@@ -59,7 +59,7 @@ export function SongSheetContent({
         style={{ borderColor: cluster.color, color: cluster.color }}
       >
         <Network className="size-4" aria-hidden />
-        See connections{links.length ? ` · ${links.length}` : ""}
+        {links.length ? `See how ${links.length === 1 ? "it connects" : `these ${links.length} connect`}` : "See connections"}
       </button>
 
       {star.themes.length ? (
@@ -71,7 +71,11 @@ export function SongSheetContent({
               <li key={id} style={{ "--tone": t.color } as CSSProperties} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-xs">
                 <span className="size-1.5 rounded-full bg-[var(--tone)]" aria-hidden />
                 {t.label}
-                {state && !state.formed ? <span className="text-muted-foreground">forming · {state.songIds.length}/{THEME_THRESHOLD}</span> : null}
+                {state && !state.formed ? (
+                  <span className="text-muted-foreground">
+                    {THEME_THRESHOLD - state.songIds.length === 1 ? "one more to go" : `${THEME_THRESHOLD - state.songIds.length} more to go`}
+                  </span>
+                ) : null}
               </li>
             );
           })}

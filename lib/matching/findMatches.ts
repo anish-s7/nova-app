@@ -52,22 +52,16 @@ function orderedPair(a: string, b: string): [string, string] {
 export async function findMatches(profileId: string, limit = 10): Promise<ConfirmedMatch[]> {
   const supabase = createServerClient();
 
-  const { data: targetProfile, error: targetProfileError } = await supabase
-    .from("profiles")
-    .select("display_name")
-    .eq("id", profileId)
-    .single();
+  const [{ data: targetProfile, error: targetProfileError }, { data: candidates, error }] = await Promise.all([
+    supabase.from("profiles").select("display_name").eq("id", profileId).single(),
+    supabase.rpc("match_picks", { target_profile_id: profileId, match_count: limit }),
+  ]);
 
   if (targetProfileError || !targetProfile) {
     throw new Error(
       `findMatches failed to load target profile: ${targetProfileError?.message ?? "not found"}`
     );
   }
-
-  const { data: candidates, error } = await supabase.rpc("match_picks", {
-    target_profile_id: profileId,
-    match_count: limit,
-  });
 
   if (error) {
     throw new Error(`findMatches failed: ${error.message}`);
@@ -119,16 +113,19 @@ export async function findMatches(profileId: string, limit = 10): Promise<Confir
   if (toAssess.length > 0) {
     // The requester's own portrait is worth one call (it's reused for every pair); candidates' are
     // used only if they already exist, so one person's load never pays for someone else's portrait.
-    try {
-      await upsertPortrait(supabase, profileId);
-    } catch (err) {
-      console.error("findMatches: couldn't refresh the requester's portrait, assessing without it:", err);
-    }
+    // Refreshed alongside the batched reads rather than before them; if it fails, the stored one is used.
     const ids = [profileId, ...toAssess.map((c) => c.profile_id)];
-    const [picksOf, portraitOf] = await Promise.all([loadPublicPicks(supabase, ids), getPortraits(supabase, ids)]);
+    const [myPortrait, picksOf, portraitOf] = await Promise.all([
+      upsertPortrait(supabase, profileId).catch((err) => {
+        console.error("findMatches: couldn't refresh the requester's portrait, using the stored one:", err);
+        return null;
+      }),
+      loadPublicPicks(supabase, ids),
+      getPortraits(supabase, ids),
+    ]);
     const me = {
       displayName: targetProfile.display_name,
-      portrait: portraitOf.get(profileId)?.portrait ?? null,
+      portrait: myPortrait ?? portraitOf.get(profileId)?.portrait ?? null,
       picks: picksOf.get(profileId) ?? [],
     };
 

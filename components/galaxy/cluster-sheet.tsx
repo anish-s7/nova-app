@@ -9,7 +9,7 @@ import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
 import { getClusterDetail } from "@/lib/api";
-import { getCluster, type ClusterId } from "@/lib/clusters";
+import { getCluster } from "@/lib/clusters";
 import type { ClusterSong } from "@/lib/cluster-songs";
 import { cn } from "@/lib/utils";
 
@@ -27,12 +27,12 @@ export function ClusterSheetContent({ clusterId }: { clusterId: string }) {
         <h2 className="font-serif text-xl italic leading-snug">{cluster.label}</h2>
         {data ? (
           <p className="mt-1 text-xs text-muted-foreground">
-            <span className="tabular-nums text-foreground">{data.listeners}</span> listeners ·{" "}
-            <span className="tabular-nums text-foreground">{data.songCount}</span> songs
+            <span className="tabular-nums text-foreground">{data.listeners}</span> {data.listeners === 1 ? "person" : "people"} here for{" "}
+            <span className="tabular-nums text-foreground">{data.songCount}</span> {data.songCount === 1 ? "song" : "songs"}
             {data.newThisWeek ? (
               <>
-                {" "}
-                · <span className="text-[var(--tone)]">{data.newThisWeek} new this week</span>
+                {" — "}
+                <span className="text-[var(--tone)]">{data.newThisWeek} new this week</span>
               </>
             ) : null}
           </p>
@@ -102,10 +102,10 @@ export function ListenerList({
   opener,
 }: {
   songId?: string;
-  listeners: { id: string; name: string; isMe: boolean; reason: string; daysAgo: number; why?: ClusterId }[];
+  listeners: { id: string; name: string; isMe: boolean; reason: string; daysAgo: number; why?: string }[];
   cluster: string;
   /** A first message for this listener, prefilled in the composer. Only given where both whys are known. */
-  opener?: (listener: { id: string; why?: ClusterId }) => string | undefined;
+  opener?: (listener: { id: string; why?: string }) => string | undefined;
 }) {
   const others = listeners.filter((l) => !l.isMe);
   return (

@@ -20,9 +20,10 @@ function EvidenceRow({ who, evidence }: { who: string; evidence: SharedEvidence 
     <div className="flex items-start gap-3">
       <AlbumArt song={evidence.song} size={40} className="rounded-md" />
       <div className="min-w-0 flex-1">
-        <p className="text-xs font-medium text-muted-foreground">
+        {/* The cover already identifies the song, so the artist is for screen readers only. */}
+        <p className="truncate text-xs font-medium text-muted-foreground">
           {who} · <span className="text-foreground/90">{evidence.song.title}</span>
-          <span className="text-muted-foreground"> by {evidence.song.artist}</span>
+          <span className="sr-only"> by {evidence.song.artist}</span>
         </p>
         <p className="mt-0.5 text-pretty text-sm leading-snug text-foreground/80">{evidence.text}</p>
       </div>
@@ -67,10 +68,10 @@ export function ConnectionCardView({ card, me, other }: { card: ConnectionCard; 
         </div>
         <p data-count className="mt-4 text-3xl font-semibold tabular-nums tracking-tight">{sharedSongs}</p>
         <p data-count className="text-sm text-muted-foreground">
-          {sharedSongs === 1 ? "song" : "songs"} in common · {sharedArtists} {sharedArtists === 1 ? "artist" : "artists"}
+          {sharedSongs === 1 ? "song" : "songs"} in common · {sharedArtists} shared {sharedArtists === 1 ? "artist" : "artists"}
         </p>
         <p data-verdict className="mt-3 text-balance font-serif text-lg italic">
-          {card.sharedMotivations.length > 1 ? `But ${card.sharedMotivations.length} of the same reasons.` : "But the same reason."}
+          {card.sharedMotivations.length > 1 ? `${card.sharedMotivations.length} shared reasons.` : "The same reason."}
         </p>
       </section>
 
@@ -109,7 +110,7 @@ export function ConnectionCardView({ card, me, other }: { card: ConnectionCard; 
           Say something
         </h2>
         <ul className="mt-2 flex flex-col gap-2">
-          {card.suggestedOpeners.slice(0, 2).map((o) => (
+          {card.suggestedOpeners.slice(0, 1).map((o) => (
             <li key={o}>
               <Link
                 href={`/messages/${other.id}?draft=${encodeURIComponent(o)}`}

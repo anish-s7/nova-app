@@ -182,7 +182,7 @@ export default function GalaxyPage() {
     pendingFly.current = { songId: info.star.id, themeId: formed?.id ?? null };
     setCelebrate(
       formed
-        ? { title: `A new cluster formed: ${formed.label}`, body: `${THEME_THRESHOLD} songs now share this moment, and yours was the one that tipped it.` }
+        ? { title: `A new place: ${formed.label}`, body: `${THEME_THRESHOLD} songs now share this moment, and yours was the one that tipped it.` }
         : info.wasThere
           ? { title: `${info.star.song.title} just got brighter`, body: `${info.others} ${info.others === 1 ? "person" : "people"} already had it. You're in their orbit now.` }
           : { title: `${info.star.song.title} is on the map`, body: `Nobody had it before you. It landed near the ${info.cluster.short.toLowerCase()} stars.` },
@@ -293,7 +293,7 @@ export default function GalaxyPage() {
               {themeState.theme.description}
               {themeState.formed ? null : (
                 <span className="mt-0.5 block text-xs text-muted-foreground">
-                  {themeState.songIds.length} of {THEME_THRESHOLD} songs. One more and this becomes a cluster.
+                  {THEME_THRESHOLD - themeState.songIds.length === 1 ? "One more song and this becomes its own place." : `${THEME_THRESHOLD - themeState.songIds.length} more songs and this becomes its own place.`}
                 </span>
               )}
             </p>
@@ -322,7 +322,7 @@ export default function GalaxyPage() {
                 onClick={() => showMore(focusCluster)}
                 className="inline-flex min-h-9 shrink-0 items-center border border-white/15 px-3 text-xs font-medium hover:bg-white/5 disabled:opacity-60"
               >
-                {loadingMore ? "Loading…" : `More here · ${hiddenHere.toLocaleString()}`}
+                {loadingMore ? "Finding them…" : `${hiddenHere === 1 ? "One more here" : `${hiddenHere.toLocaleString()} more here`}`}
               </button>
             ) : null}
           </div>
@@ -383,7 +383,7 @@ export default function GalaxyPage() {
         ) : data ? (
           <section aria-labelledby="closest-heading" className="pointer-events-auto min-w-0 flex-1 border border-white/10 bg-background/90 px-3 pb-2 pt-2.5">
             <h2 id="closest-heading" className="px-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-              {focusCluster ? `Closest · ${getCluster(focusCluster).short}` : "Closest to you"}
+              {focusCluster ? `Closest, ${getCluster(focusCluster).short.toLowerCase()}` : "Closest to you"}
             </h2>
             {closest.length === 0 ? (
               <p className="px-1 pb-1.5 pt-1 text-xs text-muted-foreground">Nobody here is close to you yet. Tap a star to meet them anyway.</p>
@@ -566,7 +566,7 @@ function StarPreview({ node, traded, hop }: { node: GalaxyNode; traded: number; 
       <div className="border-l-2 pl-3" style={{ borderColor: getCluster(node.cluster).color }}>
         {edge && moment ? (
           <>
-            <p className="text-xs text-muted-foreground">You both: {edge.sharedMotivation}</p>
+            <p className="text-xs text-muted-foreground">You both come back to &ldquo;{edge.sharedMotivation}&rdquo;</p>
             <p className="mt-2 font-serif text-lg italic leading-snug">“{moment.text}”</p>
             <p className="mt-1.5 text-sm text-foreground/80">
               {moment.song.title} <span className="text-muted-foreground">· {moment.song.artist}</span>
@@ -592,9 +592,9 @@ function StarPreview({ node, traded, hop }: { node: GalaxyNode; traded: number; 
       {traded > 0 ? (
         <p className="-mt-1 text-sm text-foreground/85">
           <span className={traded >= BOND_AT ? "font-medium text-primary" : "text-muted-foreground"}>
-            {traded >= BOND_AT ? "Bonded" : "Trading"} · {traded} {traded === 1 ? "song" : "songs"}
+            {traded >= BOND_AT ? `Bonded over ${traded} ${traded === 1 ? "song" : "songs"}` : `${traded} ${traded === 1 ? "song" : "songs"} traded so far`}
           </span>
-          {traded < BOND_AT ? <span className="text-muted-foreground"> · {BOND_AT - traded} more and your line glows</span> : null}{" "}
+          {traded < BOND_AT ? <span className="text-muted-foreground">, {BOND_AT - traded} more and your line glows</span> : null}{" "}
           <Link href={`/messages/${node.userId}`} className="underline underline-offset-4 hover:text-foreground">
             Open thread
           </Link>

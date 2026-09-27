@@ -22,7 +22,7 @@ export function MotivationCard({ motivation: m, songs, className, inline = false
     return (
       <article style={tone} className={cn("flex min-h-14 items-center gap-3", inline ? "px-4 pb-3" : "rounded-2xl border border-dashed border-white/10 px-4 py-2", className)}>
         <p className="min-w-0 flex-1 truncate text-sm text-muted-foreground">
-          <span className="line-through decoration-white/30">{m.label}</span> · not you, so we&apos;ll leave it out
+          <span className="line-through decoration-white/30">{m.label}</span> · left out
         </p>
         <button
           type="button"
@@ -61,7 +61,7 @@ export function MotivationCard({ motivation: m, songs, className, inline = false
       <p className={cn(inline ? "" : "mt-1.5", "text-pretty font-serif text-[17px] italic leading-snug text-foreground/85")}>{m.description}</p>
 
       <ul className="mt-4 flex flex-col gap-3 border-t border-white/5 pt-4" aria-label="Why we think so">
-        {m.evidence.slice(0, 3).map((e, i) => (
+        {m.evidence.slice(0, 2).map((e, i) => (
           <EvidenceLine key={i} evidence={e} songs={songs} />
         ))}
       </ul>
@@ -79,8 +79,8 @@ export function MotivationCard({ motivation: m, songs, className, inline = false
           </div>
 
           <div>
-            <label htmlFor={`${id}-note`} className="text-sm font-medium">
-              Add a note <span className="font-normal text-muted-foreground">(optional)</span>
+            <label htmlFor={`${id}-note`} className="sr-only">
+              Note (optional)
             </label>
             <textarea
               id={`${id}-note`}
@@ -89,18 +89,18 @@ export function MotivationCard({ motivation: m, songs, className, inline = false
               value={note}
               onChange={(e) => setNote(e.target.value)}
               onBlur={() => note !== (m.note ?? "") && updateMotivation(m.id, { note: note.trim() || undefined })}
-              placeholder="Say it in your own words, if you want to."
-              className={cn("mt-1.5 w-full resize-none border border-white/10 bg-background/60 px-3 py-2.5 font-serif text-base italic outline-none placeholder:font-sans placeholder:not-italic placeholder:text-muted-foreground focus:border-[var(--tone)]", !inline && "rounded-xl")}
+              placeholder="Add a note (optional)"
+              className={cn("w-full resize-none border border-white/10 bg-background/60 px-3 py-2.5 font-serif text-base italic outline-none placeholder:font-sans placeholder:not-italic placeholder:text-muted-foreground focus:border-[var(--tone)]", !inline && "rounded-xl")}
             />
           </div>
 
           <div className="flex items-start gap-3">
             <div className="min-w-0 flex-1">
               <label htmlFor={`${id}-public`} className="text-sm font-medium">
-                Can appear on Connection Cards
+                Show on Connection Cards
               </label>
-              <p id={`${id}-public-help`} className="mt-0.5 text-xs leading-relaxed text-muted-foreground">
-                People you match with see this reason and its songs. Your note stays private unless this is on.
+              <p id={`${id}-public-help`} className="mt-0.5 text-xs text-muted-foreground">
+                Matches see this reason, its songs and your note.
               </p>
             </div>
             <Switch id={`${id}-public`} aria-describedby={`${id}-public-help`} checked={m.isPublic} onCheckedChange={(v) => updateMotivation(m.id, { isPublic: v })} className="mt-0.5" />

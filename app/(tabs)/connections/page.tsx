@@ -70,7 +70,7 @@ export default function ConnectionsPage() {
         {error ? (
           <div className="flex flex-col items-center gap-3 py-16 text-center">
             <p className="text-muted-foreground">
-              Couldn&apos;t load your connections.
+              We couldn&apos;t bring up who you match with.
             </p>
             <Button
               variant="secondary"
@@ -176,8 +176,8 @@ export default function ConnectionsPage() {
                             c.sharedSongs > 0 ? c.sharedSongs : c.sharedArtists
                           }
                         />
-                        <span className="w-10 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
-                          {Math.round(c.similarity * 100)}%
+                        <span className="w-14 shrink-0 text-right text-xs tabular-nums text-muted-foreground">
+                          {Math.round(c.similarity * 100)}% match
                         </span>
                         <ChevronRight
                           className="size-4 shrink-0 text-muted-foreground"

@@ -3,7 +3,8 @@ import type { ContextTag } from "./types";
 export type ClusterId = "quiet_company" | "armor_up" | "carrying_loss" | "somewhere_else" | "old_selves";
 
 export type Cluster = {
-  id: ClusterId;
+  /** Not narrowed to `ClusterId`: real clusters are discovered at runtime with ids this module never hard-codes. */
+  id: string;
   /** Canonical motivation label shared across users in this cluster. */
   label: string;
   short: string;
@@ -52,12 +53,44 @@ export const CLUSTERS: Record<ClusterId, Cluster> = {
 
 export const CLUSTER_IDS = Object.keys(CLUSTERS) as ClusterId[];
 
+/**
+ * Not a real cluster: `galaxy_pool`/`galaxy_cluster_counts` (supabase/migrations/
+ * 20260927010000_galaxy_window.sql) coalesce a profile with no `primary_cluster` yet to the literal
+ * id `"unassigned"`. It needs its own entry so `getCluster` doesn't silently alias it to
+ * `quiet_company` — which used to make two genuinely different groups (real quiet_company members,
+ * and people nothing has been computed for yet) render as the same "Too quiet" chip twice in
+ * `ClusterFilter`.
+ */
+const UNASSIGNED: Cluster = {
+  id: "unassigned",
+  label: "Still finding their sound",
+  short: "New",
+  description: "Hasn't picked enough songs yet for a cluster to show.",
+  color: "#6b7280",
+};
+
+/**
+ * `getCluster`/`clusterForLabel` read from this cache, not straight from `CLUSTERS`, because
+ * clusters are no longer a fixed set of five: the real backend discovers them at runtime
+ * (`topic_clusters`, scripts/recompute-topic-clusters.ts) with ids this module never hard-codes.
+ * Seeded with the five static ones above so both functions work before any fetch happens (mock
+ * mode never fetches at all, and real mode renders once with these while `/api/clusters` is
+ * in flight) — `primeClusters` then merges the real rows in once they arrive.
+ */
+const clusterCache = new Map<string, Cluster>([...Object.entries(CLUSTERS), [UNASSIGNED.id, UNASSIGNED]]);
+
+/** Merges freshly fetched cluster rows into the cache. Called once by `ClusterCacheProvider` in real-data mode. */
+export function primeClusters(clusters: Cluster[]) {
+  for (const c of clusters) clusterCache.set(c.id, c);
+}
+
 export function getCluster(id: string): Cluster {
-  return CLUSTERS[id as ClusterId] ?? CLUSTERS.quiet_company;
+  return clusterCache.get(id) ?? UNASSIGNED;
 }
 
 export function clusterForLabel(label: string): Cluster {
-  return CLUSTER_IDS.map((id) => CLUSTERS[id]).find((c) => c.label === label) ?? CLUSTERS.quiet_company;
+  for (const c of clusterCache.values()) if (c.label === label) return c;
+  return UNASSIGNED;
 }
 
 export const CONTEXT_TAGS: { id: ContextTag; label: string }[] = [

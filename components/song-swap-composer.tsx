@@ -84,7 +84,7 @@ export function SongSwapComposer({ userId, replyToSwapId, initialSongId, initial
 
         <section className="mt-5" aria-labelledby="song-step">
           <h2 id="song-step" className={stepLabel}>
-            1 · The song
+            Pick the song
           </h2>
           {song ? (
             <div className="mt-2 flex items-center gap-3 border border-white/10 bg-card/50 p-2 pr-3">
@@ -119,7 +119,7 @@ export function SongSwapComposer({ userId, replyToSwapId, initialSongId, initial
           <>
             <section className="mt-6" aria-labelledby="reason-step">
               <h2 id="reason-step" className={stepLabel}>
-                2 · Why this one, for {name}?
+                Why this one, for {name}?
               </h2>
               {theyHaveIt ? <p className="mt-1 text-sm text-primary">{name} has this one too. Tell them what it is for you.</p> : null}
               {!reason.trim() ? (

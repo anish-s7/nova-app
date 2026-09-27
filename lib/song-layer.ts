@@ -13,8 +13,12 @@ import type { Song } from "./types";
  */
 export type SongPick = { songId: string; reason: string; themes: ThemeId[]; addedAt: number };
 
-/** `why` is why this person has this song, which can differ from the person sitting next to them. */
-export type SongListener = { id: string; name: string; isMe: boolean; reason: string; daysAgo: number; why: ClusterId };
+/**
+ * `why` is why this person has this song, which can differ from the person sitting next to them.
+ * Typed as a plain string, not `ClusterId`: real-mode stars carry whatever cluster id the backend
+ * assigned (lib/real-api.ts), which is not one of the five mock ones.
+ */
+export type SongListener = { id: string; name: string; isMe: boolean; reason: string; daysAgo: number; why: string };
 
 export type SongStar = {
   /** Catalog song id. The scene uses `songNodeId(id)`. */
@@ -22,14 +26,14 @@ export type SongStar = {
   song: Song;
   meaning: string;
   /** The why most of its listeners have it for, used for color. Ties go to the song's own strongest lean. */
-  cluster: ClusterId;
+  cluster: string;
   listeners: SongListener[];
   /** People per why, strongest first. More than one entry makes this a bridge. */
-  whyCounts: { id: ClusterId; count: number }[];
+  whyCounts: { id: string; count: number }[];
   /** Two or more listeners, with two or more different whys among them. */
   isBridge: boolean;
   /** Why this song would land for you, whether or not you have it. */
-  myWhy: ClusterId;
+  myWhy: string;
   themes: ThemeId[];
   weight: number;
   isNew: boolean;
@@ -93,7 +97,7 @@ export function buildSongLayer(picks: SongPick[] = []): SongLayer {
   const stars: SongStar[] = [...bySong].map(([songId, listeners]) => {
     const sorted = [...listeners].sort((a, b) => Number(b.isMe) - Number(a.isMe) || a.daysAgo - b.daysAgo);
     const own = dominantCluster(songId);
-    const counts = new Map<ClusterId, number>();
+    const counts = new Map<string, number>();
     for (const l of sorted) counts.set(l.why, (counts.get(l.why) ?? 0) + 1);
     const whyCounts = [...counts].map(([id, count]) => ({ id, count })).sort((a, b) => b.count - a.count || Number(b.id === own) - Number(a.id === own));
     return {
