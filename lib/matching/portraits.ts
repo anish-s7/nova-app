@@ -2,12 +2,22 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { generatePortrait, type PortraitCluster, type PortraitPick } from "../gemini/generatePortrait";
 import type { Portrait } from "../portrait";
 import type { Database } from "../supabase/types";
+import { CLUSTERS, CLUSTER_IDS } from "../clusters";
+import { isMissingTable } from "../supabase/missing-table";
 
 type Client = SupabaseClient<Database>;
 
-/** The live (non-superseded) topic_clusters set, for generatePortrait's cluster naming schema. */
+/**
+ * The live (non-superseded) topic_clusters set, for generatePortrait's cluster naming schema. Until
+ * migration 20260929000000 is applied to the project, the table doesn't exist: fall back to the
+ * five static clusters (lib/clusters.ts), which is what portraits used before topic clusters.
+ */
 async function loadLiveClusters(supabase: Client): Promise<PortraitCluster[]> {
   const { data, error } = await supabase.from("topic_clusters").select("id, label, description").is("superseded_by", null);
+  if (isMissingTable(error)) {
+    console.warn("topic_clusters table missing (migration 20260929000000 not applied): portraits use the five static clusters");
+    return CLUSTER_IDS.map((id) => ({ id, label: CLUSTERS[id].label, description: CLUSTERS[id].description }));
+  }
   if (error) throw new Error(`loadLiveClusters failed: ${error.message}`);
   return (data ?? []).map((c) => ({ id: c.id, label: c.label, description: c.description ?? c.label }));
 }
