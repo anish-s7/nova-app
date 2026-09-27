@@ -122,6 +122,20 @@ export async function searchSongs(q: string): Promise<Song[]> {
   }));
 }
 
+/** Where the empty-search suggestions came from: people here ("community") or the charts. */
+export type Discovery = { songs: Song[]; source: "community" | "chart" };
+
+/** Songs to suggest before anything is typed (GET /api/songs/search with no query). */
+export async function discoverSongs(): Promise<Discovery> {
+  const res = await fetch("/api/songs/search", { credentials: "same-origin" });
+  if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to search." : "Song suggestions aren't loading right now.");
+  const { songs, source } = (await res.json()) as { songs: SearchSong[]; source?: Discovery["source"] };
+  return {
+    source: source ?? "chart",
+    songs: songs.map((s) => ({ id: s.id, title: s.title, artist: s.artist, albumArtUrl: s.albumArtUrl ?? undefined, previewUrl: s.previewUrl ?? undefined, source: "manual" as const })),
+  };
+}
+
 // --- listening portrait ----------------------------------------------------------
 
 const looseTitle = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");

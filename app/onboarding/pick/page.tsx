@@ -10,7 +10,8 @@ import { ScreenHeader } from "@/components/screen-header";
 import { SongTile } from "@/components/song-tile";
 import { Button } from "@/components/ui/button";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
-import { chooseSongs, getMySongs, REAL_DATA, sameSong, searchSongs } from "@/lib/api";
+import { ClusterStar } from "@/components/cluster-star";
+import { chooseSongs, discoverSongs, getMySongs, REAL_DATA, sameSong, searchSongs } from "@/lib/api";
 import { stopPreview } from "@/lib/preview-player";
 import { getSession, useHydrated } from "@/lib/session";
 import type { Song } from "@/lib/types";
@@ -31,7 +32,11 @@ export default function PickSongsPage() {
 
 function PickSongsGate() {
   const router = useRouter();
-  const managing = new URLSearchParams(window.location.search).get("mode") === "manage";
+  // Managing songs on purpose: Profile's links say so (?mode=manage), and so does an unfinished
+  // selection in this browser (e.g. Back from the feel step mid-edit, whose links don't carry the mode).
+  const session = getSession();
+  const selecting = session.source === "manual" && session.saveStatus !== "saved" && session.songs.length > 0;
+  const managing = new URLSearchParams(window.location.search).get("mode") === "manage" || selecting;
   const mine = useSWR(["my-songs"], getMySongs);
   const alreadyOnboarded = (mine.data?.length ?? 0) > 0;
 
@@ -69,7 +74,14 @@ function PickSongs({ mine }: { mine: Awaited<ReturnType<typeof getMySongs>> }) {
   const [query, setQuery] = useState("");
   // Real mode searches the whole catalog over the network, so wait for a pause in typing.
   const deferred = useDebouncedValue(query, REAL_DATA ? 350 : 0).trim();
-  const { data: results, isLoading, error: searchError } = useSWR(["songs", deferred], ([, q]) => searchSongs(q));
+  // keepPreviousData: the current results stay up while the next search loads, instead of blanking.
+  const search = useSWR(deferred ? ["songs", deferred] : null, ([, q]) => searchSongs(q), { keepPreviousData: true });
+  // Nothing typed yet: suggestions, from what people here pick most (or the charts, early on).
+  const discovery = useSWR(deferred ? null : ["discover"], discoverSongs, { revalidateOnFocus: false });
+  const active = deferred ? search : discovery;
+  const results = deferred ? search.data : discovery.data?.songs;
+  const isLoading = active.isLoading;
+  const searchError = active.error;
   const searching = deferred.length >= (REAL_DATA ? 2 : 1);
   const tray = useRef<HTMLUListElement>(null);
   // Songs you've already saved: marked in the list, and picking one again updates it instead of adding a copy.
@@ -129,10 +141,17 @@ function PickSongs({ mine }: { mine: Awaited<ReturnType<typeof getMySongs>> }) {
           </label>
         </div>
 
-        {!deferred && REAL_DATA ? (
-          <div className="pb-3 pt-4">
-            <p className="font-medium">Not sure where to start?</p>
-            <p className="mt-1 text-sm text-muted-foreground">Pick something familiar, or search for any song.</p>
+        {!deferred && discovery.data?.songs.length ? (
+          <div className="px-1 pb-2 pt-4">
+            <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              <ClusterStar color="var(--primary)" size={10} />
+              {discovery.data.source === "community" ? "Popular on Song Galaxy" : "Trending now"}
+            </p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {discovery.data.source === "community"
+                ? "What people here reach for most. Or search for any song."
+                : "Not sure where to start? Pick something familiar, or search for any song."}
+            </p>
           </div>
         ) : null}
 

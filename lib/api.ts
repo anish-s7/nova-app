@@ -178,6 +178,16 @@ function byTime(messages: Message[]) {
 // demo catalog. There's no Spotify import in the UI: Spotify's development mode only admits a
 // handful of allowlisted accounts, so everyone picks their own songs.
 
+/**
+ * Suggestions for the empty song picker: the songs people here pick most, or the charts while the
+ * community is small (real mode); the demo catalog's first songs in demo mode.
+ */
+export async function discoverSongs(): Promise<real.Discovery> {
+  if (REAL_DATA) return real.discoverSongs();
+  await delay(180);
+  return { songs: SONG_CATALOG.slice(0, 12), source: "community" };
+}
+
 export async function searchSongs(q: string): Promise<Song[]> {
   const res = REAL_DATA
     ? await real.searchSongs(q)
