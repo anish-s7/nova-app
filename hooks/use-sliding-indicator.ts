@@ -39,7 +39,8 @@ export function useSlidingIndicator(activeKey: string | number | null | undefine
       indicator.style.opacity = "1";
       indicator.style.width = `${t.width}px`;
       indicator.style.height = `${t.height}px`;
-      indicator.style.transform = `translate(${t.left - c.left}px, ${t.top - c.top}px)`;
+      // Absolute children are placed from inside the container's border, so subtract its width.
+      indicator.style.transform = `translate(${t.left - c.left - container.clientLeft}px, ${t.top - c.top - container.clientTop}px)`;
 
       const body = indicator.firstElementChild as HTMLElement | null;
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -48,7 +49,16 @@ export function useSlidingIndicator(activeKey: string | number | null | undefine
 
     place(placed.current);
     placed.current = true;
-    const observer = new ResizeObserver(() => place(false));
+    // A ResizeObserver reports once as soon as it starts watching; placing on that first report
+    // (without animation) would snap the highlight and cancel the glide that was just started.
+    let first = true;
+    const observer = new ResizeObserver(() => {
+      if (first) {
+        first = false;
+        return;
+      }
+      place(false);
+    });
     observer.observe(container);
     return () => observer.disconnect();
   }, [activeKey]);
