@@ -288,6 +288,8 @@ export type Connection = {
   cluster: string;
   similarity: number;
   sharedMotivation: string;
+  /** The card's primary thread label (threads[0].why), max 7 words. Used for per-row display. */
+  threadWhy?: string;
   sharedSongs: number;
   sharedArtists: number;
   /** Covers shown on the row: shared songs first, then their songs by shared artists (max 4). NOT IN CONTRACT: see MERGE_CHECKLIST.md. */

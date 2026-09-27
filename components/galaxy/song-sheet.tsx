@@ -3,6 +3,7 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import { ChevronLeft, Network } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
+import { PreviewButton } from "@/components/preview-button";
 import { bridgeOpener, whySummary } from "@/lib/bridge-opener";
 import { getCluster } from "@/lib/clusters";
 import { getTheme, THEME_THRESHOLD } from "@/lib/themes";
@@ -44,6 +45,7 @@ export function SongSheetContent({
           </p>
           {star.isBridge ? <p className="mt-0.5 text-[11px] text-muted-foreground">{star.listeners.length} people, here for more than one reason.</p> : null}
         </div>
+        <PreviewButton song={star.song} />
       </div>
 
       {star.meaning ? (

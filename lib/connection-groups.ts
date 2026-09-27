@@ -1,4 +1,3 @@
-import { getCluster } from "./clusters";
 import type { Connection } from "./types";
 
 export type ConnectionGroup = {
@@ -8,33 +7,58 @@ export type ConnectionGroup = {
   people: Connection[];
 };
 
+const TIERS = [
+  {
+    key: "shared_songs",
+    label: "You both picked the same song",
+    color: "var(--foreground)",
+    test: (c: Connection) => c.sharedSongs > 0,
+  },
+  {
+    key: "shared_artists",
+    label: "Same artists, different songs",
+    color: "var(--muted-foreground)",
+    test: (c: Connection) => c.sharedArtists > 0 && c.sharedSongs === 0,
+  },
+  {
+    key: "why_thread",
+    label: "Connected by why you listen",
+    color: "var(--muted-foreground)",
+    test: (_c: Connection) => true,
+  },
+] as const;
+
 /**
- * Groups connections under the "why" they share, strongest group first and strongest person
- * first inside each. Pure: no fetching, no mock imports.
+ * Groups connections by concrete overlap and shared thread tiers.
+ * Pure: no fetching, no mock imports.
  */
 export function groupByWhy(
   connections: Connection[],
   sort: ConnectionSort = "match",
 ): ConnectionGroup[] {
-  const byCluster = new Map<string, Connection[]>();
-  for (const c of connections)
-    byCluster.set(c.cluster, [...(byCluster.get(c.cluster) ?? []), c]);
-  return [...byCluster.entries()]
-    .map(([cluster, people]) => {
-      const meta = getCluster(cluster);
-      return {
-        cluster,
-        label: meta.label,
-        color: meta.color,
-        people: sortConnections(people, sort),
-      };
-    })
-    .sort(
-      (a, b) =>
-        a.label.localeCompare(b.label) * (sort === "name" ? 1 : 0) ||
-        Math.max(...b.people.map((c) => c.similarity)) -
-          Math.max(...a.people.map((c) => c.similarity)),
-    );
+  const remaining = [...connections];
+  const groups: ConnectionGroup[] = [];
+
+  for (const tier of TIERS) {
+    const matches = remaining.filter(tier.test);
+    for (const m of matches) {
+      const idx = remaining.indexOf(m);
+      if (idx >= 0) remaining.splice(idx, 1);
+    }
+    if (matches.length > 0) {
+      groups.push({
+        cluster: tier.key,
+        label:
+          matches.length > 1 && tier.key === "shared_songs"
+            ? "You both picked the same songs"
+            : tier.label,
+        color: tier.color,
+        people: sortConnections(matches, sort),
+      });
+    }
+  }
+
+  return groups;
 }
 
 export type ConnectionSort = "match" | "shared" | "name";

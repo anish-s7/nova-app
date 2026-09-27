@@ -37,11 +37,11 @@ create table public.topic_clusters (
 -- from text ids to literal uuids, so nothing regresses on day one. The
 -- recompute job takes over cluster membership/centroids from here.
 insert into public.topic_clusters (id, label, short, description, color) values
-  ('00000000-0000-4000-8000-000000000001', 'When it''s too quiet at home', 'Too quiet', 'You put something on so the room isn''t silent, usually late and usually alone.', '#c9a66b'),        -- quiet_company
-  ('00000000-0000-4000-8000-000000000002', 'Armor for hard days', 'Hard days', 'What you play before the thing you''re dreading.', '#7fa9a3'),                 -- armor_up
-  ('00000000-0000-4000-8000-000000000003', 'Songs for someone I miss', 'Missing someone', 'You go back to songs tied to a person, a place, or a time that''s gone.', '#9a8fbf'),      -- carrying_loss
-  ('00000000-0000-4000-8000-000000000004', 'When I need to disappear for a bit', 'Disappearing', 'Headphones in, a few minutes somewhere else.', '#c48e96'), -- somewhere_else
-  ('00000000-0000-4000-8000-000000000005', 'Songs that take me back', 'Taking me back', 'One song and you''re in a specific year again.', '#9db084');        -- old_selves
+  ('00000000-0000-4000-8000-000000000001', 'Quiet & Solitude', 'Solitude', 'You put something on so the room isn''t silent, usually late and usually alone.', '#c9a66b'),        -- quiet_company
+  ('00000000-0000-4000-8000-000000000002', 'Motivation & Focus', 'Motivation', 'What you play before something challenging or when you need energy.', '#7fa9a3'),                 -- armor_up
+  ('00000000-0000-4000-8000-000000000003', 'Comfort & Longing', 'Comfort', 'You go back to songs tied to a person, a place, or a time that''s gone.', '#9a8fbf'),      -- carrying_loss
+  ('00000000-0000-4000-8000-000000000004', 'Escaping & Zoning Out', 'Zoning Out', 'Headphones in, taking a break from everything else.', '#c48e96'), -- somewhere_else
+  ('00000000-0000-4000-8000-000000000005', 'Nostalgia & Memories', 'Nostalgia', 'One song and you''re in a specific year again.', '#9db084');        -- old_selves
 
 alter table public.profiles
   add column primary_topic_cluster_id uuid references public.topic_clusters(id);

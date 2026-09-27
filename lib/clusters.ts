@@ -16,36 +16,36 @@ export type Cluster = {
 export const CLUSTERS: Record<ClusterId, Cluster> = {
   quiet_company: {
     id: "quiet_company",
-    label: "When it's too quiet at home",
-    short: "Too quiet",
+    label: "Quiet & Solitude",
+    short: "Solitude",
     description: "You put something on so the room isn't silent, usually late and usually alone.",
     color: "#c9a66b",
   },
   armor_up: {
     id: "armor_up",
-    label: "Armor for hard days",
-    short: "Hard days",
-    description: "What you play before the thing you're dreading.",
+    label: "Motivation & Focus",
+    short: "Motivation",
+    description: "What you play before something challenging or when you need energy.",
     color: "#7fa9a3",
   },
   carrying_loss: {
     id: "carrying_loss",
-    label: "Songs for someone I miss",
-    short: "Missing someone",
+    label: "Comfort & Longing",
+    short: "Comfort",
     description: "You go back to songs tied to a person, a place, or a time that's gone.",
     color: "#9a8fbf",
   },
   somewhere_else: {
     id: "somewhere_else",
-    label: "When I need to disappear for a bit",
-    short: "Disappearing",
-    description: "Headphones in, a few minutes somewhere else.",
+    label: "Escaping & Zoning Out",
+    short: "Zoning Out",
+    description: "Headphones in, taking a break from everything else.",
     color: "#c48e96",
   },
   old_selves: {
     id: "old_selves",
-    label: "Songs that take me back",
-    short: "Taking me back",
+    label: "Nostalgia & Memories",
+    short: "Nostalgia",
     description: "One song and you're in a specific year again.",
     color: "#9db084",
   },
@@ -79,13 +79,29 @@ const UNASSIGNED: Cluster = {
  */
 const clusterCache = new Map<string, Cluster>([...Object.entries(CLUSTERS), [UNASSIGNED.id, UNASSIGNED]]);
 
+const LEGACY_LABEL_MAP: Record<string, { label: string; short: string }> = {
+  "When it's too quiet at home": { label: "Quiet & Solitude", short: "Solitude" },
+  "Armor for hard days": { label: "Motivation & Focus", short: "Motivation" },
+  "Songs for someone I miss": { label: "Comfort & Longing", short: "Comfort" },
+  "When I need to disappear for a bit": { label: "Escaping & Zoning Out", short: "Zoning Out" },
+  "Songs that take me back": { label: "Nostalgia & Memories", short: "Nostalgia" },
+};
+
+function sanitizeCluster(c: Cluster): Cluster {
+  const mapped = LEGACY_LABEL_MAP[c.label];
+  if (!mapped) return c;
+  return { ...c, label: mapped.label, short: mapped.short };
+}
+
 /** Merges freshly fetched cluster rows into the cache. Called once by `ClusterCacheProvider` in real-data mode. */
 export function primeClusters(clusters: Cluster[]) {
-  for (const c of clusters) clusterCache.set(c.id, c);
+  for (const c of clusters) clusterCache.set(c.id, sanitizeCluster(c));
 }
 
 export function getCluster(id: string): Cluster {
-  return clusterCache.get(id) ?? UNASSIGNED;
+  const c = clusterCache.get(id);
+  if (c) return sanitizeCluster(c);
+  return UNASSIGNED;
 }
 
 export function clusterForLabel(label: string): Cluster {

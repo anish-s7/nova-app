@@ -572,6 +572,7 @@ export async function getConnections(): Promise<Connection[]> {
         cluster: u.primary,
         similarity: e.similarity,
         sharedMotivation: e.sharedMotivation,
+        threadWhy: undefined,
         sharedSongs: e.sharedSongs,
         sharedArtists: e.sharedArtists,
         evidenceSongs: evidenceSongs(me.songs, u.songs),

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ArrowRight, Disc3, GitCompareArrows } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
+import { PreviewButton } from "@/components/preview-button";
 import { buttonVariants } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
 import { getCluster } from "@/lib/clusters";
@@ -26,6 +27,9 @@ export function ContrastCardView({ card, me, other }: { card: ContrastCard; me: 
         <p className="mt-4 text-xs font-medium uppercase tracking-wider text-muted-foreground">Same song</p>
         <p className="mt-1 text-balance font-serif text-xl italic">{card.song.title}</p>
         <p className="text-sm text-muted-foreground">{card.song.artist}</p>
+        <div className="mt-2 flex justify-center">
+          <PreviewButton song={card.song} />
+        </div>
         <p className="mt-3 text-pretty text-sm text-foreground/80">{card.sharedThread}</p>
       </section>
 

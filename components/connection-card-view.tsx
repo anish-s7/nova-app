@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, Disc3, GitCompareArrows } from "lucide-react";
 import { animate, createTimeline, spring, splitText, stagger } from "animejs";
 import { AlbumArt } from "@/components/album-art";
+import { PreviewButton } from "@/components/preview-button";
 import { ThemeTag } from "@/components/theme-tag";
 import { buttonVariants } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
@@ -27,6 +28,7 @@ function EvidenceRow({ who, evidence }: { who: string; evidence: SharedEvidence 
         </p>
         <p className="mt-0.5 text-pretty text-sm leading-snug text-foreground/80">{evidence.text}</p>
       </div>
+      <PreviewButton song={evidence.song} className="size-8" />
     </div>
   );
 }

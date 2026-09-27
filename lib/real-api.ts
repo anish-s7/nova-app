@@ -192,6 +192,7 @@ export async function getConnections(): Promise<Connection[]> {
       cluster: m.cluster ?? DEFAULT_CLUSTER,
       similarity,
       sharedMotivation: m.card.shared_why,
+      threadWhy: m.card.threads?.[0]?.why,
       ...o,
       evidenceSongs: evidenceSongs(mine, theirs),
     };
