@@ -2,17 +2,12 @@ import type { CSSProperties } from "react";
 import { cn } from "@/lib/utils";
 
 /**
- * A cluster's (or song theme's) color as a small glowing four-point star instead of a flat dot:
- * the color fills the star and softly glows around it, with a bright core. `color` can be any CSS
- * color, including `var(--tone)`. `hollow` draws just the outline (a song theme still forming).
+ * A cluster's (or song theme's) color as a small matte four-point star instead of a flat dot.
+ * `color` can be any CSS color, including `var(--tone)`. `hollow` draws just the outline (a song
+ * theme still forming).
  */
 export function ClusterStar({ color, size = 11, hollow = false, className }: { color: string; size?: number; hollow?: boolean; className?: string }) {
-  const style: CSSProperties = {
-    width: size,
-    height: size,
-    color,
-    filter: hollow ? undefined : `drop-shadow(0 0 ${Math.max(2, size / 4)}px ${color})`,
-  };
+  const style: CSSProperties = { width: size, height: size, color };
   return (
     <svg viewBox="0 0 16 16" className={cn("inline-block shrink-0 align-middle", className)} style={style} aria-hidden focusable="false">
       <path
@@ -22,7 +17,6 @@ export function ClusterStar({ color, size = 11, hollow = false, className }: { c
         strokeWidth={hollow ? 1.2 : 0}
         strokeLinejoin="round"
       />
-      {hollow ? null : <circle cx="8" cy="8" r="1.4" fill="white" fillOpacity="0.85" />}
     </svg>
   );
 }
