@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
 import { useReducedMotion } from "@/hooks/use-capabilities";
 
 /** Deterministic PRNG so server and client render the identical sky. */
@@ -235,43 +235,62 @@ const HOLD_MS = 7000;
 /** Must cover the line's own delay + draw duration (see globals.css's sky-draw) so hold never cuts a draw-in short. */
 const DRAW_MS = 4750;
 const EXIT_MS = 1800;
+/**
+ * The original constellation's own draw-in (see OriginalConstellation): its slowest piece is the
+ * champagne bridge, delayed 2.4s then drawing for the same 4.6s as everything else — so it's done
+ * by ~7s. Cycling slots wait until then to start, so the original is the first thing to finish.
+ */
+const ORIGINAL_READY_MS = 7200;
 
 interface SlotState {
   shapeIndex: number | null;
   exiting: boolean;
 }
 
-function pickDifferent(prev: number | null) {
-  if (CONSTELLATIONS.length <= 1) return 0;
-  let next = prev;
-  while (next === prev) next = Math.floor(Math.random() * CONSTELLATIONS.length);
-  return next;
+/** Picks a shape no other currently-visible slot in this canvas is showing, and not this slot's own last pick. */
+function pickAvoiding(taken: Set<number>, prev: number | null) {
+  const all = CONSTELLATIONS.map((_, i) => i);
+  const free = all.filter((i) => i !== prev && !taken.has(i));
+  const pool = free.length > 0 ? free : all.filter((i) => i !== prev);
+  const finalPool = pool.length > 0 ? pool : all;
+  return finalPool[Math.floor(Math.random() * finalPool.length)];
 }
 
 /**
  * Runs one slot's independent draw-in → hold → fade-out → (new shape) → ... loop forever.
- * Reduced motion: picks one shape and stops, matching this codebase's other motion-gated loops
- * (see hooks/use-capabilities.ts's useReducedMotion, used the same way in reading-sequence.tsx).
- * Starts empty on both server and the first client render (see LandingStarfield) so the random
- * pick never desyncs hydration; the loop itself only ever runs client-side inside this effect.
+ * `registry` is shared by every slot in the same canvas (tall or wide) so two slots never show
+ * the same constellation at once — each slot reserves its current pick in it and frees it when it
+ * moves on. Reduced motion: picks one shape and stops, matching this codebase's other
+ * motion-gated loops (see hooks/use-capabilities.ts's useReducedMotion, used the same way in
+ * reading-sequence.tsx). Starts empty on both server and the first client render (see
+ * LandingStarfield) so the random pick never desyncs hydration; the loop itself only ever runs
+ * client-side inside this effect.
  */
-function useCyclingSlot(startDelayMs: number): SlotState {
+function useCyclingSlot(startDelayMs: number, registry: React.MutableRefObject<Set<number>>): SlotState {
   const reducedMotion = useReducedMotion();
   const [state, setState] = useState<SlotState>({ shapeIndex: null, exiting: false });
 
   useEffect(() => {
+    let mine: number | null = null;
+
     if (reducedMotion) {
-      setState({ shapeIndex: Math.floor(Math.random() * CONSTELLATIONS.length), exiting: false });
-      return;
+      mine = pickAvoiding(registry.current, null);
+      registry.current.add(mine);
+      setState({ shapeIndex: mine, exiting: false });
+      return () => {
+        if (mine !== null) registry.current.delete(mine);
+      };
     }
 
     let cancelled = false;
     let timer: ReturnType<typeof setTimeout>;
-    let current: number | null = null;
 
     function enter() {
-      current = pickDifferent(current);
-      setState({ shapeIndex: current, exiting: false });
+      const next = pickAvoiding(registry.current, mine);
+      if (mine !== null) registry.current.delete(mine);
+      registry.current.add(next);
+      mine = next;
+      setState({ shapeIndex: next, exiting: false });
       timer = setTimeout(exit, DRAW_MS + HOLD_MS);
     }
     function exit() {
@@ -284,15 +303,26 @@ function useCyclingSlot(startDelayMs: number): SlotState {
     return () => {
       cancelled = true;
       clearTimeout(timer);
+      if (mine !== null) registry.current.delete(mine);
     };
-  }, [reducedMotion, startDelayMs]);
+  }, [reducedMotion, startDelayMs, registry]);
 
   return state;
 }
 
 /** One slot: picks its own shape on a loop and places it via a computed translate+scale. */
-function ConstellationSlot({ halo, slot, startDelayMs }: { halo: string; slot: Slot; startDelayMs: number }) {
-  const { shapeIndex, exiting } = useCyclingSlot(startDelayMs);
+function ConstellationSlot({
+  halo,
+  slot,
+  startDelayMs,
+  registry,
+}: {
+  halo: string;
+  slot: Slot;
+  startDelayMs: number;
+  registry: React.MutableRefObject<Set<number>>;
+}) {
+  const { shapeIndex, exiting } = useCyclingSlot(startDelayMs, registry);
   if (shapeIndex === null) return null;
 
   const shape = CONSTELLATIONS[shapeIndex];
@@ -301,7 +331,9 @@ function ConstellationSlot({ halo, slot, startDelayMs }: { halo: string; slot: S
   // tall, not get squashed to fill a square slot the way a fixed reference size would force it to.
   // Centered in the slot rather than corner-anchored, since a shape's aspect ratio rarely matches
   // its slot's exactly (e.g. Lyra, portrait, dropped into the wide low strip under the original).
-  const scale = Math.min(slot.w / (width || 1), slot.h / (height || 1)) * 0.88;
+  // Kept well under the slot's own size (0.55, not ~1) so these read as smaller background
+  // constellations rather than competing with the permanent original for attention.
+  const scale = Math.min(slot.w / (width || 1), slot.h / (height || 1)) * 0.55;
   const tx = slot.x + (slot.w - width * scale) / 2 - minX * scale;
   const ty = slot.y + (slot.h - height * scale) / 2 - minY * scale;
 
@@ -445,12 +477,17 @@ const wideStars = makeBackgroundStars(20260928, 300, WIDE.W, WIDE.H, WIDE_AVOID)
 
 /**
  * The welcome page's night sky: the original constellation, permanent in its original spot, plus
- * a couple of other constellations that each independently draw in, hold, fade out, and re-form
- * as a different shape elsewhere in their own slot around it. Phones and narrow windows get two
- * cycling slots (TALL_SLOTS); laptops (lg) get two bigger ones (WIDE_SLOTS) — both laid out to
- * leave the original's footprint and AVOID/WIDE_AVOID (the headline zones) clear.
+ * a couple of smaller constellations that each independently draw in, hold, fade out, and re-form
+ * as a different shape elsewhere in their own slot around it, never starting until the original
+ * has finished drawing (ORIGINAL_READY_MS) and never showing the same shape as each other at once
+ * (each canvas's own `registry`, shared across its slots — see useCyclingSlot). Phones and narrow
+ * windows get two cycling slots (TALL_SLOTS); laptops (lg) get two bigger ones (WIDE_SLOTS) — both
+ * laid out to leave the original's footprint and AVOID/WIDE_AVOID (the headline zones) clear.
  */
 export function LandingStarfield() {
+  const tallRegistry = useRef<Set<number>>(new Set());
+  const wideRegistry = useRef<Set<number>>(new Set());
+
   return (
     <div className="absolute inset-0" aria-hidden="true">
       <svg className="h-full w-full lg:hidden" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid slice" focusable="false">
@@ -459,7 +496,13 @@ export function LandingStarfield() {
         <MinorTicks />
         <OriginalConstellation halo="landing-halo-tall" />
         {TALL_SLOTS.map((slot, i) => (
-          <ConstellationSlot key={i} halo="landing-halo-tall" slot={slot} startDelayMs={i * 3500} />
+          <ConstellationSlot
+            key={i}
+            halo="landing-halo-tall"
+            slot={slot}
+            startDelayMs={ORIGINAL_READY_MS + i * 2500}
+            registry={tallRegistry}
+          />
         ))}
       </svg>
       <svg className="hidden h-full w-full lg:block" viewBox={`0 0 ${WIDE.W} ${WIDE.H}`} preserveAspectRatio="xMidYMid slice" focusable="false">
@@ -469,7 +512,13 @@ export function LandingStarfield() {
           <OriginalConstellation halo="landing-halo-wide" />
         </g>
         {WIDE_SLOTS.map((slot, i) => (
-          <ConstellationSlot key={i} halo="landing-halo-wide" slot={slot} startDelayMs={i * 3200} />
+          <ConstellationSlot
+            key={i}
+            halo="landing-halo-wide"
+            slot={slot}
+            startDelayMs={ORIGINAL_READY_MS + i * 2500}
+            registry={wideRegistry}
+          />
         ))}
       </svg>
     </div>
