@@ -4,9 +4,10 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-/** Screens that use the whole window on a laptop (the welcome page, the galaxy, Connections and
- * Messages, which lay themselves out for it); everything else sits in a centered column. "/" only
- * matches the welcome page itself (see `matches`). */
+/** Screens that use the whole window on a laptop and lay themselves out for it (the welcome page,
+ * the galaxy, Messages' two panes, and Connections' own centered column without the frame's edge
+ * lines); everything else sits in a bordered centered column. "/" only matches the welcome page
+ * itself (see `matches`). */
 const FULL_WIDTH = ["/galaxy", "/", "/connections", "/messages"];
 /** Scripted demos composed for a phone screen: they keep the phone frame at every size. */
 const PHONE_ONLY = ["/pitch", "/sim", "/proto"];
