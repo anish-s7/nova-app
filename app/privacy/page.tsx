@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 };
 
 /** Where deletion and privacy requests go. Also the contact on Google's OAuth consent screen. */
-const CONTACT_EMAIL = "TODO-contact-email";
+const CONTACT_EMAIL = "anish.swaminathan101@gmail.com";
 const UPDATED = "September 27, 2026";
 
 const SECTIONS: { title: string; body: React.ReactNode }[] = [
