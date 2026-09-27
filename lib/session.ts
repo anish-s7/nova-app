@@ -21,6 +21,20 @@ export type Feeling = {
 
 export type SaveStatus = "idle" | "saving" | "saved" | "error";
 
+export type AvatarConfig = {
+  avatarUrl?: string;
+  hairStyle?: "short" | "side-part" | "curly" | "long" | "bun" | "buzzed" | "spiky" | "fade" | "dreads" | "braids" | "ponytail" | "waves" | "beanie" | "cap" | "bald";
+  hairColor?: string;
+  skinColor?: string;
+  shirtStyle?: "crewneck" | "hoodie" | "vneck" | "collared" | "tank";
+  shirtColor?: string;
+  facialHair?: "none" | "stubble" | "beard" | "mustache" | "goatee";
+  eyewear?: "none" | "round-glasses" | "square-glasses" | "sunglasses" | "headphones" | "earrings";
+  expression?: "smile" | "neutral" | "grin" | "smirk" | "tongue" | "chill";
+  eyeStyle?: "normal" | "happy" | "wide" | "wink" | "starry";
+  background?: string;
+};
+
 export type SessionState = {
   demo: boolean;
   failures: FailureKey[];
@@ -30,6 +44,8 @@ export type SessionState = {
   analysis?: AnalysisResult;
   motivations: InferredMotivation[];
   revealSeen: boolean;
+  /** Optional avatar configuration for profile and map */
+  avatarConfig?: AvatarConfig;
   /** Optional answer to "what do you reach for when you can't decide what to play?" */
   reach?: string;
   /** Songs added from the galaxy after onboarding, with the reason typed for each. Kept out of `songs` so adding one grows the galaxy without re-laying it out. */

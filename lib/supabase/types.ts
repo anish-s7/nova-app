@@ -165,6 +165,234 @@ export interface Database {
         }>;
         Relationships: [];
       };
+      listening_connections: {
+        Row: {
+          id: string;
+          profile_id: string;
+          provider: Database["public"]["Enums"]["listening_provider"];
+          canonical_username: string;
+          verification_state: "unverified";
+          status: Database["public"]["Enums"]["listening_connection_status"];
+          generation: number;
+          consent_version: string;
+          consented_at: string;
+          last_successful_query_at: string | null;
+          latest_observed_listen_at: string | null;
+          next_due_at: string;
+          safe_error_code: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          provider: Database["public"]["Enums"]["listening_provider"];
+          canonical_username: string;
+          verification_state?: "unverified";
+          status?: Database["public"]["Enums"]["listening_connection_status"];
+          generation?: number;
+          consent_version: string;
+          consented_at?: string;
+          last_successful_query_at?: string | null;
+          latest_observed_listen_at?: string | null;
+          next_due_at?: string;
+          safe_error_code?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["listening_connections"]["Insert"]>;
+        Relationships: [];
+      };
+      listening_preferences: {
+        Row: {
+          profile_id: string;
+          primary_connection_id: string | null;
+          timezone: string;
+          exploration_setting: "close" | "balanced" | "explore";
+          input_revision: number;
+          raw_retention_days: number;
+          updated_at: string;
+        };
+        Insert: {
+          profile_id: string;
+          primary_connection_id?: string | null;
+          timezone?: string;
+          exploration_setting?: "close" | "balanced" | "explore";
+          input_revision?: number;
+          raw_retention_days?: number;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["listening_preferences"]["Insert"]>;
+        Relationships: [];
+      };
+      listening_tracks: {
+        Row: {
+          id: string;
+          profile_id: string;
+          title: string;
+          artist_credit: string;
+          credited_artist_key: string;
+          album_hint: string | null;
+          version_hint: string | null;
+          identity_fingerprint: string;
+          catalog_song_id: string | null;
+          identity_status: Database["public"]["Enums"]["listening_identity_status"];
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          title: string;
+          artist_credit: string;
+          credited_artist_key: string;
+          album_hint?: string | null;
+          version_hint?: string | null;
+          identity_fingerprint: string;
+          catalog_song_id?: string | null;
+          identity_status?: Database["public"]["Enums"]["listening_identity_status"];
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["listening_tracks"]["Insert"]>;
+        Relationships: [];
+      };
+      listening_track_aliases: {
+        Row: {
+          id: string;
+          profile_id: string;
+          provider: Database["public"]["Enums"]["listening_provider"];
+          namespace: string;
+          identifier: string;
+          track_id: string;
+          resolution_method: string;
+          provenance: string;
+          created_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["listening_track_aliases"]["Row"], "id" | "created_at"> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["listening_track_aliases"]["Insert"]>;
+        Relationships: [];
+      };
+      listening_events: {
+        Row: {
+          id: string;
+          profile_id: string;
+          connection_id: string;
+          connection_generation: number;
+          track_id: string;
+          played_at: string;
+          idempotency_fingerprint: string;
+          provider_event_id: string | null;
+          source_metadata: Record<string, unknown>;
+          excluded: boolean;
+          created_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["listening_events"]["Row"], "id" | "created_at" | "source_metadata" | "excluded"> & {
+          id?: string;
+          source_metadata?: Record<string, unknown>;
+          excluded?: boolean;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["listening_events"]["Insert"]>;
+        Relationships: [];
+      };
+      listening_sync_jobs: {
+        Row: {
+          id: string;
+          profile_id: string;
+          connection_id: string;
+          connection_generation: number;
+          state: Database["public"]["Enums"]["listening_sync_state"];
+          kind: Database["public"]["Enums"]["listening_sync_kind"];
+          range_lower: string;
+          range_upper: string;
+          continuation: Record<string, unknown> | null;
+          checkpoint_revision: number;
+          lease_token: string | null;
+          lease_expires_at: string | null;
+          attempt_count: number;
+          next_attempt_at: string;
+          pages_fetched: number;
+          events_seen: number;
+          events_inserted: number;
+          events_deduplicated: number;
+          safe_error_code: string | null;
+          created_at: string;
+          updated_at: string;
+          completed_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          profile_id: string;
+          connection_id: string;
+          connection_generation: number;
+          state?: Database["public"]["Enums"]["listening_sync_state"];
+          kind: Database["public"]["Enums"]["listening_sync_kind"];
+          range_lower: string;
+          range_upper: string;
+          continuation?: Record<string, unknown> | null;
+          checkpoint_revision?: number;
+          lease_token?: string | null;
+          lease_expires_at?: string | null;
+          attempt_count?: number;
+          next_attempt_at?: string;
+          pages_fetched?: number;
+          events_seen?: number;
+          events_inserted?: number;
+          events_deduplicated?: number;
+          safe_error_code?: string | null;
+          created_at?: string;
+          updated_at?: string;
+          completed_at?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["listening_sync_jobs"]["Insert"]>;
+        Relationships: [];
+      };
+      listening_daily_tracks: {
+        Row: {
+          profile_id: string;
+          connection_id: string;
+          track_id: string;
+          local_date: string;
+          play_count: number;
+          distinct_observed_timestamps: number;
+          aggregation_revision: number;
+          updated_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["listening_daily_tracks"]["Row"], "updated_at"> & {
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["listening_daily_tracks"]["Insert"]>;
+        Relationships: [];
+      };
+      listening_dirty_dates: {
+        Row: {
+          profile_id: string;
+          connection_id: string;
+          local_date: string;
+          created_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["listening_dirty_dates"]["Row"], "created_at"> & {
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      listening_provider_pacing: {
+        Row: {
+          provider: Database["public"]["Enums"]["listening_provider"];
+          not_before: string;
+          updated_at: string;
+        };
+        Insert: {
+          provider: Database["public"]["Enums"]["listening_provider"];
+          not_before?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["listening_provider_pacing"]["Insert"]>;
+        Relationships: [];
+      };
       connection_cards: {
         Row: {
           id: string;
@@ -271,8 +499,103 @@ export interface Database {
           emotion_gap: number;
         }[];
       };
+      claim_listening_job: {
+        Args: { p_now: string };
+        Returns: {
+          id: string;
+          profile_id: string;
+          connection_id: string;
+          connection_generation: number;
+          provider: Database["public"]["Enums"]["listening_provider"];
+          canonical_username: string;
+          kind: Database["public"]["Enums"]["listening_sync_kind"];
+          range_lower: string;
+          range_upper: string;
+          continuation: Record<string, unknown> | null;
+          checkpoint_revision: number;
+          lease_token: string;
+          lease_expires_at: string;
+        }[];
+      };
+      commit_listening_page: {
+        Args: {
+          p_job_id: string;
+          p_lease_token: string;
+          p_connection_generation: number;
+          p_expected_checkpoint_revision: number;
+          p_events: unknown;
+          p_next_continuation: Record<string, unknown> | null;
+          p_range_complete: boolean;
+        };
+        Returns: { inserted: number; duplicates: number; input_revision: number }[];
+      };
+      release_listening_job: {
+        Args: {
+          p_job_id: string;
+          p_lease_token: string;
+          p_connection_generation: number;
+          p_expected_checkpoint_revision: number;
+          p_next_attempt_at: string;
+        };
+        Returns: undefined;
+      };
+      fail_listening_job: {
+        Args: {
+          p_job_id: string;
+          p_lease_token: string;
+          p_connection_generation: number;
+          p_expected_checkpoint_revision: number;
+          p_retryable: boolean;
+          p_next_attempt_at: string;
+          p_safe_error_code: string;
+        };
+        Returns: undefined;
+      };
+      reserve_listening_provider_request: {
+        Args: {
+          p_provider: Database["public"]["Enums"]["listening_provider"];
+          p_min_interval_ms: number;
+        };
+        Returns: string;
+      };
+      configure_listening_connection: {
+        Args: {
+          p_profile_id: string;
+          p_provider: Database["public"]["Enums"]["listening_provider"];
+          p_canonical_username: string;
+          p_consent_version: string;
+          p_now: string;
+        };
+        Returns: { connection_id: string; job_id: string }[];
+      };
+      enqueue_listening_sync: {
+        Args: { p_profile_id: string; p_connection_id: string; p_now: string };
+        Returns: string;
+      };
+      disconnect_listening_connection: {
+        Args: {
+          p_profile_id: string;
+          p_provider: Database["public"]["Enums"]["listening_provider"];
+        };
+        Returns: boolean;
+      };
+      set_listening_preferences: {
+        Args: {
+          p_profile_id: string;
+          p_primary_connection_id: string | null;
+          p_timezone: string;
+          p_exploration_setting: string;
+        };
+        Returns: undefined;
+      };
     };
-    Enums: Record<string, never>;
+    Enums: {
+      listening_provider: "lastfm" | "listenbrainz";
+      listening_connection_status: "active" | "error" | "disconnected";
+      listening_identity_status: "unresolved" | "catalog_matched" | "ambiguous";
+      listening_sync_state: "queued" | "running" | "retry_wait" | "complete" | "failed" | "cancelled";
+      listening_sync_kind: "backfill" | "incremental" | "reconcile";
+    };
     CompositeTypes: Record<string, never>;
   };
 }
