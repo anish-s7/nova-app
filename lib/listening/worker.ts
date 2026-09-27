@@ -3,6 +3,7 @@ import type { Database } from "../supabase/types";
 import { LISTENING_WORKER_BUDGET_MS, LISTENING_WORKER_PAGE_LIMIT } from "./config";
 import { SupabaseSyncRepository, toCommitPageEvent, type ClaimedJob, type SyncRepository } from "./repository";
 import { ListeningProviderError, type ListeningAdapter, type ListeningProvider } from "./types";
+import { recomputeTasteSnapshot } from "../taste/snapshots";
 
 export type WorkerAdapters = Record<ListeningProvider, ListeningAdapter>;
 export type ProviderPacer = { wait(provider: ListeningProvider, signal: AbortSignal): Promise<void> };
@@ -43,6 +44,7 @@ export async function runListeningWorker(input: {
   now?: () => number;
   pageLimit?: number;
   budgetMs?: number;
+  onRangeComplete?: (job: ClaimedJob) => Promise<void>;
 }): Promise<WorkerRunResult> {
   const now = input.now ?? Date.now;
   const started = now();
@@ -92,7 +94,10 @@ export async function runListeningWorker(input: {
         inserted += commit.inserted;
         duplicates += commit.duplicates;
         cursor = page.nextCursor;
-        if (page.rangeComplete) return { status: "complete", jobId: job.id, pages, inserted, duplicates };
+        if (page.rangeComplete) {
+          await input.onRangeComplete?.(job);
+          return { status: "complete", jobId: job.id, pages, inserted, duplicates };
+        }
       } finally {
         clearTimeout(timer);
       }
@@ -130,6 +135,15 @@ export function createSupabaseWorker(input: { client: SupabaseClient<Database>; 
     repository: new SupabaseSyncRepository(input.client),
     adapters: input.adapters,
     pacer: new SupabaseProviderPacer(input.client),
+    onRangeComplete: async (job) => {
+      try {
+        await recomputeTasteSnapshot({ client: input.client, profileId: job.profileId, connectionId: job.connectionId });
+      } catch (error) {
+        // Ingestion is already durably complete. A later sync or preference change
+        // retries derivation without relabeling the provider job as failed.
+        console.error("Taste snapshot recomputation failed", error);
+      }
+    },
   });
 }
 

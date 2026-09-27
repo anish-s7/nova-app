@@ -53,6 +53,20 @@ test("generation fencing during an active fetch is treated as an intentional sta
   assert.equal(failed, true);
 });
 
+test("taste derivation is requested only after a range commits complete", async () => {
+  const completed: ClaimedJob[] = [];
+  const repository = repositoryStub({});
+  const adapter = adapterStub(async () => ({ events: [], nextCursor: null, rangeComplete: true }));
+  const result = await runListeningWorker({
+    repository,
+    adapters: { lastfm: adapter, listenbrainz: adapter },
+    now: () => 1_770_000_000_000,
+    onRangeComplete: async (claimed) => { completed.push(claimed); },
+  });
+  assert.equal(result.status, "complete");
+  assert.deepEqual(completed.map((item) => item.id), ["job"]);
+});
+
 function adapterStub(fetchPage: ListeningAdapter["fetchPage"]): ListeningAdapter {
   return { provider: "lastfm", validateUsername: async (value) => value, fetchPage };
 }

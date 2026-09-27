@@ -79,6 +79,8 @@ import type {
   User,
   WanderEntry,
 } from "./types";
+import type { DiscoveryMode } from "./discovery/types";
+import type { DiscoveryView } from "./real-api";
 
 // ===========================================================================
 // SWAP POINT: the only line that decides mock vs real data (see lib/data-source.ts).
@@ -88,6 +90,16 @@ const db: Db = REAL_DATA ? httpDb : mockDb;
 // ===========================================================================
 
 export { ME_ID, ApiError, REAL_DATA };
+
+export async function getDiscovery(anchorSongId: string, mode: DiscoveryMode): Promise<DiscoveryView> {
+  if (REAL_DATA) return real.getDiscovery(anchorSongId, mode);
+  return { status: "not_ready", batchId: null, snapshotId: null, feedbackRevision: 1, mode, expiresAt: null, songs: [] };
+}
+
+export async function sendDiscoveryFeedback(candidateId: string, action: "save" | "dismiss" | "not_now" | "more_like" | "hide_artist") {
+  if (REAL_DATA) return real.sendDiscoveryFeedback(candidateId, action);
+  return { feedbackRevision: 1, saved: action === "save" };
+}
 
 /** Mock-only latency so loading states are visible. */
 function delay(ms: number) {

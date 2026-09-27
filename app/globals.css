@@ -240,8 +240,17 @@
 @utility draw-line {
   stroke-dasharray: 1;
   stroke-dashoffset: 0;
-  animation: sky-draw 2.8s cubic-bezier(0.4, 0, 0.2, 1) both;
+  animation: sky-draw 4.6s cubic-bezier(0.4, 0, 0.2, 1) both;
   animation-delay: var(--draw-delay, 0.5s);
+}
+
+@keyframes sky-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes sky-fade-out {
@@ -253,9 +262,18 @@
   }
 }
 
-/* A drawn-in constellation dissolving away before its slot forms a new one (see landing-starfield). */
+/*
+ * A constellation slot's whole group (halos + stars + lines) fades in as it forms and fades out
+ * before its slot forms a new one (see landing-starfield): without this, the stars used to pop in
+ * at full brightness instantly while only their connecting line animated, so exits dissolved
+ * smoothly but entries snapped in — read as a glitch. Both now fade the same way.
+ */
+@utility constellation-enter {
+  animation: sky-fade-in 1.8s ease-out both;
+}
+
 @utility constellation-exit {
-  animation: sky-fade-out 1.4s ease-in both;
+  animation: sky-fade-out 1.8s ease-in both;
 }
 
 @keyframes star-twinkle {

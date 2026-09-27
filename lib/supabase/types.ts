@@ -213,6 +213,8 @@ export interface Database {
           input_revision: number;
           raw_retention_days: number;
           updated_at: string;
+          active_taste_snapshot_id: string | null;
+          discovery_feedback_revision: number;
         };
         Insert: {
           profile_id: string;
@@ -222,6 +224,8 @@ export interface Database {
           input_revision?: number;
           raw_retention_days?: number;
           updated_at?: string;
+          active_taste_snapshot_id?: string | null;
+          discovery_feedback_revision?: number;
         };
         Update: Partial<Database["public"]["Tables"]["listening_preferences"]["Insert"]>;
         Relationships: [];
@@ -392,6 +396,97 @@ export interface Database {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["listening_provider_pacing"]["Insert"]>;
+        Relationships: [];
+      };
+      taste_snapshots: {
+        Row: {
+          id: string;
+          profile_id: string;
+          input_revision: number;
+          algorithm_version: string;
+          primary_connection_id: string;
+          primary_source_generation: number;
+          computed_as_of: string;
+          timezone: string;
+          coverage_start: string | null;
+          coverage_end: string | null;
+          coverage_state: "empty" | "short" | "established";
+          total_plays: number;
+          distinct_tracks: number;
+          distinct_artists: number;
+          observed_days: number;
+          recent_7_plays: number;
+          previous_7_plays: number;
+          state: "ready";
+          created_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["taste_snapshots"]["Row"], "id" | "state" | "created_at"> & {
+          id?: string;
+          state?: "ready";
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      taste_interests: {
+        Row: {
+          id: string;
+          snapshot_id: string;
+          profile_id: string;
+          stable_interest_key: string;
+          label: string;
+          seed_artists: unknown[];
+          seed_tracks: unknown[];
+          recent_weight: number;
+          core_weight: number;
+          confidence: number;
+          evidence_days: number;
+          representative_tracks: unknown[];
+          created_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["taste_interests"]["Row"], "id" | "created_at"> & {
+          id?: string;
+          created_at?: string;
+        };
+        Update: never;
+        Relationships: [];
+      };
+      discovery_batches: {
+        Row: {
+          id: string; profile_id: string; taste_snapshot_id: string; anchor_song_id: string | null;
+          public_catalog_revision: string | null; feedback_revision: number;
+          exploration_mode: "close" | "explore"; algorithm_version: string;
+          created_at: string; expires_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["discovery_batches"]["Row"], "id" | "created_at"> & { id?: string; created_at?: string };
+        Update: never;
+        Relationships: [];
+      };
+      discovery_candidates: {
+        Row: {
+          id: string; batch_id: string; profile_id: string; song_id: string; rank: number;
+          pool_type: "core" | "current" | "bridge" | "rediscovery"; interest_key: string | null;
+          component_scores: Record<string, unknown>; evidence: Record<string, unknown>;
+          source_attribution: string; created_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["discovery_candidates"]["Row"], "id" | "created_at"> & { id?: string; created_at?: string };
+        Update: never;
+        Relationships: [];
+      };
+      discovery_events: {
+        Row: {
+          id: string; profile_id: string; candidate_id: string; batch_id: string;
+          action: "impression" | "preview_start" | "outbound_click" | "save" | "dismiss" | "not_now" | "more_like" | "hide_artist";
+          client_idempotency_key: string; created_at: string;
+        };
+        Insert: Omit<Database["public"]["Tables"]["discovery_events"]["Row"], "id" | "created_at"> & { id?: string; created_at?: string };
+        Update: never;
+        Relationships: [];
+      };
+      discovery_saves: {
+        Row: { profile_id: string; song_id: string; candidate_id: string | null; created_at: string };
+        Insert: Omit<Database["public"]["Tables"]["discovery_saves"]["Row"], "created_at"> & { created_at?: string };
+        Update: Partial<Database["public"]["Tables"]["discovery_saves"]["Insert"]>;
         Relationships: [];
       };
       connection_cards: {
@@ -594,6 +689,67 @@ export interface Database {
           p_exploration_setting: string;
         };
         Returns: undefined;
+      };
+      rebuild_listening_daily_tracks: {
+        Args: {
+          p_profile_id: string;
+          p_connection_id: string;
+          p_connection_generation: number;
+          p_expected_input_revision: number;
+          p_as_of: string;
+        };
+        Returns: {
+          track_id: string;
+          title: string;
+          artist_credit: string;
+          artist_key: string;
+          local_date: string;
+          play_count: number;
+          distinct_observed_timestamps: number;
+        }[];
+      };
+      publish_taste_snapshot: {
+        Args: {
+          p_profile_id: string;
+          p_connection_id: string;
+          p_connection_generation: number;
+          p_expected_input_revision: number;
+          p_algorithm_version: string;
+          p_computed_as_of: string;
+          p_coverage_start: string | null;
+          p_coverage_end: string | null;
+          p_coverage_state: string;
+          p_total_plays: number;
+          p_distinct_tracks: number;
+          p_distinct_artists: number;
+          p_observed_days: number;
+          p_recent_7_plays: number;
+          p_previous_7_plays: number;
+          p_interests: unknown;
+        };
+        Returns: string;
+      };
+      discovery_catalog_candidates: {
+        Args: { p_profile_id: string; p_taste_snapshot_id: string; p_anchor_song_id?: string | null; p_limit?: number };
+        Returns: {
+          song_id: string; title: string; artist: string; album_art_url: string | null;
+          spotify_track_id: string | null; path_type: string; interest_key: string | null;
+          interest_weight: number; anchor_song_id: string | null; public_pick_id: string | null;
+          contributor_profile_id: string | null; repeat_days: number; anchor_strength: number;
+          listening_track_id: string | null;
+        }[];
+      };
+      publish_discovery_batch: {
+        Args: {
+          p_profile_id: string; p_taste_snapshot_id: string; p_anchor_song_id: string | null;
+          p_feedback_revision: number; p_exploration_mode: string; p_algorithm_version: string;
+          p_expires_at: string; p_candidates: unknown;
+        };
+        Returns: string;
+      };
+      record_discovery_feedback: {
+        Args: { p_profile_id: string; p_candidate_id: string; p_action: string; p_client_idempotency_key: string };
+        Returns: number;
       };
     };
     Enums: {

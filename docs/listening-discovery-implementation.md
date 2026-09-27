@@ -1,6 +1,6 @@
 # Listening, evolving taste, and music discovery
 
-Status: slices 1–2 implemented locally; migrations not applied to hosted data and
+Status: slices 1–4 implemented locally; migrations not applied to hosted data and
 no live provider account was connected during automated verification.
 Prepared 2026-09-27 against the current checkout. Baseline `npx tsc --noEmit` passes.
 
@@ -24,6 +24,28 @@ exclusive ListenBrainz pagination and same-second boundary recovery, worker
 interruption/retry, and disconnect generation fencing. Both feature flags still
 default disabled. Hosted migrations, provider credentials, scheduler setup, and
 the one-consenting-account-per-provider rollout gate remain operations work.
+
+Slice 3 implementation (2026-09-27): added timezone-aware daily aggregate rebuilds,
+immutable atomic taste snapshots, pure recent/core scoring, artist-led interests,
+and a private summary route/Profile view. Selected-source dirty dates advance the
+input revision; rebuild and publication recheck revision, primary connection,
+generation, and active sync state. Tests cover repeat caps, elapsed-time decay,
+artist dominance and smaller-interest retention, short-history labels, weekly
+windows, IANA DST boundaries, primary-source switching, and preservation of the
+previous snapshot after a fenced publication. Snapshot computation contains no LLM
+calls and remains separate from authored pick meanings.
+
+Slice 4 implementation (2026-09-27): added a bounded public-pick catalog RPC,
+versioned private discovery batches, deterministic ranking/diversification, typed
+evidence with serve-time public-visibility revalidation, and private save/feedback
+state. The real song sheet now offers close/explore recommendations with factual
+reasons, preview/outbound access, Save, Dismiss, and a separate Add meaning action.
+Retrieval is capped at 300 paths and publication at 24 songs; per-person and
+per-artist caps prevent a single neighbor or artist from filling the result. Tests
+cover smaller-interest representation, artist diversity, feedback suppression,
+private-pick exclusion, bounded retrieval, ownership, atomic publication, evidence
+wording, and the invariant that a discovery save never creates a `song_picks` row.
+Flags still default disabled and the migration remains local-only.
 
 ## Outcome and first release
 

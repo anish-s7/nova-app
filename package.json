@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsx --test tests/listening/*.test.ts",
+    "test": "tsx --test tests/listening/*.test.ts tests/discovery/*.test.ts",
     "listening:sync": "tsx scripts/sync-listening.ts"
   },
   "dependencies": {
