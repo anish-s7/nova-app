@@ -10,8 +10,8 @@ const sourceSans = Source_Sans_3({ variable: "--font-source-sans", subsets: ["la
 const newsreader = Newsreader({ variable: "--font-newsreader", subsets: ["latin"], style: ["normal", "italic"] });
 
 export const metadata: Metadata = {
-  title: "Song Galaxy — Someone out there feels it too",
-  description: "Song Galaxy connects people through the emotions and personal stories behind their favorite music.",
+  title: "Resonyx — Someone out there feels it too",
+  description: "Resonyx connects people through the emotions and personal stories behind their favorite music.",
 };
 
 export const viewport: Viewport = {

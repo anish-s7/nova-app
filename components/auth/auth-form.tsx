@@ -29,7 +29,7 @@ const COPY = {
     title: "Welcome back",
     subtitle: "Log in to see your galaxy.",
     submit: "Log in",
-    switchText: "New to Song Galaxy?",
+    switchText: "New to Resonyx?",
     switchLink: { href: "/signup", label: "Create an account" },
   },
 } as const;
@@ -184,7 +184,7 @@ export function AuthForm({ mode, next, initialError, initialNotice }: { mode: Mo
   return (
     <main className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="px-6 pt-5">
-        <Link href="/" aria-label="Song Galaxy home">
+        <Link href="/" aria-label="Resonyx home">
           <Logo />
         </Link>
       </div>

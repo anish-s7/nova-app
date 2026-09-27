@@ -3,8 +3,8 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 export const metadata: Metadata = {
-  title: "Privacy policy · Song Galaxy",
-  description: "What Song Galaxy stores, who it's shared with, and how to delete it.",
+  title: "Privacy policy · Resonyx",
+  description: "What Resonyx stores, who it's shared with, and how to delete it.",
 };
 
 /** Where deletion and privacy requests go. Also the contact on Google's OAuth consent screen. */
@@ -95,7 +95,7 @@ const SECTIONS: { title: string; body: React.ReactNode }[] = [
   },
   {
     title: "Children",
-    body: <p>Song Galaxy isn&apos;t meant for anyone under 13, and we don&apos;t knowingly collect their data.</p>,
+    body: <p>Resonyx isn&apos;t meant for anyone under 13, and we don&apos;t knowingly collect their data.</p>,
   },
   {
     title: "Changes",
@@ -116,11 +116,11 @@ export default function PrivacyPage() {
       <div className="mx-auto w-full max-w-2xl px-6 pb-16 pt-6 lg:px-10 lg:pt-12">
         <Link href="/" className="inline-flex min-h-10 items-center gap-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground">
           <ArrowLeft className="size-4" aria-hidden />
-          Song Galaxy
+          Resonyx
         </Link>
         <h1 className="mt-6 text-3xl font-semibold tracking-tight lg:text-4xl">Privacy policy</h1>
         <p className="mt-3 text-pretty leading-relaxed text-muted-foreground">
-          Song Galaxy connects people through what their favorite songs mean to them. This page explains, in plain language,
+          Resonyx connects people through what their favorite songs mean to them. This page explains, in plain language,
           what we store, who can see it, and how to delete it.
         </p>
         <div className="mt-10 flex flex-col gap-9">

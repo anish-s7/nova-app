@@ -47,8 +47,8 @@ function Confirmed() {
             <h1 className="mt-5 text-2xl font-semibold tracking-tight">Email confirmed</h1>
             <p className="mt-2 max-w-72 text-pretty text-muted-foreground">
               {state === "handedOff"
-                ? "You're all set. Your other Song Galaxy tab has already moved on."
-                : "You're all set. If Song Galaxy is still open in another tab, you can pick up there."}
+                ? "You're all set. Your other Resonyx tab has already moved on."
+                : "You're all set. If Resonyx is still open in another tab, you can pick up there."}
             </p>
             <p className="mt-4 text-sm font-medium text-foreground">You can close this tab now.</p>
             {state === "handedOff" ? (

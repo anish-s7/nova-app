@@ -68,7 +68,7 @@ export type SessionState = {
   version: number;
 };
 
-const STORAGE_KEY = "song-galaxy-session-v2";
+const STORAGE_KEY = "resonyx-session-v2";
 
 const initial: SessionState = {
   demo: false,

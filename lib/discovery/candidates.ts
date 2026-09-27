@@ -19,7 +19,7 @@ export function combineCandidatePaths(paths: RawCandidatePath[], interests: Inte
       interestKey: interestPath?.interestKey ?? null,
       poolType,
       evidence: evidenceFor(songPaths),
-      sourceAttribution: songPaths.some((path) => path.pathType !== "own_rediscovery") ? "Public Song Galaxy picks" : "Your recorded listening history",
+      sourceAttribution: songPaths.some((path) => path.pathType !== "own_rediscovery") ? "Public Resonyx picks" : "Your recorded listening history",
     };
   });
 }
