@@ -47,7 +47,7 @@ You should land on onboarding, and a row should appear in the `profiles` table.
 
 1. Go to https://console.cloud.google.com and create a project (or pick an existing one).
 2. **APIs & Services → OAuth consent screen** (called "Google Auth Platform" in newer consoles):
-   - App name: `Resonyx`, user support email: yours, developer contact: yours.
+   - App name: `Nova`, user support email: yours, developer contact: yours.
    - Audience: **External**.
    - While the app is in **Testing**, only the Google accounts you add under **Test users**
      (up to 100) can sign in. Add your teammates. Click **Publish app** when you want anyone to

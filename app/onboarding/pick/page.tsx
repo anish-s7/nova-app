@@ -145,7 +145,7 @@ function PickSongs({ mine }: { mine: Awaited<ReturnType<typeof getMySongs>> }) {
           <div className="px-1 pb-2 pt-4">
             <p className="flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
               <ClusterStar color="var(--primary)" size={10} />
-              {discovery.data.source === "community" ? "Popular on Resonyx" : "Trending now"}
+              {discovery.data.source === "community" ? "Popular on Nova" : "Trending now"}
             </p>
             <p className="mt-1 text-sm text-muted-foreground">
               {discovery.data.source === "community"

@@ -4,7 +4,7 @@
  * `/galaxy?intro` replays it every time, for demos.
  */
 
-const SEEN_KEY = "resonyx-built-out";
+const SEEN_KEY = "nova-built-out";
 
 export function shouldPlayGalaxyIntro(): boolean {
   if (typeof window === "undefined") return false;

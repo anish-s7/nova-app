@@ -675,8 +675,8 @@ function closestTo(meId: string, nodes: GalaxyNode[], edges: GalaxyEdge[], clust
     .slice(0, limit);
 }
 
-const HINT_KEY = "resonyx-hint-seen";
-const BOND_KEY = "resonyx-bonds";
+const HINT_KEY = "nova-hint-seen";
+const BOND_KEY = "nova-bonds";
 
 /** A one-time gesture hint that clears itself on first interaction or after a few seconds. */
 function useFirstVisitHint() {

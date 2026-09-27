@@ -191,7 +191,7 @@ export default function ReadingConstellationProto() {
     <div className="flex min-h-dvh items-center justify-center bg-black/60 p-6">
       <div ref={root} className="starfield relative flex h-[844px] max-h-[calc(100dvh-3rem)] w-[390px] flex-col overflow-hidden rounded-[2.75rem] border border-white/10">
         <div className="flex items-center justify-between px-6 pt-5">
-          <span className="text-sm font-medium tracking-wide text-foreground/90">Resonyx</span>
+          <span className="text-sm font-medium tracking-wide text-foreground/90">Nova</span>
           <button type="button" onClick={replay} aria-label="Replay" className="rounded-full p-2 text-muted-foreground hover:text-foreground">
             <RotateCcw className="size-4" />
           </button>

@@ -1,4 +1,4 @@
-# 🌌 Resonyx
+# 🌌 Nova
 
 **Connecting people through *why* they listen, not *what* they listen to.**
 
@@ -9,7 +9,7 @@ Built for HackGT, Meta Track: *Improving social connection using AI.*
 Most music platforms connect people by genre or artist. But two people can love
 completely different songs for the exact same reason, like needing company on
 lonely nights, getting hyped before a hard day, or working through grief.
-Resonyx uses an LLM to understand the *reasons* behind people's music taste
+Nova uses an LLM to understand the *reasons* behind people's music taste
 and connect them based on shared emotional meaning.
 
 ## How It Works

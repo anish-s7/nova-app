@@ -7,7 +7,7 @@
  * Both tabs share the session cookie, so the waiting tab is already signed in.
  */
 
-const CHANNEL = "resonyx-auth";
+const CHANNEL = "nova-auth";
 type Message = { type: "confirmed" } | { type: "ack" };
 
 const supported = () => typeof BroadcastChannel !== "undefined";
