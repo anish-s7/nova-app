@@ -21,6 +21,7 @@ import {
   type ConnectionSort,
 } from "@/lib/connection-groups";
 import { useSession } from "@/lib/session";
+import { ClusterStar } from "@/components/cluster-star";
 
 const GROUP_PREVIEW = 5;
 
@@ -137,11 +138,7 @@ export default function ConnectionsPage() {
             {groups.map((g) => (
               <section key={g.cluster} aria-label={g.label}>
                 <h2 className="mb-1 flex items-center gap-2 px-1 text-sm font-medium">
-                  <span
-                    aria-hidden
-                    className="size-2 rounded-full"
-                    style={{ background: g.color }}
-                  />
+                  <ClusterStar color={g.color} size={12} />
                   {g.label}
                   <span className="ml-auto text-xs tabular-nums text-muted-foreground">
                     {g.people.length}

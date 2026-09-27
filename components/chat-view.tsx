@@ -17,6 +17,7 @@ import { threadFrom } from "@/lib/thread";
 import { clockTime, dayLabel, sameDay } from "@/lib/time";
 import type { Conversation, Message } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ClusterStar } from "@/components/cluster-star";
 
 const PENDING = "pending-";
 /** Messages from the same person this close together read as one group. */
@@ -100,7 +101,7 @@ export function ChatView({ userId, initialDraft }: { userId: string; initialDraf
                 <span className="block truncate font-semibold leading-tight">{data.user.name}</span>
                 {data.sharedMotivation ? (
                   <span className="flex items-center gap-1.5 truncate text-xs font-normal text-muted-foreground">
-                    <span className="size-1.5 shrink-0 rounded-full" style={{ background: getCluster(data.cluster).color }} aria-hidden />
+                    <ClusterStar color={getCluster(data.cluster).color} size={10} />
                     {data.sharedMotivation}
                   </span>
                 ) : null}

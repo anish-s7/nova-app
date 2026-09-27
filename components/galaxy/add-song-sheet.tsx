@@ -13,6 +13,7 @@ import { addPick, effectiveSongs, getSession, useSession } from "@/lib/session";
 import { describePick, type SongLayer, type SongPick } from "@/lib/song-layer";
 import { THEME_THRESHOLD, THEMES, type ThemeId } from "@/lib/themes";
 import { cn } from "@/lib/utils";
+import { ClusterStar } from "@/components/cluster-star";
 
 export type AddedInfo = ReturnType<typeof describePick>;
 
@@ -215,7 +216,7 @@ function MockAddSongSheet({ layer, initialSongId, onAdded }: { layer: SongLayer;
                   on ? "border-[color-mix(in_oklch,var(--tone)_60%,transparent)] bg-[color-mix(in_oklch,var(--tone)_14%,transparent)]" : "border-white/15 text-foreground/80 hover:border-white/30",
                 )}
               >
-                <span className="size-1.5 rounded-full bg-[var(--tone)]" aria-hidden />
+                <ClusterStar color="var(--tone)" size={10} />
                 {theme.short}
                 {completes ? <span className="text-[var(--tone)]">one more makes it a place</span> : null}
               </button>

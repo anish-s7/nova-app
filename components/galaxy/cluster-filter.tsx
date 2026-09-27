@@ -5,6 +5,7 @@ import { Check, ChevronDown, Sparkles } from "lucide-react";
 import { getCluster } from "@/lib/clusters";
 import type { GalaxyNode } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ClusterStar } from "@/components/cluster-star";
 
 const compact = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : n.toLocaleString());
 
@@ -77,10 +78,7 @@ export function ClusterFilter({
         )}
       >
         {activeCluster ? (
-          <span
-            className="size-2 rounded-full bg-[var(--tone)] shadow-[0_0_6px_var(--tone)] shrink-0"
-            aria-hidden
-          />
+          <ClusterStar color="var(--tone)" size={12} />
         ) : (
           <Sparkles className="size-3 text-primary shrink-0" aria-hidden />
         )}
@@ -175,10 +173,7 @@ export function ClusterFilter({
                 >
                   <div className="flex items-center justify-between gap-2 w-full">
                     <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className="size-2 shrink-0 rounded-full bg-[var(--tone)] shadow-[0_0_6px_var(--tone)]"
-                        aria-hidden
-                      />
+                      <ClusterStar color="var(--tone)" size={12} />
                       <span className="text-xs font-medium truncate">{c.short}</span>
                     </div>
                     <div className="flex items-center gap-1.5 shrink-0">

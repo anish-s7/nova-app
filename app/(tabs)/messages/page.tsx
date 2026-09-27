@@ -18,6 +18,7 @@ import { useSession } from "@/lib/session";
 import type { Connection, ConversationSummary, Message } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { relativeTime } from "@/lib/time";
+import { ClusterStar } from "@/components/cluster-star";
 
 function Preview({ message }: { message?: Message }) {
   if (!message) return <span className="truncate italic">Say hello</span>;
@@ -135,7 +136,7 @@ function StartConversation({ people }: { people: Connection[] }) {
                 <UserAvatar name={p.user.name} cluster={p.cluster} userId={p.user.id} size={40} />
                 <p className="truncate text-sm font-medium">{p.user.name}</p>
                 <p className="line-clamp-2 flex-1 text-xs leading-snug text-muted-foreground">
-                  <span className="mr-1 inline-block size-1.5 rounded-full bg-[var(--tone)] align-middle" aria-hidden />
+                  <ClusterStar color="var(--tone)" size={10} className="mr-1" />
                   {p.sharedMotivation}
                 </p>
                 <span className="inline-flex items-center gap-1 text-xs font-medium text-[var(--tone)]">

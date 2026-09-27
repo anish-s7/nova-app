@@ -4,6 +4,7 @@ import { animate, stagger } from "animejs";
 import { useAnime } from "@/hooks/use-anime";
 import { getCluster } from "@/lib/clusters";
 import type { InferredMotivation } from "@/lib/types";
+import { ClusterStar } from "@/components/cluster-star";
 
 /** One bar, split by how much each kept reason accounts for your listening. */
 export function ReasonSpectrum({ motivations }: { motivations: InferredMotivation[] }) {
@@ -36,7 +37,7 @@ export function ReasonSpectrum({ motivations }: { motivations: InferredMotivatio
       <ul className="mt-3 flex flex-wrap gap-x-4 gap-y-1.5">
         {kept.map((m) => (
           <li key={m.id} data-legend className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <span className="size-2 rounded-full" style={{ background: getCluster(m.cluster).color }} aria-hidden />
+            <ClusterStar color={getCluster(m.cluster).color} size={12} />
             {getCluster(m.cluster).short}
             <span className="tabular-nums text-foreground/80">{Math.round((m.confidence / total) * 100)}%</span>
           </li>

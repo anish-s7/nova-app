@@ -5,6 +5,7 @@ import { useSlidingIndicator } from "@/hooks/use-sliding-indicator";
 import { THEME_THRESHOLD } from "@/lib/themes";
 import type { ThemeState } from "@/lib/song-layer";
 import { cn } from "@/lib/utils";
+import { ClusterStar } from "@/components/cluster-star";
 
 /** Song-layer chips. Themes that haven't reached three songs are still forming: dashed, with how far they are. */
 export function ThemeFilter({ themes, value, onChange, className }: { themes: ThemeState[]; value: string | null; onChange: (id: string | null) => void; className?: string }) {
@@ -40,7 +41,7 @@ export function ThemeFilter({ themes, value, onChange, className }: { themes: Th
                 : cn("text-foreground/80 hover:border-white/20", formed ? "border-white/10" : "border-white/20"),
             )}
           >
-            <span className={cn("size-1.5 rounded-full", formed ? "bg-[var(--tone)]" : "border border-[var(--tone)]")} aria-hidden />
+            <ClusterStar color="var(--tone)" size={10} hollow={!formed} />
             {theme.short}
             <span className="tabular-nums text-muted-foreground">{formed ? songIds.length : `${songIds.length}/${THEME_THRESHOLD}`}</span>
           </button>

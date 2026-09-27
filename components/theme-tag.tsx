@@ -1,6 +1,7 @@
 import type { CSSProperties } from "react";
 import { clusterForLabel, getCluster } from "@/lib/clusters";
 import { cn } from "@/lib/utils";
+import { ClusterStar } from "@/components/cluster-star";
 
 /** A motivation label in its cluster color. Pass either a cluster id or a motivation label. */
 export function ThemeTag({
@@ -26,7 +27,7 @@ export function ThemeTag({
         className,
       )}
     >
-      <span className="size-1.5 shrink-0 rounded-full bg-[var(--tone)]" aria-hidden />
+      <ClusterStar color="var(--tone)" size={10} />
       <span className="truncate">{short ? c.short : (label ?? c.label)}</span>
     </span>
   );

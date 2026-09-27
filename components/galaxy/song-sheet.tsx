@@ -11,6 +11,7 @@ import type { SongLayer, SongStar } from "@/lib/song-layer";
 import { REASON_LABEL, reasonLine, songConnections, type ReasonKind, type SongConnection } from "@/lib/song-connections";
 import { cn } from "@/lib/utils";
 import { ListenerList } from "./cluster-sheet";
+import { ClusterStar } from "@/components/cluster-star";
 
 /** One song star, opened: what it means, the moments it belongs to, and everyone who has it. */
 export function SongSheetContent({
@@ -40,7 +41,7 @@ export function SongSheetContent({
           <h2 className="truncate text-xl font-semibold leading-tight">{star.song.title}</h2>
           <p className="truncate text-sm text-muted-foreground">{star.song.artist}</p>
           <p className="mt-1 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="size-1.5 rounded-full bg-[var(--tone)]" aria-hidden />
+            <ClusterStar color="var(--tone)" size={10} />
             {star.isBridge ? whySummary(star.whyCounts) : `${cluster.short} · ${star.listeners.length === 1 ? "1 person" : `${star.listeners.length} people`}`}
           </p>
           {star.isBridge ? <p className="mt-0.5 text-[11px] text-muted-foreground">{star.listeners.length} people, here for more than one reason.</p> : null}
@@ -71,7 +72,7 @@ export function SongSheetContent({
             const state = layer.themes.find((x) => x.theme.id === id);
             return (
               <li key={id} style={{ "--tone": t.color } as CSSProperties} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-xs">
-                <span className="size-1.5 rounded-full bg-[var(--tone)]" aria-hidden />
+                <ClusterStar color="var(--tone)" size={10} />
                 {t.label}
                 {state && !state.formed ? (
                   <span className="text-muted-foreground">
@@ -91,7 +92,7 @@ export function SongSheetContent({
             <section key={why} aria-label={star.isBridge ? getCluster(why).short : undefined}>
               {star.isBridge ? (
                 <h3 className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                  <span className="size-1.5 rounded-full" style={{ background: getCluster(why).color }} aria-hidden />
+                  <ClusterStar color={getCluster(why).color} size={10} />
                   {getCluster(why).label}
                 </h3>
               ) : null}

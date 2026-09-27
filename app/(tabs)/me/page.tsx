@@ -21,6 +21,7 @@ import { getCluster } from "@/lib/clusters";
 import { setSession, useHydrated, useSession } from "@/lib/session";
 import type { InferredMotivation, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { ClusterStar } from "@/components/cluster-star";
 
 const SONGS_SHOWN = 9;
 const sectionLabel = "text-[11px] font-medium uppercase tracking-wider text-muted-foreground";
@@ -77,7 +78,7 @@ export default function MePage() {
                   <h1 className="truncate text-2xl font-semibold tracking-tight">{account.name ?? "You"}</h1>
                   {primary ? (
                     <p className="mt-0.5 flex items-center gap-1.5 text-sm text-foreground/85">
-                      <span className="size-1.5 shrink-0 rounded-full bg-[var(--tone)]" aria-hidden />
+                      <ClusterStar color="var(--tone)" size={10} />
                       <span className="truncate">{getCluster(primary.cluster).label}</span>
                     </p>
                   ) : null}
@@ -190,7 +191,7 @@ function Reasons({ motivations, songs }: { motivations: InferredMotivation[]; so
                 aria-expanded={isOpen}
                 className={cn("flex min-h-14 w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-white/[0.03]", isOpen && "bg-white/[0.02]")}
               >
-                <span className="size-2 shrink-0 rounded-full bg-[var(--tone)]" aria-hidden />
+                <ClusterStar color="var(--tone)" size={12} />
                 <span className="min-w-0 flex-1">
                   <span className={cn("block truncate font-medium", m.feedback === "rejected" && "text-muted-foreground line-through decoration-white/30")}>{m.label}</span>
                   <span className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
