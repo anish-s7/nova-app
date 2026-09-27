@@ -1,11 +1,3 @@
-export function AppleIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
-      <path d="M16.37 12.8c-.02-2.26 1.85-3.35 1.93-3.4-1.05-1.54-2.69-1.75-3.27-1.77-1.39-.14-2.72.82-3.42.82-.71 0-1.79-.8-2.95-.78-1.52.02-2.92.88-3.7 2.24-1.58 2.74-.4 6.79 1.13 9.01.75 1.09 1.64 2.3 2.8 2.26 1.13-.05 1.55-.73 2.91-.73 1.36 0 1.74.73 2.93.71 1.21-.02 1.98-1.1 2.72-2.2.86-1.26 1.21-2.48 1.23-2.55-.03-.01-2.36-.9-2.38-3.61zM14.14 6.16c.62-.76 1.04-1.8.93-2.85-.9.04-1.99.6-2.63 1.35-.57.66-1.08 1.73-.94 2.75 1 .08 2.02-.51 2.64-1.25z" />
-    </svg>
-  );
-}
-
 export function GoogleIcon({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden>

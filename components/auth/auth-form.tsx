@@ -4,8 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
-import type { Provider } from "@supabase/supabase-js";
-import { AppleIcon, GoogleIcon } from "@/components/auth/brand-icons";
+import { GoogleIcon } from "@/components/auth/brand-icons";
 import { Logo } from "@/components/logo";
 import { Button } from "@/components/ui/button";
 import { resetWorld } from "@/lib/api";
@@ -58,6 +57,9 @@ function friendly(error: { message: string; code?: string }) {
 }
 
 /** Asks Supabase which OAuth providers are switched on. Fails open so a network blip doesn't block sign-in. */
+/** Google is the only social sign-in (Apple was removed 2026-09-27). */
+type Provider = "google";
+
 async function providerEnabled(provider: Provider) {
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_SUPABASE_URL}/auth/v1/settings`, {
@@ -160,8 +162,12 @@ export function AuthForm({ mode, next, initialError, initialNotice }: { mode: Mo
     // A disabled provider would otherwise dump the user on a raw Supabase JSON error page.
     if (!(await providerEnabled(provider))) {
       setPending(null);
-      return setError(`${provider === "apple" ? "Apple" : "Google"} sign-in isn't set up yet. Use email for now.`);
+      return setError("Google sign-in isn't set up yet. Use email for now.");
     }
+    // Whoever comes back from Google may not be whoever used this browser last, so start clean,
+    // as email signup does. (Brand-new accounts are sent to onboarding by /auth/callback.)
+    resetSession();
+    resetWorld();
     const { error } = await createClient().auth.signInWithOAuth({ provider, options: { redirectTo: callbackUrl() } });
     // On success the browser is already navigating to the provider.
     if (error) {
@@ -197,18 +203,9 @@ export function AuthForm({ mode, next, initialError, initialNotice }: { mode: Mo
         <div className="mt-8 flex flex-col gap-2.5">
           <button
             type="button"
-            onClick={() => oauth("apple")}
-            disabled={busy || !configured}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-white font-medium text-black transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            {pending === "apple" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <AppleIcon className="size-[18px]" />}
-            Continue with Apple
-          </button>
-          <button
-            type="button"
             onClick={() => oauth("google")}
             disabled={busy || !configured}
-            className="inline-flex h-12 items-center justify-center gap-2 rounded-full border border-white/15 bg-card/60 font-medium transition-colors hover:border-white/25 hover:bg-card disabled:opacity-50"
+            className="inline-flex h-12 items-center justify-center gap-2 rounded-full bg-white font-medium text-black transition-opacity hover:opacity-90 disabled:opacity-50"
           >
             {pending === "google" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <GoogleIcon className="size-[18px]" />}
             Continue with Google
