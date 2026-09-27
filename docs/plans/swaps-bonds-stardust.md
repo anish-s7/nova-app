@@ -1,5 +1,7 @@
-> Saved 2026-09-26. Status: **approved, in progress** — step 1 (previews) first. Each step on its
-> own branch; merge to `main` (which deploys to Vercel) only after it's tested.
+> Saved 2026-09-26. Status (2026-09-27): **1. previews — done** (`cee5be6`); **2. song-specific
+> tags — replaced** by fixed feeling tags (`e3e7336`; the AI-tags and picture-postcard experiments
+> are on the `song-tags` / `postcards` branches, see CLAUDE.md "Tried and dropped"); **3. real swaps
+> + bonds — next after Google OAuth**; **4. Stardust — moved to the backlog as a stretch goal.**
 
 # Song previews, song-specific tags, real swaps + bonds, Stardust
 
