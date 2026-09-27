@@ -97,6 +97,8 @@ export type Song = {
   artist: string;
   albumArtUrl?: string;
   spotifyId?: string;
+  /** Real-mode search results only: a ~30s clip (Deezer/iTunes). Short-lived signed URL, never saved. */
+  previewUrl?: string;
   source: "spotify" | "manual";
 };
 

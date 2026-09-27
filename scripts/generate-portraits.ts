@@ -5,12 +5,12 @@
  *   node --env-file=.env.local node_modules/.bin/tsx scripts/generate-portraits.ts [--force]
  *
  * Without --force, profiles whose stored portrait already covers their current picks are skipped.
- * Paced for the Gemini free tier (15 requests/minute).
+ * Lightly paced (~1 call/second); the Gemini key is on the paid tier.
  */
 import { createServerClient } from "../lib/supabase/server";
 import { upsertPortrait } from "../lib/matching/portraits";
 
-const MIN_GEMINI_INTERVAL_MS = 4500;
+const MIN_GEMINI_INTERVAL_MS = 1000;
 const force = process.argv.includes("--force");
 
 async function main() {

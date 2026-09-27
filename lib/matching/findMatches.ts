@@ -25,8 +25,10 @@ export interface ConfirmedMatch {
   songs: MatchSong[];
 }
 
-/** New Gemini assessments per request; the rest wait for the next load (free tier is 15/min). */
+/** New Gemini assessments per request; the rest wait for the next load. Bounds page wait and spend. */
 const MAX_NEW_ASSESSMENTS = 5;
+/** How many of those run at once (paid-tier key). Each takes ~2-3s, so 5 finish in ~2 rounds. */
+const ASSESS_CONCURRENCY = 3;
 
 /**
  * Pairs the AI already turned down, keyed by both pick counts so a new pick on either side earns a
@@ -130,17 +132,17 @@ export async function findMatches(profileId: string, limit = 10): Promise<Confir
       picks: picksOf.get(profileId) ?? [],
     };
 
-    let assessed = 0;
-    for (const candidate of toAssess) {
-      if (assessed >= MAX_NEW_ASSESSMENTS) break;
-      const theirPicks = picksOf.get(candidate.profile_id) ?? [];
-      if (me.picks.length === 0 || theirPicks.length === 0) continue;
-      const rejectKey = `${orderedPair(profileId, candidate.profile_id).join(":")}:${me.picks.length}:${theirPicks.length}`;
-      if (rejected.has(rejectKey)) continue;
+    // Up to MAX_NEW_ASSESSMENTS candidates that are worth asking about, assessed a few at a time.
+    const batch = toAssess
+      .map((candidate) => ({ candidate, theirPicks: picksOf.get(candidate.profile_id) ?? [] }))
+      .filter(({ theirPicks }) => me.picks.length > 0 && theirPicks.length > 0)
+      .map((c) => ({ ...c, rejectKey: `${orderedPair(profileId, c.candidate.profile_id).join(":")}:${me.picks.length}:${c.theirPicks.length}` }))
+      .filter(({ rejectKey }) => !rejected.has(rejectKey))
+      .slice(0, MAX_NEW_ASSESSMENTS);
 
+    const assessOne = async ({ candidate, theirPicks, rejectKey }: (typeof batch)[number]) => {
       const songA = titleOfPick.get(candidate.target_pick_id);
       const songB = titleOfPick.get(candidate.song_pick_id);
-      assessed++;
       let assessment;
       try {
         assessment = await assessConnection(
@@ -150,11 +152,11 @@ export async function findMatches(profileId: string, limit = 10): Promise<Confir
         );
       } catch (err) {
         console.error(`findMatches: assessment failed for ${candidate.profile_id}, skipping for now:`, err);
-        continue;
+        return;
       }
       if (assessment.status !== "match") {
         rejected.add(rejectKey);
-        continue;
+        return;
       }
 
       // The AI writes A-side fields for the requester; align them to the row's user_a/user_b
@@ -165,7 +167,14 @@ export async function findMatches(profileId: string, limit = 10): Promise<Confir
       if (upsertError) console.error(`findMatches: couldn't cache the card for ${candidate.profile_id}:`, upsertError.message);
 
       results.push(result(candidate.profile_id, candidate.display_name, alignedCard, candidate.similarity));
-    }
+    };
+
+    // A small worker pool: ASSESS_CONCURRENCY calls in flight, so a cold load takes ~2 rounds, not 5.
+    let next = 0;
+    const worker = async () => {
+      while (next < batch.length) await assessOne(batch[next++]);
+    };
+    await Promise.all(Array.from({ length: Math.min(ASSESS_CONCURRENCY, batch.length) }, worker));
   }
 
   // AI score first; older cards without one fall back to the pre-filter's similarity on the same scale.

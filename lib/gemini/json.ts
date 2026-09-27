@@ -1,6 +1,13 @@
 import type { Schema } from "@google/genai";
 import { getGeminiClient, GEMINI_JUDGMENT_MODELS } from "./client";
 
+/**
+ * Cap on "thinking" tokens. gemini-flash-latest now thinks by default (500+ tokens even for a tiny
+ * prompt), which made a connection assessment take 5-18s instead of ~2s and bills those tokens as
+ * output. A small budget keeps a little reasoning for these judgment calls without the wait.
+ */
+const THINKING_BUDGET = 1024;
+
 /** Errors that mean "try the next model", not "the request is wrong". */
 function isRetryable(err: unknown) {
   const status = (err as { status?: number })?.status;
@@ -26,6 +33,7 @@ export async function generateJson<T>(input: { system: string; prompt: string; s
           responseMimeType: "application/json",
           responseSchema: input.schema,
           temperature: 0.4,
+          thinkingConfig: { thinkingBudget: THINKING_BUDGET },
         },
       });
       const text = response.text?.trim();

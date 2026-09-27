@@ -15,7 +15,6 @@
  */
 
 import { CLUSTER_IDS, getCluster } from "./clusters";
-import type { Tag } from "./tags";
 import { ApiError } from "./api-error";
 import { REAL_DATA } from "./data-source";
 import { httpDb } from "./http-db";
@@ -249,7 +248,7 @@ export async function saveSongs() {
     for (const song of songs) {
       if (getSession().savedSongIds?.includes(song.id)) continue;
       const feeling = s.feelings?.[song.id];
-      if (!feeling || feeling.tags.length === 0) throw new ApiError(`"${song.title}" still needs at least one tag.`);
+      if (!feeling || feeling.tags.length === 0) throw new ApiError(`"${song.title}" still needs at least one feeling.`);
       await db.insertPick({
         title: song.title,
         artist: song.artist,
@@ -273,7 +272,7 @@ export async function saveSongs() {
  * no more placeholder tags/valence/energy. Slow: MusicBrainz, cover art and, for a new song, Gemini
  * all run inside the request.
  */
-export async function addSong(input: { title: string; artist: string; tags: Tag[]; valence: number; energy: number; reason?: string }) {
+export async function addSong(input: { title: string; artist: string; tags: string[]; valence: number; energy: number; reason?: string }) {
   await db.insertPick({
     title: input.title,
     artist: input.artist,
@@ -310,7 +309,7 @@ export async function getMySongs(): Promise<MySong[]> {
   return rows.map((r) => ({
     pickId: r.id,
     song: songFromRow(r.song),
-    feeling: { tags: r.tags as Tag[], valence: r.valence, energy: r.energy, placed: r.tags.length > 0 || r.valence !== 0 || r.energy !== 0 },
+    feeling: { tags: r.tags, valence: r.valence, energy: r.energy, placed: r.tags.length > 0 || r.valence !== 0 || r.energy !== 0 },
   }));
 }
 

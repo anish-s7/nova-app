@@ -175,6 +175,12 @@ Written only by the service role (`upsertPortrait` in `lib/matching/portraits.ts
 portraits are read only server-side, as input to the connection assessment; they're never returned
 to another user, and cards must not quote them.
 
+### `song_tags` — unused
+From the dropped AI-tags experiment (migration `20260928010000`, applied to the hosted project):
+`song_tags (song_key pk, title, artist, tags jsonb, model, created_at)` and a
+`song_picks.tag_whys text[]` column. Nothing on `main` reads or writes either; safe to drop.
+Pick tags are the fixed feelings in `lib/tags.ts` (or the original tags on older picks).
+
 ### `messages`
 | column | type | notes |
 |---|---|---|

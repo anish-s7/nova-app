@@ -23,12 +23,14 @@ type Cluster = "quiet_company" | "armor_up" | "carrying_loss" | "somewhere_else"
 // Heuristic stand-in for the real tags/valence/energy onboarding UX, which
 // doesn't exist yet (see MERGE_CHECKLIST.md #3). Good enough for demo data,
 // not a resolution of that open product decision.
+// Feeling tags (lib/tags.ts). The existing personas' picks were hand-tuned per song by
+// scripts/retag-demo-personas.ts; these defaults only apply to picks seeded from now on.
 const CLUSTER_PROFILE: Record<Cluster, { tags: string[]; valence: number; energy: number }> = {
-  quiet_company: { tags: ["late night", "comfort"], valence: -0.2, energy: -0.6 },
-  armor_up: { tags: ["hype / workout"], valence: 0.3, energy: 0.7 },
-  carrying_loss: { tags: ["grief", "nostalgia"], valence: -0.7, energy: -0.4 },
-  somewhere_else: { tags: ["road trip"], valence: 0.0, energy: 0.1 },
-  old_selves: { tags: ["nostalgia"], valence: -0.1, energy: -0.2 },
+  quiet_company: { tags: ["tender", "safe"], valence: -0.2, energy: -0.6 },
+  armor_up: { tags: ["fearless", "alive"], valence: 0.3, energy: 0.7 },
+  carrying_loss: { tags: ["aching", "longing"], valence: -0.7, energy: -0.4 },
+  somewhere_else: { tags: ["free", "hopeful"], valence: 0.0, energy: 0.1 },
+  old_selves: { tags: ["nostalgic", "bittersweet"], valence: -0.1, energy: -0.2 },
 };
 
 type PersonaSong = { title: string; artist: string; cluster: Cluster };
@@ -111,11 +113,10 @@ if (DEMO_PASSWORD.length < 12) {
   throw new Error("Set SEED_DEMO_PASSWORD (12+ characters) in .env.local before seeding.");
 }
 
-// Gemini's free tier caps gemini-flash-lite-latest at 15 requests/minute
-// (confirmed via a live 429 on 2026-09-26). This is a seed-script-only
-// concern — a real user's interactive traffic won't burst like a seed run
-// does — so the pacing lives here, not in lib/gemini/client.ts.
-const MIN_GEMINI_INTERVAL_MS = 4500;
+// The Gemini key is on the paid tier (billing enabled 2026-09-26), so this is light courtesy
+// pacing rather than the old free-tier 15 requests/minute (which needed ~4.5s). The backoff below
+// still handles a 429 if one happens.
+const MIN_GEMINI_INTERVAL_MS = 1000;
 let lastGeminiCallAt = 0;
 
 function sleep(ms: number) {

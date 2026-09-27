@@ -11,7 +11,6 @@ import { getCluster } from "@/lib/clusters";
 import { SONG_CATALOG } from "@/lib/music-context";
 import { addPick, effectiveSongs, getSession, useSession } from "@/lib/session";
 import { describePick, type SongLayer, type SongPick } from "@/lib/song-layer";
-import type { Tag } from "@/lib/tags";
 import { THEME_THRESHOLD, THEMES, type ThemeId } from "@/lib/themes";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +28,7 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
   const [reason, setReason] = useState("");
-  const [tags, setTags] = useState<Tag[]>([]);
+  const [tags, setTags] = useState<string[]>([]);
   const [mood, setMood] = useState<Mood>({ valence: 0, energy: 0 });
   const [placed, setPlaced] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -65,7 +64,6 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
       <input ref={titleRef} value={title} onChange={(e) => setTitle(e.target.value)} placeholder="What's the song called?" aria-label="Song title" disabled={busy} className={field} />
       <input value={artist} onChange={(e) => setArtist(e.target.value)} placeholder="Who made it?" aria-label="Artist" disabled={busy} className={field} />
 
-      <TagPicker value={tags} onChange={setTags} label={`Tags for ${title.trim() || "this song"}`} />
       <MoodCircle
         value={mood}
         placed={placed}
@@ -76,6 +74,7 @@ function RealAddSongSheet({ layer, onAdded }: { layer: SongLayer; onAdded: (info
         label={`How ${title.trim() || "this song"} makes you feel`}
         size={180}
       />
+      <TagPicker value={tags} onChange={setTags} label={`Feelings for ${title.trim() || "this song"}`} mood={{ ...mood, placed }} />
 
       <label className="flex flex-col gap-1.5">
         <span className="text-xs text-muted-foreground">Why does it matter to you? Optional.</span>
