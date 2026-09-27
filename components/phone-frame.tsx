@@ -4,8 +4,9 @@ import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
-/** Screens that use the whole window on a laptop; everything else sits in a centered column. */
-const FULL_WIDTH = ["/galaxy"];
+/** Screens that use the whole window on a laptop (the welcome page and the galaxy); everything else
+ * sits in a centered column. "/" only matches the welcome page itself (see `matches`). */
+const FULL_WIDTH = ["/galaxy", "/"];
 /** Scripted demos composed for a phone screen: they keep the phone frame at every size. */
 const PHONE_ONLY = ["/pitch", "/sim", "/proto"];
 

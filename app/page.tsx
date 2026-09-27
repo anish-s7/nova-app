@@ -27,18 +27,18 @@ export default function WelcomePage() {
       <LandingStarfield />
       <div className="sky-grain" />
 
-      <div className="relative z-10 flex items-center justify-between px-6 pt-5">
+      <div className="relative z-10 flex items-center justify-between px-6 pt-5 lg:px-12 lg:pt-8">
         <Logo />
         {demo ? <span className="rounded-full border border-white/10 px-2 py-0.5 text-[11px] text-muted-foreground">Demo</span> : null}
       </div>
 
-      <div ref={intro} className="relative z-10 mt-auto flex flex-col px-6 pb-8 pt-8 motion-safe:opacity-0">
-        <h1 className="text-balance font-serif text-[2.6rem] font-light leading-[1.08] tracking-tight text-foreground">
+      <div ref={intro} className="relative z-10 mt-auto flex flex-col px-6 pb-8 pt-8 motion-safe:opacity-0 lg:max-w-xl lg:px-12 lg:pb-16">
+        <h1 className="text-balance font-serif text-[2.6rem] font-light leading-[1.08] tracking-tight text-foreground lg:text-6xl">
           Someone out there
           <br />
           <span className="italic text-foreground/90">feels it too.</span>
         </h1>
-        <p data-intro-rest className="mt-4 text-pretty leading-relaxed text-muted-foreground">
+        <p data-intro-rest className="mt-4 text-pretty leading-relaxed text-muted-foreground lg:text-lg">
           Find your people through the stories behind your favorite songs.
         </p>
 
