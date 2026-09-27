@@ -9,9 +9,25 @@ import "./globals.css";
 const sourceSans = Source_Sans_3({ variable: "--font-source-sans", subsets: ["latin"] });
 const newsreader = Newsreader({ variable: "--font-newsreader", subsets: ["latin"], style: ["normal", "italic"] });
 
+const DESCRIPTION = "Nova connects people through the emotions and personal stories behind their favorite music.";
+
 export const metadata: Metadata = {
-  title: "Nova — Someone out there feels it too",
-  description: "Nova connects people through the emotions and personal stories behind their favorite music.",
+  // Update this if/when the production domain changes (see CLAUDE.md) — link previews (and the
+  // generated share image below) need an absolute URL to resolve against.
+  metadataBase: new URL("https://song-galaxy-nu.vercel.app"),
+  title: "Nova",
+  description: DESCRIPTION,
+  openGraph: {
+    title: "Nova",
+    description: DESCRIPTION,
+    siteName: "Nova",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Nova",
+    description: DESCRIPTION,
+  },
 };
 
 export const viewport: Viewport = {
