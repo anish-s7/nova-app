@@ -3,12 +3,14 @@
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import Link from "next/link";
 import useSWR from "swr";
-import { Check, ChevronDown, ChevronRight, Eye, EyeOff, ListMusic, Orbit, Pencil } from "lucide-react";
+import { Check, ChevronDown, ChevronRight, Eye, EyeOff, ListMusic, Orbit, Sparkles, User } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
 import { AccountRow } from "@/components/auth/account-row";
-import { AvatarEditorSheet } from "@/components/avatar-editor-sheet";
 import { useAccount } from "@/components/auth/use-account";
+import { AvatarCustomizerSheet } from "@/components/avatar-customizer-sheet";
+import { ClusterStar } from "@/components/cluster-star";
 import { EmptyState } from "@/components/empty-state";
+import { SourceSettings } from "@/components/listening/source-settings";
 import { MotivationCard } from "@/components/motivation-card";
 import { ReachQuestion } from "@/components/reach-question";
 import { ReasonSpectrum } from "@/components/reason-spectrum";
@@ -21,7 +23,6 @@ import { getCluster } from "@/lib/clusters";
 import { setSession, useHydrated, useSession } from "@/lib/session";
 import type { InferredMotivation, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { ClusterStar } from "@/components/cluster-star";
 
 const SONGS_SHOWN = 9;
 const sectionLabel = "text-[11px] font-medium uppercase tracking-wider text-muted-foreground";
@@ -34,7 +35,7 @@ export default function MePage() {
   // Your saved songs with how each one feels (real mode: your picks; mock: the session). One entry per song.
   const mine = useSWR(["my-songs", session.version], getMySongs);
   const [editing, setEditing] = useState<MySong | null>(null);
-  const [editingIcon, setEditingIcon] = useState(false);
+  const [customizerOpen, setCustomizerOpen] = useState(false);
   // Real mode, signed in somewhere new: this browser's session has no reading yet, but the stored portrait does.
   const needsPortrait = REAL_DATA && hydrated && !session.analysis;
   const stored = useSWR(needsPortrait ? ["portrait", session.version] : null, getStoredAnalysis);
@@ -68,10 +69,16 @@ export default function MePage() {
             {/* Who you are here, at a glance. */}
             <section className="px-5 pb-5 pt-6" style={{ "--tone": tone } as CSSProperties} aria-label="Your profile">
               <div className="flex items-center gap-4">
-                <button type="button" onClick={() => setEditingIcon(true)} className="relative shrink-0 rounded-full" aria-label="Edit profile icon">
+                <button
+                  type="button"
+                  onClick={() => setCustomizerOpen(true)}
+                  className="relative group rounded-full text-left outline-none transition-transform hover:scale-105 active:scale-95 focus-visible:ring-2 focus-visible:ring-primary"
+                  title="Customize avatar"
+                  aria-label="Customize avatar"
+                >
                   <UserAvatar name={account.name ?? "You"} cluster={primary?.cluster ?? ""} isMe size={64} ring />
-                  <span className="absolute -bottom-0.5 -right-0.5 grid size-6 place-items-center rounded-full border border-white/15 bg-card text-foreground" aria-hidden>
-                    <Pencil className="size-3" />
+                  <span className="absolute -bottom-1 -right-1 flex size-6 items-center justify-center rounded-full bg-[#f3cb8b] text-[#1c160c] shadow-md transition-transform group-hover:scale-110">
+                    <Sparkles className="size-3.5" />
                   </span>
                 </button>
                 <div className="min-w-0">
@@ -111,11 +118,24 @@ export default function MePage() {
           </>
         )}
 
+        <SourceSettings />
+
         <section className="mt-8" aria-labelledby="settings-heading">
           <h2 id="settings-heading" className={cn(sectionLabel, "px-5")}>
             Settings
           </h2>
           <ul className="mt-2 border-y border-white/[0.07]">
+            <li className="border-b border-white/[0.07]">
+              <button
+                type="button"
+                onClick={() => setCustomizerOpen(true)}
+                className="flex min-h-14 w-full items-center gap-3 px-5 text-sm transition-colors hover:bg-white/[0.03] text-left"
+              >
+                <span className="text-muted-foreground"><User className="size-4" aria-hidden /></span>
+                <span className="flex-1">Customize avatar</span>
+                <ChevronRight className="size-4 text-muted-foreground" aria-hidden />
+              </button>
+            </li>
             <SettingsLink href="/onboarding/pick?mode=manage" icon={<ListMusic className="size-4" aria-hidden />}>
               Add or change songs
             </SettingsLink>
@@ -132,7 +152,6 @@ export default function MePage() {
           </ul>
         </section>
       </div>
-      <AvatarEditorSheet open={editingIcon} onClose={() => setEditingIcon(false)} name={account.name ?? "You"} />
       <SongFeelingSheet
         item={editing}
         onClose={() => setEditing(null)}
@@ -140,6 +159,12 @@ export default function MePage() {
           void mine.mutate();
           setSession({}, true); // other screens keyed on the session version (galaxy, connections) refetch too
         }}
+      />
+      <AvatarCustomizerSheet
+        open={customizerOpen}
+        onClose={() => setCustomizerOpen(false)}
+        userName={account.name ?? "You"}
+        userCluster={primary?.cluster ?? ""}
       />
     </main>
   );
@@ -162,11 +187,6 @@ function Stat({ label, value, href }: { label: string; value: number | string; h
   );
 }
 
-/**
- * Your reasons as a compact list. Each row shows where it stands (confirmed, needs a look, left
- * out) and whether it's public; tap to open the full card with its evidence and controls. All
- * start closed, so the page stays a scannable list rather than leading with a wall of text.
- */
 function Reasons({ motivations, songs }: { motivations: InferredMotivation[]; songs: Song[] }) {
   const toReview = motivations.filter((m) => m.feedback === "unreviewed");
   const [open, setOpen] = useState<string | null>(null);
@@ -191,7 +211,7 @@ function Reasons({ motivations, songs }: { motivations: InferredMotivation[]; so
                 aria-expanded={isOpen}
                 className={cn("flex min-h-14 w-full items-center gap-3 px-5 py-3 text-left transition-colors hover:bg-white/[0.03]", isOpen && "bg-white/[0.02]")}
               >
-                <ClusterStar color="var(--tone)" size={12} />
+                <span className="size-2 shrink-0 rounded-full bg-[var(--tone)]" aria-hidden />
                 <span className="min-w-0 flex-1">
                   <span className={cn("block truncate font-medium", m.feedback === "rejected" && "text-muted-foreground line-through decoration-white/30")}>{m.label}</span>
                   <span className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground">
@@ -225,7 +245,6 @@ function Status({ m }: { m: InferredMotivation }) {
   return <span className="font-medium text-primary">Review</span>;
 }
 
-/** Your songs. Tap one to change how it feels or remove it; "Add songs" goes through the picker. */
 function Songs({ items, onSelect }: { items: MySong[]; onSelect: (item: MySong) => void }) {
   const [all, setAll] = useState(false);
   const shown = all ? items : items.slice(0, SONGS_SHOWN);

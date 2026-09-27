@@ -1,6 +1,6 @@
 /**
  * The illustrated face behind every profile icon, shared by the renderer (components/user-avatar.tsx),
- * the editor (components/avatar-editor-sheet.tsx) and the save route (app/api/avatar), which uses
+ * the editor (components/avatar-customizer-sheet.tsx) and the save route (app/api/avatar), which uses
  * sanitizeFace to accept only known options. Stored as profiles.avatar; null means "the face
  * generated from their name", which is what everyone had before faces were editable.
  */

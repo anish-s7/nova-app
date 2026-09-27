@@ -25,6 +25,59 @@ anything derived from one.
 
 ## Tables
 
+### Private listening imports (migrations `20261001000000`, `20261002000000`)
+
+`LISTENING_ENABLED` and `DISCOVERY_ENABLED` default off. Imported history never
+creates a `songs` or `song_picks` row. Last.fm and ListenBrainz are unverified,
+username-only sources; no provider credential is stored.
+
+- `listening_connections`: one unverified public-username connection per
+  `(profile_id, provider)`. A username change advances `generation`, which fences
+  writes from an older fetch. Provider is `lastfm` or `listenbrainz`.
+- `listening_preferences`: owner row containing the selected primary connection,
+  IANA timezone, exploration setting, 120-day raw-retention default, and monotonic
+  `input_revision`. A composite foreign key proves the primary connection belongs
+  to the same profile; primary-source or timezone changes increment the revision.
+- `listening_tracks`: profile-scoped, conservative recording identities. Unknown
+  imports remain here with `identity_status = 'unresolved'`; only an explicit,
+  reliable match may set nullable `catalog_song_id`.
+- `listening_track_aliases`: profile-scoped provider identifiers with an explicit
+  namespace (`musicbrainz_recording` and `listenbrainz_msid` are distinct), method,
+  and provenance.
+- `listening_events`: owner/connection/track, generation, UTC playback time and a
+  same-source idempotency fingerprint. Composite foreign keys prevent cross-owner
+  references. The fallback identity intentionally collapses indistinguishable rows
+  for the same recording at the same second; different timestamps remain separate.
+- `listening_sync_jobs`: fixed query bounds, provider continuation, checkpoint,
+  random lease, retry time and bounded counters. A partial unique index permits one
+  queued/running/retrying job per connection.
+- `listening_daily_tracks`: replaceable per-local-day aggregates. Page commits mark
+  `listening_dirty_dates`; later aggregation rebuilds the whole affected date rather
+  than incrementing counts during a retry.
+
+Owner-only RLS `select` applies to connections, preferences, tracks, aliases, events,
+and daily aggregates. Authenticated/anonymous clients receive no table mutation
+grants. Job and dirty-date internals have no browser policy or grant. Service-role-only
+RPCs `claim_listening_job`, `commit_listening_page`, `release_listening_job`, and
+`fail_listening_job` enforce lease token, connection generation, and checkpoint
+revision. Page commit resolves private tracks, inserts events, marks dirty dates, and
+advances the checkpoint in one database transaction. Lease expiry is based on the
+database clock.
+
+Migration `20261002000000` adds service-role-only connection lifecycle RPCs. A
+configure/reconfigure transaction cancels earlier jobs and queues a fixed 90-day,
+newest-first backfill. Manual sync reuses an active job or queues a fixed 48-hour
+reconciliation range after the first successful import. Disconnect advances the
+connection generation before cancelling work and deleting source events, aggregates,
+aliases, and now-unreferenced private track identities, so a fetch already in flight
+cannot commit. `listening_provider_pacing` and its reservation RPC coordinate request
+spacing across worker processes; it is not browser-readable.
+
+Authenticated routes expose only owner-scoped status and use `private, no-store`.
+Mutations check same-origin browser metadata and call service-role RPCs after deriving
+the profile from the signed-in session. The optional Next.js `after()` kick improves
+latency, while `scripts/sync-listening.ts` is the durable, host-independent consumer.
+
 ### `profiles`
 | column | type | notes |
 |---|---|---|
