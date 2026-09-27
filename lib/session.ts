@@ -1,7 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import { songById } from "./music-context";
+import { registerSongs, songById } from "./music-context";
 import type { SongPick } from "./song-layer";
 import type { AnalysisResult, InferredMotivation, ListeningSignal, Song } from "./types";
 
@@ -92,6 +92,7 @@ function persist() {
 
 export function getSession(): SessionState {
   load();
+  if (state.songs?.length) registerSongs(state.songs);
   return state;
 }
 
@@ -99,6 +100,7 @@ export function setSession(update: Partial<SessionState> | ((s: SessionState) =>
   load();
   const patch = typeof update === "function" ? update(state) : update;
   state = { ...state, ...patch, version: bump ? state.version + 1 : state.version };
+  if (state.songs?.length) registerSongs(state.songs);
   persist();
   listeners.forEach((l) => l());
 }

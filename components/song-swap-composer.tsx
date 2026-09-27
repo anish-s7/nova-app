@@ -11,7 +11,7 @@ import { SongTile } from "@/components/song-tile";
 import { Button } from "@/components/ui/button";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { getConversation, ME_ID, REAL_DATA, searchSongs, sendSongSwap } from "@/lib/api";
-import { SONG_CATALOG } from "@/lib/music-context";
+import { songById, SONG_CATALOG } from "@/lib/music-context";
 import { effectiveSongs, getSession, useSession } from "@/lib/session";
 import { buildSongLayer } from "@/lib/song-layer";
 import type { Song } from "@/lib/types";
@@ -28,7 +28,7 @@ export function SongSwapComposer({ userId, replyToSwapId, initialSongId, initial
   const deferred = useDebouncedValue(query, REAL_DATA ? 350 : 0).trim();
   const { data: results } = useSWR(deferred ? ["songs", deferred] : null, ([, q]) => searchSongs(q), { keepPreviousData: true });
   // Arriving from a song in the galaxy: the song is already chosen, so the only thing left is why.
-  const [song, setSong] = useState<Song | null>(() => SONG_CATALOG.find((s) => s.id === initialSongId) ?? null);
+  const [song, setSong] = useState<Song | null>(() => (initialSongId ? songById(initialSongId) : null));
   // An opener from a bridge song arrives prefilled and editable; it is a starting line, not something sent for them.
   const [reason, setReason] = useState(initialReason ?? "");
   const [sending, setSending] = useState(false);

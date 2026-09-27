@@ -28,7 +28,7 @@ import { classifyMix, mixFromScores } from "./why-mix";
 import { buildClusterDetail, type ClusterDetail } from "./cluster-songs";
 import { listeningMoment } from "./texture";
 import { threadFrom } from "./thread";
-import { SONG_CATALOG } from "./music-context";
+import { registerSongs, SONG_CATALOG } from "./music-context";
 import {
   DEMO_BIAS,
   DEMO_MATCH_IDS,
@@ -176,11 +176,16 @@ function byTime(messages: Message[]) {
 // handful of allowlisted accounts, so everyone picks their own songs.
 
 export async function searchSongs(q: string): Promise<Song[]> {
-  if (REAL_DATA) return real.searchSongs(q);
-  await delay(180);
-  const needle = q.trim().toLowerCase();
-  if (!needle) return SONG_CATALOG.slice(0, 12);
-  return SONG_CATALOG.filter((s) => `${s.title} ${s.artist}`.toLowerCase().includes(needle)).slice(0, 20);
+  const res = REAL_DATA
+    ? await real.searchSongs(q)
+    : await (async () => {
+        await delay(180);
+        const needle = q.trim().toLowerCase();
+        if (!needle) return SONG_CATALOG.slice(0, 12);
+        return SONG_CATALOG.filter((s) => `${s.title} ${s.artist}`.toLowerCase().includes(needle)).slice(0, 20);
+      })();
+  registerSongs(res);
+  return res;
 }
 
 export async function analyzeMusic(input: { songs: Song[]; signals: ListeningSignal[] }): Promise<AnalysisResult> {

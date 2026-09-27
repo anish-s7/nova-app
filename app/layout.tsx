@@ -23,8 +23,8 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${sourceSans.variable} ${newsreader.variable} antialiased`}>
-      <body>
+    <html lang="en" className={`${sourceSans.variable} ${newsreader.variable} antialiased`} suppressHydrationWarning>
+      <body suppressHydrationWarning>
         <Suspense>
           <SessionSync />
         </Suspense>

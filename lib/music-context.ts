@@ -108,11 +108,29 @@ export const SONG_CATALOG: Song[] = ROWS.map(([id, title, artist, cover]) => ({
 }));
 
 const byId = new Map(SONG_CATALOG.map((s) => [s.id, s]));
+const dynamicKnown = new Map<string, Song>();
+
+export function registerSong(s: Song) {
+  if (s && s.id) {
+    dynamicKnown.set(s.id, s);
+  }
+}
+
+export function registerSongs(songs: Song[]) {
+  if (!songs) return;
+  for (const s of songs) registerSong(s);
+}
 
 export function songById(id: string): Song {
-  const s = byId.get(id);
-  if (!s) throw new Error(`Unknown song ${id}`);
-  return s;
+  const s = byId.get(id) ?? dynamicKnown.get(id);
+  if (s) return s;
+  const cleanId = id.replace(/^(deezer|itunes|spotify):/, "");
+  return {
+    id,
+    title: cleanId || id,
+    artist: "Unknown Artist",
+    source: "manual",
+  };
 }
 
 export function contextFor(songId: string): SongContext {
@@ -122,3 +140,4 @@ export function contextFor(songId: string): SongContext {
 export function songsInCluster(cluster: ClusterId, min = 0.6) {
   return SONG_CATALOG.filter((s) => (contextFor(s.id).clusters[cluster] ?? 0) >= min);
 }
+
