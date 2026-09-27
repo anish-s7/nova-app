@@ -123,24 +123,22 @@ export async function POST(req: NextRequest) {
   const clampedEnergy = clampEmotionValue(energy ?? 0);
   const pickEmbedding = buildPickEmbedding(parseVector(song.embedding), clampedValence, clampedEnergy);
 
-  const { data: pick, error: pickError } = await supabase
-    .from("song_picks")
-    .insert({
-      profile_id: profileId,
-      song_id: song.id,
-      tags,
-      valence: clampedValence,
-      energy: clampedEnergy,
-      embedding: pickEmbedding,
-      reason_text: reasonText ?? null,
-      is_public: isPublic ?? true,
-    })
-    .select()
-    .single();
-
-  if (pickError) {
-    return NextResponse.json({ error: pickError.message }, { status: 500 });
+  // One pick per (profile, song): re-picking a song you already have updates that pick, so the
+  // newest feelings win and no duplicate is created (unique index, 20260928000000_one_pick_per_song.sql).
+  const feelings = {
+    tags,
+    valence: clampedValence,
+    energy: clampedEnergy,
+    embedding: pickEmbedding,
+    reason_text: reasonText ?? null,
+    is_public: isPublic ?? true,
+    updated_at: new Date().toISOString(),
+  };
+  const saved = await savePick(supabase, profileId, song.id, feelings);
+  if ("error" in saved) {
+    return NextResponse.json({ error: saved.error }, { status: 500 });
   }
+  const { pick, updated } = saved;
 
   // Keep the galaxy label current. A failure here must not fail the pick, which is already saved:
   // the next pick, or the next galaxy load, recomputes it.
@@ -152,5 +150,103 @@ export async function POST(req: NextRequest) {
     console.error("refreshPrimaryCluster failed after pick insert:", err);
   }
 
-  return NextResponse.json({ song, pick });
+  return NextResponse.json({ song, pick, updated });
+}
+
+type Supabase = ReturnType<typeof createServerClient>;
+type Feelings = { tags: string[]; valence: number; energy: number; embedding: number[]; reason_text: string | null; is_public: boolean; updated_at: string };
+
+/** Updates the profile's existing pick for this song, or inserts one. Retries as an update if a concurrent save won the insert. */
+async function savePick(supabase: Supabase, profileId: string, songId: string, feelings: Feelings) {
+  const update = () =>
+    supabase.from("song_picks").update(feelings).eq("profile_id", profileId).eq("song_id", songId).select().maybeSingle();
+
+  const { data: existing, error: findError } = await supabase.from("song_picks").select("id").eq("profile_id", profileId).eq("song_id", songId).maybeSingle();
+  if (findError) return { error: findError.message };
+
+  if (existing) {
+    const { data, error } = await update();
+    return error || !data ? { error: error?.message ?? "Couldn't update the pick" } : { pick: data, updated: true };
+  }
+
+  const { data, error } = await supabase.from("song_picks").insert({ profile_id: profileId, song_id: songId, ...feelings }).select().single();
+  if (error?.code === "23505") {
+    const retry = await update();
+    return retry.error || !retry.data ? { error: retry.error?.message ?? "Couldn't update the pick" } : { pick: retry.data, updated: true };
+  }
+  return error ? { error: error.message } : { pick: data, updated: false };
+}
+
+/**
+ * Changes how one of your songs feels: new tags and/or mood-circle position. The pick keeps its id;
+ * its matching vector is rebuilt from the song's embedding. No MusicBrainz or Gemini call.
+ */
+export async function PATCH(req: NextRequest) {
+  const profileId = await getCurrentProfileId();
+  if (!profileId) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const { id, tags, valence, energy } = (await req.json()) as { id?: string; tags?: string[]; valence?: number; energy?: number };
+  if (!id || !Array.isArray(tags) || tags.length === 0 || tags.length > 3) {
+    return NextResponse.json({ error: "id and 1-3 tags are required" }, { status: 400 });
+  }
+  const invalidTags = tags.filter((t) => !isValidTag(t));
+  if (invalidTags.length > 0) {
+    return NextResponse.json({ error: `Invalid tags: ${invalidTags.join(", ")}` }, { status: 400 });
+  }
+
+  const supabase = createServerClient();
+  // Scoped to the caller's own picks: someone else's pick id simply isn't found.
+  const { data: existing, error: findError } = await supabase.from("song_picks").select("id, song_id").eq("id", id).eq("profile_id", profileId).maybeSingle();
+  if (findError) return NextResponse.json({ error: findError.message }, { status: 500 });
+  if (!existing) return NextResponse.json({ error: "Pick not found" }, { status: 404 });
+  const { data: song } = await supabase.from("songs").select("embedding").eq("id", existing.song_id).maybeSingle();
+  if (!song?.embedding) return NextResponse.json({ error: "Catalog song is missing an embedding" }, { status: 500 });
+
+  const clampedValence = clampEmotionValue(valence ?? 0);
+  const clampedEnergy = clampEmotionValue(energy ?? 0);
+  const { data: pick, error } = await supabase
+    .from("song_picks")
+    .update({
+      tags,
+      valence: clampedValence,
+      energy: clampedEnergy,
+      embedding: buildPickEmbedding(parseVector(song.embedding), clampedValence, clampedEnergy),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("profile_id", profileId)
+    .select()
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  try {
+    await refreshPrimaryCluster(supabase, profileId);
+  } catch (err) {
+    console.error("refreshPrimaryCluster failed after pick update:", err);
+  }
+  return NextResponse.json({ pick });
+}
+
+/** Removes one of your songs (DELETE /api/picks?id=<pick id>). */
+export async function DELETE(req: NextRequest) {
+  const profileId = await getCurrentProfileId();
+  if (!profileId) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+  const id = req.nextUrl.searchParams.get("id");
+  if (!id) return NextResponse.json({ error: "id query param is required" }, { status: 400 });
+
+  const supabase = createServerClient();
+  const { data, error } = await supabase.from("song_picks").delete().eq("id", id).eq("profile_id", profileId).select("id");
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data?.length) return NextResponse.json({ error: "Pick not found" }, { status: 404 });
+
+  try {
+    await refreshPrimaryCluster(supabase, profileId);
+  } catch (err) {
+    console.error("refreshPrimaryCluster failed after pick delete:", err);
+  }
+  return NextResponse.json({ deleted: id });
 }

@@ -39,7 +39,9 @@ export function BottomSheet({
   }, [open, onClose]);
 
   return (
-    <div className={cn("absolute inset-0 z-30", open && !peek && !minimized ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!open}>
+    // overflow-hidden: the closed panel is parked just below this box (translate-y-full). Without
+    // clipping it paints over whatever sits beneath the page, e.g. the tab bar on Profile.
+    <div className={cn("absolute inset-0 z-30 overflow-hidden", open && !peek && !minimized ? "pointer-events-auto" : "pointer-events-none")} aria-hidden={!open}>
       <div
         className={cn("absolute inset-0 bg-night/50 transition-opacity duration-300", open && !peek && !minimized ? "opacity-100" : "opacity-0")}
         onClick={onClose}

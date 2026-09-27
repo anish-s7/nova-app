@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AudioLines, Check } from "lucide-react";
@@ -10,7 +11,7 @@ import { MoodCircle, type Mood } from "@/components/mood-circle";
 import { ScreenHeader } from "@/components/screen-header";
 import { TagPicker } from "@/components/tag-picker";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { saveSongs } from "@/lib/api";
+import { getMySongs, sameSong, saveSongs } from "@/lib/api";
 import { setSession, useHydrated, useSession, type Feeling } from "@/lib/session";
 import type { Tag } from "@/lib/tags";
 import type { Song } from "@/lib/types";
@@ -52,6 +53,7 @@ export default function FeelPage() {
 /** Spotify path only: pick which imported songs to describe. */
 function ChooseSongs({ songs }: { songs: Song[] }) {
   const [chosen, setChosen] = useState<string[]>([]);
+  const { data: mine } = useSWR(["my-songs"], getMySongs);
   const full = chosen.length >= MAX_DESCRIBE;
 
   const toggle = (id: string) =>
@@ -91,7 +93,7 @@ function ChooseSongs({ songs }: { songs: Song[] }) {
                     </span>
                   ) : null}
                   <p className="mt-1.5 truncate text-xs font-medium">{song.title}</p>
-                  <p className="truncate text-xs text-muted-foreground">{song.artist}</p>
+                  <p className="truncate text-xs text-muted-foreground">{mine?.some((m) => sameSong(m.song, song)) ? <span className="text-primary">Yours · update</span> : song.artist}</p>
                 </button>
               </li>
             );
@@ -114,6 +116,13 @@ function DescribeSongs({ songs, feelings, fromSpotify }: { songs: Song[]; feelin
   const song = songs[Math.min(index, songs.length - 1)];
   const feeling = feelings[song.id] ?? EMPTY_FEELING;
   const last = index >= songs.length - 1;
+  // Already one of your songs: start from how you described it last time. Saving updates that pick.
+  const { data: mine } = useSWR(["my-songs"], getMySongs);
+  const existing = mine?.find((m) => sameSong(m.song, song));
+  useEffect(() => {
+    if (!existing || feelings[song.id]) return;
+    setSession((s) => ({ feelings: { ...s.feelings, [song.id]: existing.feeling } }));
+  }, [existing, song.id, feelings]);
   const ready = feeling.tags.length > 0;
 
   const update = (patch: Partial<Feeling>) =>
@@ -160,6 +169,7 @@ function DescribeSongs({ songs, feelings, fromSpotify }: { songs: Song[]; feelin
               <p className="truncate text-muted-foreground">{song.artist}</p>
             </div>
           </div>
+          {existing ? <p className="mt-3 border-l-2 border-primary/60 pl-3 text-sm text-muted-foreground">Already in your songs. Your answers here replace the old ones.</p> : null}
 
           <div className="mt-6">
             <TagPicker value={feeling.tags} onChange={(tags: Tag[]) => update({ tags })} label={`Tags for ${song.title}`} />

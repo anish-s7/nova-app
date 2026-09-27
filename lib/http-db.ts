@@ -145,6 +145,19 @@ export const httpDb: Db = {
 
   insertPick: (pick) => post("/api/picks", pick),
 
+  async updatePick(id, patch) {
+    const { pick } = await request<{ pick: SongPickRow }>("/api/picks", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, ...patch }),
+    });
+    return pick;
+  },
+
+  async deletePick(id) {
+    await request(`/api/picks?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+  },
+
   async getMatches(limit) {
     const { matches } = await request<{ matches: ConfirmedMatchRow[] }>(`/api/match${limit ? `?limit=${limit}` : ""}`);
     return matches;

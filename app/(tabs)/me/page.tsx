@@ -12,11 +12,12 @@ import { MotivationCard } from "@/components/motivation-card";
 import { ReachQuestion } from "@/components/reach-question";
 import { ReasonSpectrum } from "@/components/reason-spectrum";
 import { ScreenHeader } from "@/components/screen-header";
+import { SongFeelingSheet } from "@/components/song-feeling-sheet";
 import { buttonVariants } from "@/components/ui/button";
 import { UserAvatar } from "@/components/user-avatar";
-import { getConversations, getMe, getStoredAnalysis, REAL_DATA } from "@/lib/api";
+import { getConversations, getMySongs, getStoredAnalysis, REAL_DATA, type MySong } from "@/lib/api";
 import { getCluster } from "@/lib/clusters";
-import { effectiveSongs, setSession, useHydrated, useSession } from "@/lib/session";
+import { setSession, useHydrated, useSession } from "@/lib/session";
 import type { InferredMotivation, Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -28,8 +29,9 @@ export default function MePage() {
   const session = useSession();
   const account = useAccount();
   const { data: conversations } = useSWR(["conversations", session.version], getConversations);
-  // Real mode: your songs are your saved picks (with covers), not the onboarding session copy.
-  const mine = useSWR(REAL_DATA ? ["me", session.version] : null, getMe);
+  // Your saved songs with how each one feels (real mode: your picks; mock: the session). One entry per song.
+  const mine = useSWR(["my-songs", session.version], getMySongs);
+  const [editing, setEditing] = useState<MySong | null>(null);
   // Real mode, signed in somewhere new: this browser's session has no reading yet, but the stored portrait does.
   const needsPortrait = REAL_DATA && hydrated && !session.analysis;
   const stored = useSWR(needsPortrait ? ["portrait", session.version] : null, getStoredAnalysis);
@@ -38,7 +40,7 @@ export default function MePage() {
   }, [stored.data, session.analysis]);
   if (!hydrated) return <main className="flex-1" />;
 
-  const songs = REAL_DATA ? (mine.data?.songs ?? []) : effectiveSongs(session);
+  const songs = mine.data?.map((m) => m.song) ?? [];
   const kept = session.motivations.filter((m) => m.feedback !== "rejected");
   const primary = [...kept].sort((a, b) => b.confidence - a.confidence)[0];
   const tone = primary ? getCluster(primary.cluster).color : undefined;
@@ -98,7 +100,7 @@ export default function MePage() {
 
             <ReachQuestion className="mx-5 mt-8" />
 
-            {songs.length ? <Songs songs={songs} /> : null}
+            {mine.data?.length ? <Songs items={mine.data} onSelect={setEditing} /> : null}
           </>
         )}
 
@@ -108,7 +110,7 @@ export default function MePage() {
           </h2>
           <ul className="mt-2 border-y border-white/[0.07]">
             <SettingsLink href="/onboarding/pick" icon={<ListMusic className="size-4" aria-hidden />}>
-              Change your music
+              Add or change songs
             </SettingsLink>
             {session.analysis ? (
               <SettingsLink href="/onboarding/reveal?replay=1" icon={<Orbit className="size-4" aria-hidden />}>
@@ -123,6 +125,14 @@ export default function MePage() {
           </ul>
         </section>
       </div>
+      <SongFeelingSheet
+        item={editing}
+        onClose={() => setEditing(null)}
+        onChanged={() => {
+          void mine.mutate();
+          setSession({}, true); // other screens keyed on the session version (galaxy, connections) refetch too
+        }}
+      />
     </main>
   );
 }
@@ -207,33 +217,37 @@ function Status({ m }: { m: InferredMotivation }) {
   return <span className="font-medium text-primary">Needs a look</span>;
 }
 
-function Songs({ songs }: { songs: Song[] }) {
+/** Your songs. Tap one to change how it feels or remove it; "Add songs" goes through the picker. */
+function Songs({ items, onSelect }: { items: MySong[]; onSelect: (item: MySong) => void }) {
   const [all, setAll] = useState(false);
-  const shown = all ? songs : songs.slice(0, SONGS_SHOWN);
+  const shown = all ? items : items.slice(0, SONGS_SHOWN);
   return (
     <section className="mt-8 px-5" aria-labelledby="songs-heading">
       <div className="flex items-baseline justify-between">
         <h2 id="songs-heading" className={sectionLabel}>
-          Your songs · {songs.length}
+          Your songs · {items.length}
         </h2>
         <Link href="/onboarding/pick" className="text-xs text-muted-foreground hover:text-foreground">
-          Edit
+          Add songs
         </Link>
       </div>
+      <p className="mt-1 text-xs text-muted-foreground">Tap a song to change how it feels, or remove it.</p>
       <ul className="mt-3 grid grid-cols-3 gap-x-3 gap-y-4">
-        {shown.map((s) => (
-          <li key={s.id} className="min-w-0">
-            <div className="relative aspect-square w-full">
-              <AlbumArt song={s} size={200} className="!absolute inset-0 !size-full rounded-md" />
-            </div>
-            <p className="mt-1.5 truncate text-xs font-medium">{s.title}</p>
-            <p className="truncate text-[11px] text-muted-foreground">{s.artist}</p>
+        {shown.map((item) => (
+          <li key={item.pickId} className="min-w-0">
+            <button type="button" onClick={() => onSelect(item)} className="group block w-full text-left" aria-label={`Edit ${item.song.title}`}>
+              <div className="relative aspect-square w-full">
+                <AlbumArt song={item.song} size={200} className="!absolute inset-0 !size-full rounded-md transition-opacity group-hover:opacity-80" />
+              </div>
+              <p className="mt-1.5 truncate text-xs font-medium">{item.song.title}</p>
+              <p className="truncate text-[11px] text-muted-foreground">{item.feeling.tags.length ? item.feeling.tags.join(" · ") : item.song.artist}</p>
+            </button>
           </li>
         ))}
       </ul>
-      {songs.length > SONGS_SHOWN ? (
+      {items.length > SONGS_SHOWN ? (
         <button type="button" onClick={() => setAll((a) => !a)} className="mt-4 min-h-10 w-full border border-white/10 text-sm text-muted-foreground hover:bg-white/[0.03] hover:text-foreground">
-          {all ? "Show fewer" : `Show all ${songs.length}`}
+          {all ? "Show fewer" : `Show all ${items.length}`}
         </button>
       ) : null}
     </section>

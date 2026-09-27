@@ -138,6 +138,9 @@ async function assertHopAllowed(viewerId: string, centerId: string): Promise<Map
   return new Map(candidates.map((c) => [c.id, c.similarity]));
 }
 
+/** How many of your strongest matches get an edge to you (the sampler's own "match" slice size). */
+const YOUR_EDGES = 12;
+
 export async function getGalaxyWindow(viewerId: string, limit = DEFAULT_BUDGET, centerId?: string): Promise<GalaxyWindow> {
   const hopped = !!centerId && centerId !== viewerId;
   const yours = hopped ? await assertHopAllowed(viewerId, centerId) : undefined;
@@ -148,20 +151,24 @@ export async function getGalaxyWindow(viewerId: string, limit = DEFAULT_BUDGET, 
   const hidden = hiddenAfter(counts, drawn);
 
   // Edges: you to your strongest matches (real pgvector similarity), then a few among the drawn.
-  const edges: WindowEdge[] = drawn
-    .filter((c) => sample.slice.get(c.id) === "match")
+  // By similarity rather than the sampler's "match" slice: a small galaxy that fits the budget is
+  // returned all as "near", which left new users with no edges at all (and the reveal with no top match).
+  const edges: WindowEdge[] = [...drawn]
+    .filter((c) => sample.slice.get(c.id) !== "far" && c.similarity > 0)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, YOUR_EDGES)
     .map((c) => ({ source: profileId, target: c.id, similarity: c.similarity }));
   edges.push(...knnEdges(drawn, 3, 0.85));
 
-  // Hopped: the center star and the viewer's anchor both need nodes (neither is in the center's own pool).
+  // The pool is everyone *but* the center (galaxy_pool excludes the target), so the center always needs
+  // its own node — without it the client has no "you" star and drops every edge from you. Hopped: the
+  // viewer's anchor needs one too.
   const extra: WindowNode[] = [];
-  if (hopped) {
-    const supabase = createServerClient();
-    const { data } = await supabase.from("profiles").select("id, display_name, primary_cluster").in("id", [profileId, viewerId]);
-    for (const id of [profileId, viewerId]) {
-      const row = data?.find((r) => r.id === id);
-      if (row && !drawn.some((c) => c.id === id)) extra.push({ profileId: id, displayName: row.display_name, cluster: row.primary_cluster ?? "unassigned", far: false });
-    }
+  const anchors = hopped ? [profileId, viewerId] : [profileId];
+  const { data: anchorRows } = await createServerClient().from("profiles").select("id, display_name, primary_cluster").in("id", anchors);
+  for (const id of anchors) {
+    const row = anchorRows?.find((r) => r.id === id);
+    if (row && !drawn.some((c) => c.id === id)) extra.push({ profileId: id, displayName: row.display_name, cluster: row.primary_cluster ?? "unassigned", far: false });
   }
 
   return {

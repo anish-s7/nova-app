@@ -113,10 +113,13 @@ export function RevealSequence() {
             <p className="mt-4 text-3xl font-semibold tabular-nums tracking-tight">
               {edge.sharedSongs} {edge.sharedSongs === 1 ? "song" : "songs"} in common
             </p>
-            <div className={cn("transition-all duration-700", step >= 4 ? "mt-3 opacity-100" : "mt-0 h-0 overflow-hidden opacity-0")}>
-              <p className="font-serif text-xl italic text-muted-foreground">Same reason:</p>
-              <ThemeTag label={edge.sharedMotivation} className="mt-2" />
-            </div>
+            {/* Real mode only knows the shared reason once their Connection Card exists; don't show an empty tag. */}
+            {edge.sharedMotivation ? (
+              <div className={cn("transition-all duration-700", step >= 4 ? "mt-3 opacity-100" : "mt-0 h-0 overflow-hidden opacity-0")}>
+                <p className="font-serif text-xl italic text-muted-foreground">Same reason:</p>
+                <ThemeTag label={edge.sharedMotivation} className="mt-2" />
+              </div>
+            ) : null}
             {step >= 4 ? (
               <div className="mt-5 flex flex-col gap-2 motion-safe:animate-rise-in">
                 <Link href={`/people/${match.userId}/card`} onClick={() => setSession({ revealSeen: true })} className={cn(buttonVariants(), "h-12 rounded-full text-base")}>

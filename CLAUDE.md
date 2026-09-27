@@ -47,7 +47,9 @@ the Spotify import taken out of onboarding.
 ## Directory map
 ```
 app/api/                     Route handlers — the only thing the frontend calls
-  picks/                     POST: resolve song (MusicBrainz → Gemini), cover art, insert song_pick, refresh cluster
+  picks/                     POST: resolve song (MusicBrainz → Gemini), cover art, save song_pick, refresh cluster.
+                             One pick per (profile, song): re-picking updates it (newest feelings win).
+                             PATCH {id, tags, valence, energy}: edit a pick in place. DELETE ?id=: remove one.
   match/                     GET: pgvector candidates → AI evidence-check → confirmed matches with cards
                              (cached pairs aren't re-sent to Gemini)
   cards/[matchId]/           GET cached card / POST assess a specific pair (same AI assessment as /api/match)
@@ -64,6 +66,7 @@ app/auth/callback/           Supabase OAuth / email-confirmation landing (exchan
 app/auth/confirmed/          Email-confirmation tab handoff back to the tab that signed up (lib/auth-handoff.ts)
 app/login/, app/signup/      Auth screens (components/auth/auth-form.tsx)
 app/onboarding/              pick → feel → reading → why → reveal. /onboarding/music is only a redirect to pick
+app/onboarding/pick/         Search + check 5–10 songs (1+ once you have some). Selection only; no tags here
 app/onboarding/feel/         Per song: 1–3 tags + the valence/energy mood circle (one song at a time)
 app/(tabs)/                  galaxy, connections, messages, people/[id] (+ /card, /contrast), me
 app/proto/                   Prototype screens (pick-constellation, reading-constellation); not linked from the app.
@@ -349,6 +352,19 @@ onboarding's reading/why screens showing the real portrait, and the Me page load
 - The galaxy "+" add-a-song uses `TagPicker` + `MoodCircle` (`d9614b5`) and refreshes the
   portrait in the background after saving.
 - Motivation feedback (confirm/reject/private) on the why/Me screens is still session-only (#4).
+- **Songs are managed, not appended** (`song-tag-management`): `song_picks` is unique per
+  (profile, song) (`20260928000000_one_pick_per_song.sql` — dedupes existing rows keeping the
+  newest, adds `updated_at`, grants the service role update/delete). Profile → tap a song to change
+  how it feels or remove it (`components/song-feeling-sheet.tsx`); "Add or change songs" re-runs the
+  picker, which marks songs you already have ("Yours"), needs only 1 song once you have some, and
+  pre-fills the feel step with your saved answers. Portraits regenerate when any pick changes, not
+  just the count (`profile_portraits.picks_updated_at`). **Apply the migration to the hosted project
+  before deploying this code.**
+- **Galaxy "you" fix** (`lib/matching/galaxyWindow.ts`): `galaxy_pool` excludes the viewer, and
+  the window only added an anchor node when hopped, so in real mode your own galaxy had no "you"
+  star and every edge from you was dropped. The center now always gets its node. Your edges also go
+  to your top 12 by similarity instead of the sampler's "match" slice, which a small galaxy (one
+  that fits the budget) never produces, so new users no longer show zero connections.
 - Album art is now populated (Cover Art Archive → iTunes → Deezer, or a Spotify `i.scdn.co`
   URL passed in); `scripts/backfill-cover-art.ts` fills older catalog rows.
 
