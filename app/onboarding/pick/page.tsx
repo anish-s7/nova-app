@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import useSWR from "swr";
 import { Check, Plus, Search, X } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
+import { PreviewButton } from "@/components/preview-button";
 import { ScreenHeader } from "@/components/screen-header";
 import { SongTile } from "@/components/song-tile";
 import { Button } from "@/components/ui/button";
 import { useDebouncedValue } from "@/hooks/use-debounced-value";
 import { chooseSongs, getMySongs, REAL_DATA, sameSong, searchSongs } from "@/lib/api";
+import { stopPreview } from "@/lib/preview-player";
 import { getSession, useHydrated } from "@/lib/session";
 import type { Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -53,6 +55,9 @@ function PickSongs() {
 
   const toggle = (song: Song) =>
     setPicked((p) => (p.some((s) => s.id === song.id) ? p.filter((s) => s.id !== song.id) : p.length >= MAX ? p : [...p, { ...song, source: "manual" }]));
+
+  // Leaving the screen stops any preview that's playing.
+  useEffect(() => stopPreview, []);
 
   // Keep the newest pick in view in the tray.
   useEffect(() => {
@@ -100,13 +105,15 @@ function PickSongs() {
           {(searching || !REAL_DATA ? (results ?? []) : []).map((song) => {
             const on = isPicked(song.id);
             return (
-              <li key={song.id}>
+              <li key={song.id} className="flex items-center gap-1">
+                {/* Real search results carry a ~30s clip; the button sits beside the pick button, not in it. */}
+                {REAL_DATA ? <PreviewButton song={song} /> : null}
                 <button
                   type="button"
                   onClick={() => toggle(song)}
                   disabled={!on && full}
                   aria-pressed={on}
-                  className={cn("w-full rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-white/5 disabled:opacity-40", on && "bg-primary/[0.07]")}
+                  className={cn("min-w-0 flex-1 rounded-xl px-2 py-1.5 text-left transition-colors hover:bg-white/5 disabled:opacity-40", on && "bg-primary/[0.07]")}
                 >
                   <SongTile
                     song={song}

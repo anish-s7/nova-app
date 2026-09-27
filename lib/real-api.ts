@@ -96,7 +96,7 @@ export function rememberSimilarities(edges: GalaxyEdge[]) {
 
 // --- song search ------------------------------------------------
 
-type SearchSong = { id: string; title: string; artist: string; albumArtUrl: string | null };
+type SearchSong = { id: string; title: string; artist: string; albumArtUrl: string | null; previewUrl: string | null };
 
 /** Real catalog search (GET /api/songs/search). Under 2 characters there's nothing to search. */
 export async function searchSongs(q: string): Promise<Song[]> {
@@ -104,7 +104,14 @@ export async function searchSongs(q: string): Promise<Song[]> {
   const res = await fetch(`/api/songs/search?q=${encodeURIComponent(q.trim())}`, { credentials: "same-origin" });
   if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to search." : "Song search isn't responding right now.");
   const { songs } = (await res.json()) as { songs: SearchSong[] };
-  return songs.map((s) => ({ id: s.id, title: s.title, artist: s.artist, albumArtUrl: s.albumArtUrl ?? undefined, source: "manual" as const }));
+  return songs.map((s) => ({
+    id: s.id,
+    title: s.title,
+    artist: s.artist,
+    albumArtUrl: s.albumArtUrl ?? undefined,
+    previewUrl: s.previewUrl ?? undefined,
+    source: "manual" as const,
+  }));
 }
 
 // --- listening portrait ----------------------------------------------------------

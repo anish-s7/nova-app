@@ -10,10 +10,12 @@ import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
  * Spotify data.
  */
 
-export type SearchSong = { id: string; title: string; artist: string; albumArtUrl: string | null };
+/** `previewUrl`: a ~30s clip for the play button. Signed and short-lived, so never stored. */
+export type SearchSong = { id: string; title: string; artist: string; albumArtUrl: string | null; previewUrl: string | null };
 
 const LIMIT = 20;
-const TTL_MS = 10 * 60 * 1000;
+// Deezer preview links in results expire ~15 minutes after the search; stay well inside that.
+const TTL_MS = 5 * 60 * 1000;
 const MAX_CACHED = 500;
 const cache = new Map<string, { at: number; songs: SearchSong[] }>();
 
@@ -21,20 +23,27 @@ async function searchITunes(q: string): Promise<SearchSong[]> {
   const url = `https://itunes.apple.com/search?${new URLSearchParams({ term: q, media: "music", entity: "song", limit: String(LIMIT) })}`;
   const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
   if (!res.ok) throw new Error(`iTunes search ${res.status}`);
-  const data = (await res.json()) as { results?: { trackId: number; trackName: string; artistName: string; artworkUrl100?: string }[] };
+  const data = (await res.json()) as { results?: { trackId: number; trackName: string; artistName: string; artworkUrl100?: string; previewUrl?: string }[] };
   return (data.results ?? []).map((r) => ({
     id: `itunes:${r.trackId}`,
     title: r.trackName,
     artist: r.artistName,
     albumArtUrl: r.artworkUrl100?.replace("100x100bb", "300x300bb") ?? null,
+    previewUrl: r.previewUrl ?? null,
   }));
 }
 
 async function searchDeezer(q: string): Promise<SearchSong[]> {
   const res = await fetch(`https://api.deezer.com/search?${new URLSearchParams({ q, limit: String(LIMIT) })}`, { signal: AbortSignal.timeout(5000) });
   if (!res.ok) throw new Error(`Deezer search ${res.status}`);
-  const data = (await res.json()) as { data?: { id: number; title: string; artist: { name: string }; album?: { cover_medium?: string } }[] };
-  return (data.data ?? []).map((r) => ({ id: `deezer:${r.id}`, title: r.title, artist: r.artist.name, albumArtUrl: r.album?.cover_medium ?? null }));
+  const data = (await res.json()) as { data?: { id: number; title: string; artist: { name: string }; album?: { cover_medium?: string }; preview?: string }[] };
+  return (data.data ?? []).map((r) => ({
+    id: `deezer:${r.id}`,
+    title: r.title,
+    artist: r.artist.name,
+    albumArtUrl: r.album?.cover_medium ?? null,
+    previewUrl: r.preview || null,
+  }));
 }
 
 /** Same song on several albums (single, album, deluxe) shows once. */
