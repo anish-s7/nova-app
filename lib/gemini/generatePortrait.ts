@@ -49,8 +49,8 @@ Fields:
 - highlights: exactly 3 short observations (at most 14 words each), each about a
   different song or pattern; these appear one at a time on screen.
 - motivations: 2 to 4, strongest first. label: at most 6 words, in their terms.
-  description: one or two sentences. confidence: 0 to 1, higher when more picks
-  support it. evidence: 1 to 3 items, each a short line citing songTitles from their list.
+  description: one sentence, at most 18 words. confidence: 0 to 1, higher when more picks
+  support it. evidence: 1 to 3 items, each at most 12 words, citing songTitles from their list.
 - seeks: one sentence on the kind of listener they'd genuinely connect with (shared
   reasons, not shared taste). This is not shown to them.
 - tensions: one sentence only if two of their uses of music pull against each other;

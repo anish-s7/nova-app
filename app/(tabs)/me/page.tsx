@@ -53,7 +53,7 @@ export default function MePage() {
         {!session.analysis ? (
           <EmptyState
             title="We don't know you yet"
-            body="Bring a few songs and we'll show you why you listen, and who else listens the same way."
+            body="Bring a few songs to see why you listen, and who listens the same way."
             action={
               <Link href="/onboarding/pick" className={cn(buttonVariants(), "h-11 rounded-none px-6")}>
                 Bring your music
@@ -74,7 +74,6 @@ export default function MePage() {
                       <span className="truncate">{getCluster(primary.cluster).label}</span>
                     </p>
                   ) : null}
-                  <p className="mt-0.5 text-xs text-muted-foreground">{session.source === "spotify" ? "Read from your Spotify listening" : "Read from the songs you picked"}</p>
                 </div>
               </div>
 
@@ -156,12 +155,12 @@ function Stat({ label, value, href }: { label: string; value: number | string; h
 
 /**
  * Your reasons as a compact list. Each row shows where it stands (confirmed, needs a look, left
- * out) and whether it's public; tap to open the full card with its evidence and controls.
+ * out) and whether it's public; tap to open the full card with its evidence and controls. All
+ * start closed, so the page stays a scannable list rather than leading with a wall of text.
  */
 function Reasons({ motivations, songs }: { motivations: InferredMotivation[]; songs: Song[] }) {
   const toReview = motivations.filter((m) => m.feedback === "unreviewed");
-  // Open the first one that needs a look, so the page leads with what's actionable.
-  const [open, setOpen] = useState<string | null>(toReview[0]?.id ?? null);
+  const [open, setOpen] = useState<string | null>(null);
 
   return (
     <section className="mt-8" aria-labelledby="reasons-heading">
@@ -169,7 +168,7 @@ function Reasons({ motivations, songs }: { motivations: InferredMotivation[]; so
         <h2 id="reasons-heading" className={sectionLabel}>
           Your reasons
         </h2>
-        {toReview.length ? <span className="text-xs text-primary">{toReview.length === 1 ? "one worth a look" : `${toReview.length} worth a look`}</span> : null}
+        {toReview.length ? <span className="text-xs text-primary">{toReview.length} to review</span> : null}
       </div>
       <ul className="mt-2 border-y border-white/[0.07]">
         {motivations.map((m) => {
@@ -214,7 +213,7 @@ function Status({ m }: { m: InferredMotivation }) {
       </span>
     );
   if (m.feedback === "rejected") return <span>Not quite you</span>;
-  return <span className="font-medium text-primary">Worth a look</span>;
+  return <span className="font-medium text-primary">Review</span>;
 }
 
 /** Your songs. Tap one to change how it feels or remove it; "Add songs" goes through the picker. */
@@ -225,13 +224,12 @@ function Songs({ items, onSelect }: { items: MySong[]; onSelect: (item: MySong) 
     <section className="mt-8 px-5" aria-labelledby="songs-heading">
       <div className="flex items-baseline justify-between">
         <h2 id="songs-heading" className={sectionLabel}>
-          {items.length === 1 ? "Your one song" : `Your ${items.length} songs`}
+          {items.length === 1 ? "1 song" : `${items.length} songs`}
         </h2>
         <Link href="/onboarding/pick" className="text-xs text-muted-foreground hover:text-foreground">
           Add songs
         </Link>
       </div>
-      <p className="mt-1 text-xs text-muted-foreground">Tap a song to change how it feels, or remove it.</p>
       <ul className="mt-3 grid grid-cols-3 gap-x-3 gap-y-4">
         {shown.map((item) => (
           <li key={item.pickId} className="min-w-0">

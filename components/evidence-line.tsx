@@ -14,13 +14,11 @@ export function EvidenceLine({ evidence, songs }: { evidence: Evidence; songs: S
   return (
     <li className="flex items-start gap-3">
       <AlbumArt song={song} size={36} className="mt-0.5 rounded-md" />
-      <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-          <Icon className="size-3" aria-hidden />
-          {label}
-        </p>
-        <p className="text-pretty text-sm leading-snug text-foreground/90">{evidence.text}</p>
-      </div>
+      {/* The kind is an icon, not a heading row: one line of text per piece of evidence. */}
+      <p className="min-w-0 flex-1 text-pretty text-sm leading-snug text-foreground/90">
+        <Icon className="mr-1.5 inline size-3.5 -translate-y-px text-muted-foreground" aria-label={label} />
+        {evidence.text}
+      </p>
     </li>
   );
 }
