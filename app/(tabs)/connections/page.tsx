@@ -125,7 +125,7 @@ export default function ConnectionsPage() {
                   onClick={() => setGrouped((g) => !g)}
                   className="ml-auto rounded-full border border-white/10 px-3 py-1.5 text-muted-foreground aria-pressed:bg-white/10 aria-pressed:text-foreground"
                 >
-                  Group by why
+                  Group
                 </button>
               </div>
             </div>
@@ -164,10 +164,11 @@ export default function ConnectionsPage() {
                         />
                         <div className="min-w-0 flex-1">
                           <p className="truncate font-medium">{c.user.name}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {c.sharedSongs > 0
-                              ? `${c.sharedSongs} shared song${c.sharedSongs === 1 ? "" : "s"}`
-                              : `${c.sharedArtists} shared artist${c.sharedArtists === 1 ? "" : "s"}`}
+                          <p className="truncate text-xs text-muted-foreground">
+                            {c.sharedMotivation ||
+                              (c.sharedSongs > 0
+                                ? `${c.sharedSongs} shared song${c.sharedSongs === 1 ? "" : "s"}`
+                                : `${c.sharedArtists} shared artist${c.sharedArtists === 1 ? "" : "s"}`)}
                           </p>
                         </div>
                         <SongStack

@@ -13,6 +13,7 @@ import { ApiError } from "./api-error";
 import { getCluster } from "./clusters";
 import type { ClusterDetail, ClusterSong } from "./cluster-songs";
 import { cached, fetchProfile, forgetMe, generatePortrait, getMyId, getPortrait, httpDb } from "./http-db";
+import { registerSong } from "./music-context";
 import { ME_ID } from "./mock-world";
 import type { Portrait } from "./portrait";
 import type { SongLayer, SongListener, SongStar } from "./song-layer";
@@ -38,7 +39,7 @@ const DEFAULT_CLUSTER = "quiet_company";
 // --- small mappers ----------------------------------------------------------
 
 function toSong(row: Pick<SongRow, "id" | "title" | "artist" | "album_art_url" | "spotify_track_id">): Song {
-  return {
+  const song: Song = {
     id: row.id,
     title: row.title,
     artist: row.artist,
@@ -46,6 +47,8 @@ function toSong(row: Pick<SongRow, "id" | "title" | "artist" | "album_art_url" |
     spotifyId: row.spotify_track_id ?? undefined,
     source: row.spotify_track_id ? "spotify" : "manual",
   };
+  registerSong(song);
+  return song;
 }
 
 const key = (s: { title: string; artist: string }) => `${s.title}::${s.artist}`.toLowerCase();
@@ -192,6 +195,7 @@ export async function getConnections(): Promise<Connection[]> {
       cluster: m.cluster ?? DEFAULT_CLUSTER,
       similarity,
       sharedMotivation: m.card.shared_why,
+      threadWhy: m.card.threads?.[0]?.why,
       ...o,
       evidenceSongs: evidenceSongs(mine, theirs),
     };

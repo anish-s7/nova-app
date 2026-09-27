@@ -1,7 +1,7 @@
 "use client";
 
 import { ContextChip } from "@/components/context-chip";
-import { getCluster } from "@/lib/clusters";
+import { CLUSTERS, getCluster } from "@/lib/clusters";
 import { MAX_PICK_TAGS, sortFeelings, TAGS } from "@/lib/tags";
 
 export const MAX_TAGS = MAX_PICK_TAGS;
@@ -59,7 +59,7 @@ export function TagPicker({
         ) : null}
         {groups.map((g) => (
           <div key={g.why}>
-            <p className="mb-1.5 text-[11px] text-muted-foreground">{getCluster(g.why).label}</p>
+            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">{CLUSTERS[g.why]?.label ?? getCluster(g.why).label}</p>
             <div className="flex flex-wrap gap-2">{g.feelings.map(chip)}</div>
           </div>
         ))}

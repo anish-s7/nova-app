@@ -5,6 +5,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import { ChevronDown } from "lucide-react";
 import { AlbumArt } from "@/components/album-art";
+import { PreviewButton } from "@/components/preview-button";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { UserAvatar } from "@/components/user-avatar";
@@ -61,19 +62,24 @@ function SongRow({ entry, clusterId, expanded, onToggle }: { entry: ClusterSong;
   const { song, listeners } = entry;
   return (
     <li className="border-b border-white/5 last:border-0">
-      <button type="button" onClick={onToggle} aria-expanded={expanded} className="flex min-h-16 w-full items-center gap-3 py-2 text-left">
-        <AlbumArt song={song} size={48} />
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[15px] font-semibold leading-tight">{song.title}</span>
-          <span className="block truncate text-sm text-muted-foreground">{song.artist}</span>
-          <span className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
-            {entry.mine ? <span className="font-medium text-[var(--tone)]">yours too</span> : null}
-            {entry.isNew ? <span className="rounded-sm bg-[color-mix(in_oklch,var(--tone)_18%,transparent)] px-1 text-foreground">new</span> : null}
-            <span>{listeners.length === 1 ? "1 person" : `${listeners.length} people`}</span>
+      <div className="flex min-h-16 w-full items-center gap-2 py-2">
+        <button type="button" onClick={onToggle} aria-expanded={expanded} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+          <AlbumArt song={song} size={48} />
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-[15px] font-semibold leading-tight">{song.title}</span>
+            <span className="block truncate text-sm text-muted-foreground">{song.artist}</span>
+            <span className="mt-0.5 flex items-center gap-2 text-[11px] text-muted-foreground">
+              {entry.mine ? <span className="font-medium text-[var(--tone)]">yours too</span> : null}
+              {entry.isNew ? <span className="rounded-sm bg-[color-mix(in_oklch,var(--tone)_18%,transparent)] px-1 text-foreground">new</span> : null}
+              <span>{listeners.length === 1 ? "1 person" : `${listeners.length} people`}</span>
+            </span>
           </span>
-        </span>
-        <ChevronDown className={cn("size-4 shrink-0 text-muted-foreground transition-transform", expanded && "rotate-180")} aria-hidden />
-      </button>
+        </button>
+        <PreviewButton song={song} />
+        <button type="button" onClick={onToggle} aria-label={expanded ? "Collapse details" : "Expand details"} className="p-2 text-muted-foreground">
+          <ChevronDown className={cn("size-4 shrink-0 transition-transform", expanded && "rotate-180")} aria-hidden />
+        </button>
+      </div>
 
       {expanded ? (
         <div className="pb-3 pl-1">
