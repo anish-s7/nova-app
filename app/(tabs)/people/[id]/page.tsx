@@ -37,7 +37,7 @@ export default function PersonPage() {
               <UserAvatar name={user.name} cluster={user.cluster} size={84} ring />
               <h1 className="mt-3 text-2xl font-semibold">{user.name}</h1>
               <ThemeTag cluster={user.cluster} className="mt-2" />
-              <OverlapBadge sharedSongs={user.edge.sharedSongs} sharedArtists={user.edge.sharedArtists} variant="both" className="mt-3" />
+              <OverlapBadge sharedSongs={user.edge.sharedSongs} sharedArtists={user.edge.sharedArtists} sharedFeelings={user.edge.sharedFeelings} variant="both" className="mt-3" />
             </section>
 
             <div className="mt-6 grid grid-cols-2 gap-2">

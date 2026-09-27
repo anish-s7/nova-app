@@ -208,6 +208,11 @@ export type GalaxyEdge = {
   sharedMotivation: string;
   sharedSongs: number;
   sharedArtists: number;
+  /**
+   * Real mode: feeling tags on both people's songs, most used first (top 3). Most linked people
+   * picked different songs, so this is usually what they actually have in common.
+   */
+  sharedFeelings?: string[];
 };
 
 /**

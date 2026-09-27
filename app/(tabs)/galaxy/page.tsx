@@ -565,7 +565,7 @@ function StarPreview({ node, traded, hop }: { node: GalaxyNode; traded: number; 
         <UserAvatar name={node.name} cluster={node.cluster} size={48} ring />
         <div className="min-w-0">
           <h2 className="truncate text-xl font-semibold">{node.name}</h2>
-          {edge ? <OverlapBadge sharedSongs={edge.sharedSongs} sharedArtists={edge.sharedArtists} variant="both" className="mt-1" /> : <Skeleton className="mt-1 h-5 w-40" />}
+          {edge ? <OverlapBadge sharedSongs={edge.sharedSongs} sharedArtists={edge.sharedArtists} sharedFeelings={edge.sharedFeelings} variant="both" className="mt-1" /> : <Skeleton className="mt-1 h-5 w-40" />}
         </div>
       </div>
 

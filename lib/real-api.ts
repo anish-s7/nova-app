@@ -169,16 +169,43 @@ export async function getMe(): Promise<User & { cluster: string }> {
   };
 }
 
+/**
+ * Feeling tags that appear on both people's songs, most used (across both) first. People are
+ * linked by how their songs feel to them, not by picking the same songs, so this is usually the
+ * real common ground.
+ */
+function sharedFeelings(mine: { tags: string[] }[], theirs: { tags: string[] }[], max = 3): string[] {
+  const count = (picks: { tags: string[] }[]) => {
+    const c = new Map<string, number>();
+    for (const p of picks) for (const t of p.tags) c.set(t, (c.get(t) ?? 0) + 1);
+    return c;
+  };
+  const a = count(mine);
+  const b = count(theirs);
+  return [...a.keys()]
+    .filter((t) => b.has(t))
+    .sort((x, y) => a.get(y)! + b.get(y)! - (a.get(x)! + b.get(x)!))
+    .slice(0, max);
+}
+
 export async function getUser(id: string): Promise<User & { cluster: string; edge: GalaxyEdge }> {
-  const [{ profile, picks }, mine] = await Promise.all([fetchProfile(id), picksOf("me")]);
+  const [{ profile, picks }, me] = await Promise.all([fetchProfile(id), fetchProfile("me")]);
   const songs = picks.flatMap((p) => (p.songs ? [toSong(p.songs)] : []));
+  const mine = me.picks.flatMap((p) => (p.songs ? [toSong(p.songs)] : []));
   return {
     id: profile.id,
     name: profile.display_name,
     songs,
     motivations: [], // NOT IN CONTRACT
     cluster: profile.primary_cluster ?? DEFAULT_CLUSTER,
-    edge: { source: ME_ID, target: id, similarity: similarityOf.get(id) ?? 0, sharedMotivation: "", ...overlap(mine, songs) },
+    edge: {
+      source: ME_ID,
+      target: id,
+      similarity: similarityOf.get(id) ?? 0,
+      sharedMotivation: "",
+      ...overlap(mine, songs),
+      sharedFeelings: sharedFeelings(me.picks, picks),
+    },
   };
 }
 
