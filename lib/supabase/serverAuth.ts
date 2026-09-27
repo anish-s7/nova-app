@@ -41,9 +41,11 @@ export async function createSessionClient() {
  */
 export async function getCurrentProfileId(): Promise<string | null> {
   const supabase = await createSessionClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() verifies the JWT signature (a forged cookie can't pass). With asymmetric signing
+  // keys it checks locally against cached JWKS, skipping getUser()'s Auth-server round trip on
+  // every request; with a symmetric secret it falls back to that same server check.
+  const { data, error } = await supabase.auth.getClaims();
+  if (error) console.error("getCurrentProfileId: session check failed:", error.message);
 
-  return user?.id ?? null;
+  return data?.claims.sub ?? null;
 }

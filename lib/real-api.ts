@@ -12,7 +12,7 @@
 import { ApiError } from "./api-error";
 import { getCluster } from "./clusters";
 import type { ClusterDetail, ClusterSong } from "./cluster-songs";
-import { fetchProfile, forgetMe, generatePortrait, getMyId, getPortrait, httpDb } from "./http-db";
+import { cached, fetchProfile, forgetMe, generatePortrait, getMyId, getPortrait, httpDb } from "./http-db";
 import { ME_ID } from "./mock-world";
 import type { Portrait } from "./portrait";
 import type { SongLayer, SongListener, SongStar } from "./song-layer";
@@ -202,9 +202,8 @@ export async function getConnections(): Promise<Connection[]> {
 
 /** Cached card, else generate one. "Not enough evidence" is a normal outcome, shown as a message, not a crash. */
 async function cardJsonFor(otherId: string): Promise<{ json: ConnectionCardJson; iAmA: boolean }> {
-  const myId = await getMyId();
-  const cached = await httpDb.getConnectionCard(otherId);
-  if (cached) return { json: cached.card_json, iAmA: cached.user_a === myId };
+  const [myId, stored] = await Promise.all([getMyId(), httpDb.getConnectionCard(otherId)]);
+  if (stored) return { json: stored.card_json, iAmA: stored.user_a === myId };
   const generated = await httpDb.generateConnectionCard(otherId);
   if (generated.status !== "match") throw new ApiError("There isn't a strong enough thread between you two yet.");
   return { json: generated.card, iAmA: myId < otherId };
@@ -349,10 +348,15 @@ type SongsResponse = {
 
 const NEW_WITHIN_DAYS = 7;
 
-async function fetchSongs(): Promise<SongsResponse> {
-  const res = await fetch("/api/galaxy/songs", { credentials: "same-origin" });
-  if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to see songs." : "The songs didn't load.");
-  return res.json() as Promise<SongsResponse>;
+/** Shared by the song layer and every cluster sheet opened soon after; cleared when my picks change. */
+const SONGS_TTL_MS = 30_000;
+
+function fetchSongs(): Promise<SongsResponse> {
+  return cached("galaxy-songs", SONGS_TTL_MS, async () => {
+    const res = await fetch("/api/galaxy/songs", { credentials: "same-origin" });
+    if (!res.ok) throw new ApiError(res.status === 401 ? "Sign in to see songs." : "The songs didn't load.");
+    return res.json() as Promise<SongsResponse>;
+  });
 }
 
 const songOf = (s: SongsResponse["songs"][number]): Song =>

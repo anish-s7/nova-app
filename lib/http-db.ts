@@ -39,6 +39,42 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 const post = <T>(path: string, body?: unknown) =>
   request<T>(path, { method: "POST", headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
 
+// --- short-lived read cache ------------------------------------------------------
+
+/**
+ * Reads that many views repeat within seconds: my profile (getMyId, picksOf("me"), getMe, …), each
+ * conversation partner's profile on every 2–4s Messages poll, a pair's card, the song layer. Shares
+ * in-flight requests and reuses answers for `ttlMs`. Failures aren't kept. Anything that changes
+ * what these return calls forgetCached (pick changes, card generation, sign-out).
+ */
+const readCache = new Map<string, { at: number; ttlMs: number; value: Promise<unknown> }>();
+
+export function cached<T>(key: string, ttlMs: number, load: () => Promise<T>): Promise<T> {
+  const hit = readCache.get(key);
+  if (hit && Date.now() - hit.at < hit.ttlMs) return hit.value as Promise<T>;
+  const value = load();
+  const entry = { at: Date.now(), ttlMs, value };
+  readCache.set(key, entry);
+  value.catch(() => {
+    if (readCache.get(key) === entry) readCache.delete(key);
+  });
+  return value;
+}
+
+/** Drops cached reads whose key starts with `prefix` (all of them by default). */
+export function forgetCached(prefix = "") {
+  for (const key of readCache.keys()) if (key.startsWith(prefix)) readCache.delete(key);
+}
+
+const PROFILE_TTL_MS = 30_000;
+const CARD_TTL_MS = 60_000;
+
+/** My picks changed: my profile, and the song layer built from everyone's picks, are stale. */
+function forgetMyPicks() {
+  forgetCached("profile:");
+  forgetCached("galaxy-songs");
+}
+
 // --- who am I -------------------------------------------------------------
 
 type ProfileResponse = {
@@ -60,7 +96,7 @@ let myIdPromise: Promise<string> | null = null;
 
 /** The signed-in user's profile id. Cached; cleared by forgetMe() on sign-out. */
 export function getMyId(): Promise<string> {
-  myIdPromise ??= request<ProfileResponse>("/api/profile?id=me")
+  myIdPromise ??= fetchProfile("me")
     .then((r) => r.profile.id)
     .catch((err) => {
       myIdPromise = null;
@@ -71,6 +107,7 @@ export function getMyId(): Promise<string> {
 
 export function forgetMe() {
   myIdPromise = null;
+  forgetCached();
 }
 
 const pair = (a: string, b: string): [string, string] => (a < b ? [a, b] : [b, a]);
@@ -92,9 +129,9 @@ function songRow(s: NonNullable<ProfileResponse["picks"][number]["songs"]>): Son
   };
 }
 
-/** Full profile response, including the parts of the row Db.getProfile drops (primary_cluster). */
+/** Full profile response, including the parts of the row Db.getProfile drops (primary_cluster). Cached briefly. */
 export function fetchProfile(id: string) {
-  return request<ProfileResponse>(profileUrl(id));
+  return cached(`profile:${id}`, PROFILE_TTL_MS, () => request<ProfileResponse>(profileUrl(id)));
 }
 
 // --- portrait (real mode only; not part of the Db contract) --------------------
@@ -143,19 +180,33 @@ export const httpDb: Db = {
     );
   },
 
-  insertPick: (pick) => post("/api/picks", pick),
+  async insertPick(pick) {
+    try {
+      return await post("/api/picks", pick);
+    } finally {
+      forgetMyPicks(); // even on an error: the server may have saved it before failing
+    }
+  },
 
   async updatePick(id, patch) {
-    const { pick } = await request<{ pick: SongPickRow }>("/api/picks", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, ...patch }),
-    });
-    return pick;
+    try {
+      const { pick } = await request<{ pick: SongPickRow }>("/api/picks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, ...patch }),
+      });
+      return pick;
+    } finally {
+      forgetMyPicks();
+    }
   },
 
   async deletePick(id) {
-    await request(`/api/picks?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    try {
+      await request(`/api/picks?id=${encodeURIComponent(id)}`, { method: "DELETE" });
+    } finally {
+      forgetMyPicks();
+    }
   },
 
   async getMatches(limit) {
@@ -164,13 +215,22 @@ export const httpDb: Db = {
   },
 
   async getConnectionCard(otherProfileId): Promise<ConnectionCardRow | null> {
-    const [me, res] = await Promise.all([getMyId(), request<{ status: string; card: ConnectionCardJson | null }>(`/api/cards/${encodeURIComponent(otherProfileId)}`)]);
+    const [me, res] = await Promise.all([
+      getMyId(),
+      cached(`card:${otherProfileId}`, CARD_TTL_MS, () => request<{ status: string; card: ConnectionCardJson | null }>(`/api/cards/${encodeURIComponent(otherProfileId)}`)),
+    ]);
     if (!res.card) return null;
     const [user_a, user_b] = pair(me, otherProfileId);
     return { id: `${user_a}:${user_b}`, user_a, user_b, card_json: res.card, created_at: "" };
   },
 
-  generateConnectionCard: (otherProfileId) => post(`/api/cards/${encodeURIComponent(otherProfileId)}`),
+  async generateConnectionCard(otherProfileId) {
+    try {
+      return await post(`/api/cards/${encodeURIComponent(otherProfileId)}`);
+    } finally {
+      forgetCached(`card:${otherProfileId}`);
+    }
+  },
 
   async wander(limit) {
     const [me, { wanders }] = await Promise.all([getMyId(), post<{ wanders: { profileId: string; displayName: string; card: ConnectionCardJson }[] }>("/api/wander")]);

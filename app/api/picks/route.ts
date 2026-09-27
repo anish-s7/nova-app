@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
 import { generateSongContext } from "@/lib/gemini/generateSongContext";
@@ -8,10 +8,30 @@ import { clampEmotionValue } from "@/lib/emotion";
 import { buildPickEmbedding } from "@/lib/matching/pickEmbedding";
 import { isValidTag } from "@/lib/tags";
 import { refreshPrimaryCluster } from "@/lib/matching/refreshPrimaryCluster";
+import { forgetGalaxyCandidates } from "@/lib/matching/galaxyWindow";
 import { parseVector } from "@/lib/supabase/vector";
 
 function fallbackKey(title: string, artist: string) {
   return `${title.trim().toLowerCase()}::${artist.trim().toLowerCase()}`;
+}
+
+/**
+ * After any pick change: drops this profile's shared galaxy pool now, so their next galaxy load
+ * sees the change, and keeps the galaxy label current once the response is sent: the pick is already saved, so the
+ * caller shouldn't wait on it, and a failure here must not fail the pick (the next pick, or the
+ * next galaxy load, recomputes it). Service-role client: primary_cluster is a derived label the
+ * backend writes, and the `authenticated` role can only update profiles.display_name.
+ */
+function refreshClusterAfterResponse(supabase: ReturnType<typeof createServerClient>, profileId: string, change: string) {
+  forgetGalaxyCandidates(profileId);
+  after(async () => {
+    try {
+      await refreshPrimaryCluster(supabase, profileId);
+    } catch (err) {
+      console.error(`refreshPrimaryCluster failed after pick ${change}:`, err);
+    }
+    forgetGalaxyCandidates(profileId); // a galaxy load during the refresh may have cached the old label
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -65,9 +85,10 @@ export async function POST(req: NextRequest) {
   let resolution: Awaited<ReturnType<typeof resolveSong>> = null;
   try {
     resolution = await resolveSong(title, artist);
-  } catch {
+  } catch (err) {
     // MusicBrainz being down/unreachable shouldn't block a pick — fall
     // through to the Gemini fallback path below.
+    console.error("MusicBrainz resolve failed, using the Gemini fallback:", err);
     resolution = null;
   }
 
@@ -84,13 +105,16 @@ export async function POST(req: NextRequest) {
   let song = existingSong;
 
   if (!song) {
-    // COMPLIANCE: only title/artist strings go to Gemini, never Spotify's
-    // API response or anything MusicBrainz-derived beyond the plain name.
-    const { contextSummary, embedding } = await generateSongContext(canonicalTitle, canonicalArtist);
     // The client's art is only trusted when it's Spotify's CDN (the import). Anything else, like the
     // mock catalog's local /covers/*.png paths, would be stored as a broken URL and skip the lookup.
     const trustedArt = albumArtUrl && /^https:\/\/i\.scdn\.co\//.test(albumArtUrl) ? albumArtUrl : null;
-    const coverArt = trustedArt ?? (await findCover(canonicalTitle, canonicalArtist, resolution?.releaseIds));
+    // Independent lookups, so they run side by side instead of Gemini then cover art.
+    // COMPLIANCE: only title/artist strings go to Gemini, never Spotify's
+    // API response or anything MusicBrainz-derived beyond the plain name.
+    const [{ contextSummary, embedding }, coverArt] = await Promise.all([
+      generateSongContext(canonicalTitle, canonicalArtist),
+      trustedArt ?? findCover(canonicalTitle, canonicalArtist, resolution?.releaseIds),
+    ]);
 
     const { data: inserted, error: insertError } = await supabase
       .from("songs")
@@ -140,34 +164,25 @@ export async function POST(req: NextRequest) {
   }
   const { pick, updated } = saved;
 
-  // Keep the galaxy label current. A failure here must not fail the pick, which is already saved:
-  // the next pick, or the next galaxy load, recomputes it.
-  // Service-role client: primary_cluster is a derived label the backend writes, and the
-  // `authenticated` role can only update profiles.display_name.
-  try {
-    await refreshPrimaryCluster(supabase, profileId);
-  } catch (err) {
-    console.error("refreshPrimaryCluster failed after pick insert:", err);
-  }
-
+  refreshClusterAfterResponse(supabase, profileId, "insert");
   return NextResponse.json({ song, pick, updated });
 }
 
 type Supabase = ReturnType<typeof createServerClient>;
 type Feelings = { tags: string[]; valence: number; energy: number; embedding: number[]; reason_text: string | null; is_public: boolean; updated_at: string };
 
-/** Updates the profile's existing pick for this song, or inserts one. Retries as an update if a concurrent save won the insert. */
+/**
+ * Updates the profile's existing pick for this song, or inserts one. Update first: a re-pick is then
+ * one round trip, and a new pick (the update matches no row) is two. Retries as an update if a
+ * concurrent save won the insert.
+ */
 async function savePick(supabase: Supabase, profileId: string, songId: string, feelings: Feelings) {
   const update = () =>
     supabase.from("song_picks").update(feelings).eq("profile_id", profileId).eq("song_id", songId).select().maybeSingle();
 
-  const { data: existing, error: findError } = await supabase.from("song_picks").select("id").eq("profile_id", profileId).eq("song_id", songId).maybeSingle();
-  if (findError) return { error: findError.message };
-
-  if (existing) {
-    const { data, error } = await update();
-    return error || !data ? { error: error?.message ?? "Couldn't update the pick" } : { pick: data, updated: true };
-  }
+  const { data: existing, error: updateError } = await update();
+  if (updateError) return { error: updateError.message };
+  if (existing) return { pick: existing, updated: true };
 
   const { data, error } = await supabase.from("song_picks").insert({ profile_id: profileId, song_id: songId, ...feelings }).select().single();
   if (error?.code === "23505") {
@@ -198,10 +213,11 @@ export async function PATCH(req: NextRequest) {
 
   const supabase = createServerClient();
   // Scoped to the caller's own picks: someone else's pick id simply isn't found.
-  const { data: existing, error: findError } = await supabase.from("song_picks").select("id, song_id").eq("id", id).eq("profile_id", profileId).maybeSingle();
+  // One read: the pick and its song's embedding together.
+  const { data: existing, error: findError } = await supabase.from("song_picks").select("id, songs(embedding)").eq("id", id).eq("profile_id", profileId).maybeSingle();
   if (findError) return NextResponse.json({ error: findError.message }, { status: 500 });
   if (!existing) return NextResponse.json({ error: "Pick not found" }, { status: 404 });
-  const { data: song } = await supabase.from("songs").select("embedding").eq("id", existing.song_id).maybeSingle();
+  const song = (existing as unknown as { songs: { embedding: string | number[] | null } | null }).songs;
   if (!song?.embedding) return NextResponse.json({ error: "Catalog song is missing an embedding" }, { status: 500 });
 
   const clampedValence = clampEmotionValue(valence ?? 0);
@@ -221,11 +237,7 @@ export async function PATCH(req: NextRequest) {
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  try {
-    await refreshPrimaryCluster(supabase, profileId);
-  } catch (err) {
-    console.error("refreshPrimaryCluster failed after pick update:", err);
-  }
+  refreshClusterAfterResponse(supabase, profileId, "update");
   return NextResponse.json({ pick });
 }
 
@@ -243,10 +255,6 @@ export async function DELETE(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data?.length) return NextResponse.json({ error: "Pick not found" }, { status: 404 });
 
-  try {
-    await refreshPrimaryCluster(supabase, profileId);
-  } catch (err) {
-    console.error("refreshPrimaryCluster failed after pick delete:", err);
-  }
+  refreshClusterAfterResponse(supabase, profileId, "delete");
   return NextResponse.json({ deleted: id });
 }

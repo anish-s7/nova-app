@@ -22,14 +22,30 @@ export interface MusicBrainzResolution {
 }
 
 let lastRequestAt = 0;
+let queue: Promise<void> = Promise.resolve();
 
-async function throttle() {
-  const elapsed = Date.now() - lastRequestAt;
-  if (elapsed < MIN_REQUEST_INTERVAL_MS) {
-    await new Promise((resolve) => setTimeout(resolve, MIN_REQUEST_INTERVAL_MS - elapsed));
-  }
-  lastRequestAt = Date.now();
+/** Waits for this caller's 1 req/sec slot. Chained, so concurrent callers queue instead of all reading the same lastRequestAt. */
+function throttle(): Promise<void> {
+  const slot = queue.then(async () => {
+    const elapsed = Date.now() - lastRequestAt;
+    if (elapsed < MIN_REQUEST_INTERVAL_MS) {
+      await new Promise((resolve) => setTimeout(resolve, MIN_REQUEST_INTERVAL_MS - elapsed));
+    }
+    lastRequestAt = Date.now();
+  });
+  queue = slot;
+  return slot;
 }
+
+/**
+ * Resolutions by typed title/artist, so re-saving a song (re-picks, "Add or change songs") skips the
+ * throttled MusicBrainz call, and repeat lookups get the same recording id instead of MusicBrainz's
+ * occasionally different one. In-memory only; a restart just re-asks. Failures aren't cached.
+ */
+const RESOLUTION_TTL_MS = 24 * 60 * 60 * 1000;
+const MAX_CACHED_RESOLUTIONS = 1000;
+const resolutions = new Map<string, { at: number; resolution: MusicBrainzResolution | null }>();
+const resolutionKey = (title: string, artist: string) => `${title.trim().toLowerCase()}::${artist.trim().toLowerCase()}`;
 
 interface MusicBrainzRecording {
   id: string;
@@ -52,6 +68,17 @@ interface MusicBrainzSearchResponse {
  * this per keystroke — resolve on submit only.
  */
 export async function resolveSong(title: string, artist: string): Promise<MusicBrainzResolution | null> {
+  const key = resolutionKey(title, artist);
+  const hit = resolutions.get(key);
+  if (hit && Date.now() - hit.at < RESOLUTION_TTL_MS) return hit.resolution;
+
+  const resolution = await searchRecording(title, artist);
+  if (resolutions.size >= MAX_CACHED_RESOLUTIONS) resolutions.delete(resolutions.keys().next().value!);
+  resolutions.set(key, { at: Date.now(), resolution });
+  return resolution;
+}
+
+async function searchRecording(title: string, artist: string): Promise<MusicBrainzResolution | null> {
   await throttle();
 
   const query = `recording:"${title.replace(/"/g, '\\"')}" AND artist:"${artist.replace(/"/g, '\\"')}"`;
@@ -102,14 +129,15 @@ export async function resolveSong(title: string, artist: string): Promise<MusicB
 export async function findCoverArtUrl(releaseIds: string[]): Promise<string | null> {
   for (const id of releaseIds.slice(0, 3)) {
     const url = `https://coverartarchive.org/release/${id}/front-250`;
-    for (let attempt = 0; attempt < 4; attempt++) {
+    // Bounded so a slow archive can't hold up a pick save: each probe times out, and at most 3 tries (≤3s of backoff).
+    for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const res = await fetch(url, { method: "HEAD", redirect: "manual" });
+        const res = await fetch(url, { method: "HEAD", redirect: "manual", signal: AbortSignal.timeout(4000) });
         if (res.status >= 300 && res.status < 400) return url;
         break; // a definite "no cover" answer; try the next release
       } catch (err) {
         console.error("Cover Art Archive lookup failed", id, err);
-        await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt)); // the archive drops connections under load; back off
+        if (attempt < 2) await new Promise((r) => setTimeout(r, 1000 * 2 ** attempt)); // the archive drops connections under load; back off
       }
     }
   }

@@ -83,12 +83,17 @@ async function newestPickChange(supabase: Client, profileId: string): Promise<st
  * when the profile has no public picks yet. Service-role client (the table has no user write grant).
  */
 export async function upsertPortrait(supabase: Client, profileId: string, { force = false } = {}): Promise<Portrait | null> {
-  const picks = (await loadPublicPicks(supabase, [profileId])).get(profileId) ?? [];
+  // Three independent reads, in one round of latency.
+  const [picksOf, picksUpdatedAt, stored] = await Promise.all([
+    loadPublicPicks(supabase, [profileId]),
+    newestPickChange(supabase, profileId),
+    force ? null : getPortraits(supabase, [profileId]),
+  ]);
+  const picks = picksOf.get(profileId) ?? [];
   if (picks.length === 0) return null;
 
-  const picksUpdatedAt = await newestPickChange(supabase, profileId);
   if (!force) {
-    const existing = (await getPortraits(supabase, [profileId])).get(profileId);
+    const existing = stored?.get(profileId);
     // Count alone misses edits and swaps (same number of picks), so also compare the newest change.
     if (existing && existing.pickCount === picks.length && existing.picksUpdatedAt === picksUpdatedAt) return existing.portrait;
   }

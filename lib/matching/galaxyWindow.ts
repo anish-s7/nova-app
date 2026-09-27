@@ -58,13 +58,41 @@ function diversityVector(tags: string[], valence: number, energy: number) {
 
 const day = () => Math.floor(Date.now() / 86_400_000);
 
-async function loadCandidates(profileId: string): Promise<{ candidates: Loaded[]; counts: Record<string, number> }> {
+type Candidates = { candidates: Loaded[]; counts: Record<string, number> };
+
+/**
+ * Candidate pools, shared for a few seconds. A galaxy page load asks for the window (/api/galaxy)
+ * and the song layer (/api/galaxy/songs, which rebuilds the same window) at once, and a hop reloads
+ * the viewer's own pool to check the target: all of those now share one load instead of repeating
+ * the cluster refresh and the three RPCs. Pick changes drop the author's entry (forgetGalaxyCandidates);
+ * everyone else's view of them catches up within the TTL.
+ */
+const CANDIDATES_TTL_MS = 10_000;
+const candidatesCache = new Map<string, { at: number; value: Promise<Candidates> }>();
+
+function loadCandidates(profileId: string): Promise<Candidates> {
+  const hit = candidatesCache.get(profileId);
+  if (hit && Date.now() - hit.at < CANDIDATES_TTL_MS) return hit.value;
+  for (const [id, entry] of candidatesCache) if (Date.now() - entry.at >= CANDIDATES_TTL_MS) candidatesCache.delete(id);
+
+  const value = loadCandidatesUncached(profileId);
+  candidatesCache.set(profileId, { at: Date.now(), value });
+  value.catch(() => candidatesCache.delete(profileId)); // don't cache a failure; the caller sees and handles it
+  return value;
+}
+
+/** Call after a profile's picks change, so their next galaxy load reflects it. */
+export function forgetGalaxyCandidates(profileId: string) {
+  candidatesCache.delete(profileId);
+}
+
+async function loadCandidatesUncached(profileId: string): Promise<Candidates> {
   const supabase = createServerClient();
 
-  // Profiles that predate primary_cluster get theirs here, so the viewer is never 'unassigned' in their own galaxy.
-  await refreshPrimaryCluster(supabase, profileId).catch((err) => console.error("refreshPrimaryCluster failed on galaxy load:", err));
-
-  const [pool, counts, far] = await Promise.all([
+  const [, pool, counts, far] = await Promise.all([
+    // Keeps this profile's topic cluster current. Runs alongside the RPCs: galaxy_pool and
+    // galaxy_cluster_counts both exclude this profile, so nothing below reads the value it writes.
+    refreshPrimaryCluster(supabase, profileId).catch((err) => console.error("refreshPrimaryCluster failed on galaxy load:", err)),
     supabase.rpc("galaxy_pool", { target_profile_id: profileId }),
     supabase.rpc("galaxy_cluster_counts", { target_profile_id: profileId }),
     // Ambient far stars come from Wander's retrieval (same song, far apart in feeling), without the LLM step.
@@ -143,9 +171,15 @@ const YOUR_EDGES = 12;
 
 export async function getGalaxyWindow(viewerId: string, limit = DEFAULT_BUDGET, centerId?: string): Promise<GalaxyWindow> {
   const hopped = !!centerId && centerId !== viewerId;
-  const yours = hopped ? await assertHopAllowed(viewerId, centerId) : undefined;
   const profileId = hopped ? centerId : viewerId;
-  const { candidates, counts } = await loadCandidates(profileId);
+  const anchors = hopped ? [profileId, viewerId] : [profileId];
+  // The hop check, the centered pool and the anchor rows are independent: one round of latency, not three.
+  // A rejected hop still throws before anything is returned.
+  const [yours, { candidates, counts }, { data: anchorRows }] = await Promise.all([
+    hopped ? assertHopAllowed(viewerId, centerId) : undefined,
+    loadCandidates(profileId),
+    createServerClient().from("profiles").select("id, display_name, primary_cluster").in("id", anchors),
+  ]);
   const sample = sampleGalaxy(candidates, { budget: limit, seed: `${profileId}:${day()}` });
   const drawn = candidates.filter((c) => sample.ids.includes(c.id));
   const hidden = hiddenAfter(counts, drawn);
@@ -164,8 +198,6 @@ export async function getGalaxyWindow(viewerId: string, limit = DEFAULT_BUDGET, 
   // its own node — without it the client has no "you" star and drops every edge from you. Hopped: the
   // viewer's anchor needs one too.
   const extra: WindowNode[] = [];
-  const anchors = hopped ? [profileId, viewerId] : [profileId];
-  const { data: anchorRows } = await createServerClient().from("profiles").select("id, display_name, primary_cluster").in("id", anchors);
   for (const id of anchors) {
     const row = anchorRows?.find((r) => r.id === id);
     if (row && !drawn.some((c) => c.id === id)) extra.push({ profileId: id, displayName: row.display_name, cluster: row.primary_cluster ?? "unassigned", far: false });
@@ -184,9 +216,8 @@ export async function getGalaxyWindow(viewerId: string, limit = DEFAULT_BUDGET, 
 /** "More here": the next `step` people in `cluster`, after the `have` already revealed. Ranks at most the pool, not the whole cluster. */
 export async function getGalaxyMoreWindow(viewerId: string, cluster: string, have: number, step = 40, limit = DEFAULT_BUDGET, centerId?: string): Promise<GalaxyMoreWindow> {
   const hopped = !!centerId && centerId !== viewerId;
-  const yours = hopped ? await assertHopAllowed(viewerId, centerId) : undefined;
   const profileId = hopped ? centerId : viewerId;
-  const { candidates } = await loadCandidates(profileId);
+  const [yours, { candidates }] = await Promise.all([hopped ? assertHopAllowed(viewerId, centerId) : undefined, loadCandidates(profileId)]);
   const sample = sampleGalaxy(candidates, { budget: limit, seed: `${profileId}:${day()}` });
   const order = expandOrder(candidates, new Set(sample.ids), cluster);
   const page = order.slice(have, have + step) as Loaded[];

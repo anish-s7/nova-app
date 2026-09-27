@@ -24,10 +24,11 @@ export async function updateSession(request: NextRequest) {
     },
   });
 
-  // getUser() revalidates with Supabase Auth, so a forged cookie can't pass.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // getClaims() refreshes an expiring session and verifies the JWT signature, so a forged cookie
+  // can't pass. With asymmetric signing keys it's a local check (cached JWKS) instead of getUser()'s
+  // round trip to Supabase Auth on every request, API calls included.
+  const { data } = await supabase.auth.getClaims();
+  const user = data?.claims.sub ? { id: data.claims.sub } : null;
 
   return { response, user };
 }
