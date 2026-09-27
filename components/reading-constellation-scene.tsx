@@ -73,8 +73,15 @@ type Anim = ReturnType<typeof animate>;
 function Scene({ songs, step, highlightCount, converging }: ReadingConstellationSceneProps) {
   const { invalidate } = useThree();
   const positions = useMemo(() => layout3D(songs.length), [songs.length]);
-  const colors = useMemo(() => songs.map(starColor), [songs]);
-  const names = useMemo(() => songs.map((s) => (s.title.length > 24 ? `${s.title.slice(0, 23)}…` : s.title)), [songs]);
+  // Keyed on which songs these are, not the array: the parent passes a fresh array on every render
+  // (e.g. each time a song finishes saving mid-animation). Keying on the array rebuilt every star and
+  // label sprite at opacity 0, and the once-only kindle animation below never reached the new ones,
+  // so the stars and titles vanished while the reading was still in progress.
+  const songKey = songs.map((s) => `${s.id}\u0000${s.title}`).join("\u0001");
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- songKey captures everything read from songs
+  const colors = useMemo(() => songs.map(starColor), [songKey]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- songKey captures everything read from songs
+  const names = useMemo(() => songs.map((s) => (s.title.length > 24 ? `${s.title.slice(0, 23)}…` : s.title)), [songKey]);
   const glow = useMemo(() => glowTexture(), []);
   useEffect(() => () => glow.dispose(), [glow]);
 
