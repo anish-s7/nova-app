@@ -18,7 +18,7 @@ export function BottomTabBar() {
 
   return (
     <nav aria-label="Primary" className="relative z-20 shrink-0 border-t border-white/10 bg-background pb-[env(safe-area-inset-bottom)]">
-      <ul className="flex">
+      <ul className="flex lg:mx-auto lg:max-w-[720px]">
         {TABS.map(({ href, label, icon: Icon }, i) => {
           const active = i === activeIndex;
           return (

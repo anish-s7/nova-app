@@ -53,7 +53,7 @@ export function BottomSheet({
         aria-label={label}
         tabIndex={-1}
         className={cn(
-          "absolute inset-x-0 bottom-0 border-t border-white/10 bg-popover px-5 pb-6 pt-3 outline-none transition-transform duration-300 ease-out",
+          "absolute inset-x-0 bottom-0 border-t border-white/10 bg-popover px-5 pb-6 pt-3 outline-none transition-transform duration-300 ease-out lg:mx-auto lg:max-w-[640px] lg:border-x",
           open ? "pointer-events-auto" : "translate-y-full",
           open && !minimized && "translate-y-0",
           open && minimized && "translate-y-[calc(100%-4.75rem)]",
