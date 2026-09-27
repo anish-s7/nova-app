@@ -361,7 +361,7 @@ export default function GalaxyPage() {
         <p className="pointer-events-none relative z-10 mx-4 mt-2 text-xs text-muted-foreground">{mode === "songs" ? "Every star is a song. Brighter means more people share it." : "Drag to explore, pinch to zoom, tap a person."}</p>
       ) : null}
 
-      <div className="pointer-events-none relative z-10 mt-auto flex items-end gap-2 p-4">
+      <div className="pointer-events-none relative z-10 mt-auto flex items-end gap-2 p-4 lg:pb-24">
         {data && mode === "songs" ? (
           <section aria-labelledby="songs-heading" className="pointer-events-auto min-w-0 flex-1 border border-white/10 bg-background/90 px-3 pb-2 pt-2.5 lg:w-[420px] lg:flex-none lg:bg-background/75 lg:backdrop-blur">
             <h2 id="songs-heading" className="px-1 text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
@@ -424,7 +424,7 @@ export default function GalaxyPage() {
             setWandering(true);
           }}
           aria-label="Wander: find someone who hears your songs differently"
-          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center border border-white/10 bg-background/90 hover:bg-background"
+          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-background/60 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150 transition-[transform,background-color] duration-150 hover:bg-background/80 active:scale-90"
         >
           <Compass className="size-5" aria-hidden />
         </button>
@@ -432,7 +432,7 @@ export default function GalaxyPage() {
           type="button"
           onClick={() => setAdding({ songId: null })}
           aria-label="Add a song"
-          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center border border-primary/50 bg-primary/15 text-primary hover:bg-primary/25"
+          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-[0_8px_24px_-6px] shadow-primary/50 transition-transform duration-150 hover:brightness-110 active:scale-90"
         >
           <Plus className="size-5" aria-hidden />
         </button>
@@ -445,7 +445,7 @@ export default function GalaxyPage() {
             apiRef.current?.recenter();
           }}
           aria-label="Recenter on the whole galaxy"
-          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center border border-white/10 bg-background/90 hover:bg-background"
+          className="pointer-events-auto inline-flex size-12 shrink-0 items-center justify-center rounded-full border border-white/10 bg-background/60 shadow-[0_8px_24px_-6px_rgba(0,0,0,0.6)] backdrop-blur-xl backdrop-saturate-150 transition-[transform,background-color] duration-150 hover:bg-background/80 active:scale-90"
         >
           <LocateFixed className="size-5" aria-hidden />
         </button>
