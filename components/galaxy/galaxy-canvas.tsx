@@ -48,7 +48,12 @@ export function GalaxyCanvas({ nodes, edges, arrivals = [], className, songs = [
     () => (arrangement === "home" ? computeHomeLayout(nodes, edges, destinations) : computeLayout(nodes, edges)),
     [arrangement, nodes, edges, destinations],
   );
-  const extra = useMemo(() => arrivals.map((a) => placeArrival(layout, a.node, a.edges)), [arrivals, layout]);
+  // Placed sequentially (not .map) so a later arrival in the same batch sees earlier ones as occupied space.
+  const extra = useMemo(() => {
+    const placed: ReturnType<typeof placeArrival>[] = [];
+    for (const a of arrivals) placed.push(placeArrival(layout, a.node, a.edges, placed));
+    return placed;
+  }, [arrivals, layout]);
   const songPoints = useMemo(() => placeSongs(layout, songs.map((s) => ({ id: s.id, cluster: s.cluster, listenerIds: s.listeners.map((l) => l.id) })), extra), [layout, songs, extra]);
   const songNodes = useMemo(
     () =>

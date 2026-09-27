@@ -1,5 +1,6 @@
 import { forceLink, forceManyBody, forceSimulation, forceX, forceY, forceZ, type SimNode } from "d3-force-3d";
-import { CLUSTER_IDS } from "./clusters";
+import { CLUSTER_IDS, type ClusterId } from "./clusters";
+import { shapeSlot, SHAPE_SCALE } from "./constellation-shapes";
 import type { GalaxyEdge, GalaxyNode } from "./types";
 import { topTwo } from "./why-mix";
 
@@ -27,6 +28,45 @@ function hash(s: string) {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return h >>> 0;
+}
+
+type Vec3 = { x: number; y: number; z: number };
+const v_sub = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x - b.x, y: a.y - b.y, z: a.z - b.z });
+const v_add = (a: Vec3, b: Vec3): Vec3 => ({ x: a.x + b.x, y: a.y + b.y, z: a.z + b.z });
+const v_scale = (a: Vec3, k: number): Vec3 => ({ x: a.x * k, y: a.y * k, z: a.z * k });
+const v_len = (a: Vec3) => Math.hypot(a.x, a.y, a.z);
+const v_dist = (a: Vec3, b: Vec3) => v_len(v_sub(a, b));
+const v_norm = (a: Vec3): Vec3 => v_scale(a, 1 / (v_len(a) || 1));
+const v_cross = (a: Vec3, b: Vec3): Vec3 => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
+
+/** Two unit directions perpendicular to `n` (and to each other), for laying a flat shape out around it. */
+function perpAxes(n: Vec3): [Vec3, Vec3] {
+  const dir = v_norm(n);
+  const up: Vec3 = Math.abs(dir.y) < 0.9 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+  const u = v_norm(v_cross(dir, up));
+  return [u, v_norm(v_cross(dir, u))];
+}
+
+/**
+ * The offset (from a cluster's local center) of its constellation's slot `index`, oriented by
+ * `facing` — a fixed direction per cluster, so the same shape always sits the same way up
+ * regardless of which layout (real galaxy, home view) is placing it or how many members it has.
+ */
+function shapeOffsetFor(cluster: ClusterId, index: number, facing: Vec3): Vec3 {
+  const [u, w] = perpAxes(facing);
+  const slot = shapeSlot(cluster, index);
+  return v_add(v_scale(u, slot.x * SHAPE_SCALE), v_scale(w, slot.y * SHAPE_SCALE));
+}
+
+/** Stable per-cluster ordering (by hash, not join time) so the same members always claim the same slots. */
+function clusterSlotIndex(nodes: Pick<GalaxyNode, "userId" | "cluster">[]): Map<string, number> {
+  const byCluster = new Map<string, typeof nodes>();
+  for (const n of nodes) byCluster.set(n.cluster, [...(byCluster.get(n.cluster) ?? []), n]);
+  const out = new Map<string, number>();
+  for (const group of byCluster.values()) {
+    [...group].sort((a, b) => hash(a.userId) - hash(b.userId)).forEach((n, i) => out.set(n.userId, i));
+  }
+  return out;
 }
 
 function anchor(cluster: string) {
@@ -77,9 +117,17 @@ export function computeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[]): Layout 
   if (hit) return hit;
 
   const rand = seeded(hash(key));
+  const slotIndex = clusterSlotIndex(nodes);
   const simNodes: N[] = nodes.map((n) => {
     const a = nodeAnchor(n);
-    return { id: n.userId, cluster: n.cluster, ax: a.x, ay: a.y, az: a.z, x: a.x + (rand() - 0.5) * 16, y: a.y + (rand() - 0.5) * 16, z: a.z + (rand() - 0.5) * 16 };
+    // Everyone in a cluster fills a slot in its constellation (see lib/constellation-shapes.ts),
+    // so the region resolves into that recognizable shape as it fills rather than growing shapeless.
+    const facing = anchor(n.cluster);
+    const offset = shapeOffsetFor(n.cluster as ClusterId, slotIndex.get(n.userId) ?? 0, facing);
+    const ax = a.x + offset.x;
+    const ay = a.y + offset.y;
+    const az = a.z + offset.z;
+    return { id: n.userId, cluster: n.cluster, ax, ay, az, x: ax + (rand() - 0.5) * 4, y: ay + (rand() - 0.5) * 4, z: az + (rand() - 0.5) * 4 };
   });
   const ids = new Set(simNodes.map((n) => n.id));
   const links: L[] = edges
@@ -212,15 +260,31 @@ export function computeHomeLayout(nodes: GalaxyNode[], edges: GalaxyEdge[] = [],
   return { points, radius: NEARBY_RING + 3, destinations: dests };
 }
 
-/** New arrivals are placed next to their most similar neighbor without re-running the layout. */
-export function placeArrival(layout: Layout, node: GalaxyNode, edges: GalaxyEdge[]): LayoutPoint {
-  const best = [...edges]
-    .sort((a, b) => b.similarity - a.similarity)
-    .map((e) => layout.points.get(e.source === node.userId ? e.target : e.source))
-    .find(Boolean);
-  const base = best ?? { x: 0, y: 0, z: 0 };
-  const a = (hash(node.userId) % 360) * (Math.PI / 180);
-  return { id: node.userId, cluster: node.cluster, x: base.x + Math.cos(a) * 2.6, y: base.y + Math.sin(a) * 2.6, z: base.z + 0.5 };
+// --- Constellation-growth placement (arrivals + songs) --------------------------------------
+//
+// A new star doesn't grow an open-ended branch off whoever it matched — it fills the next slot
+// in its cluster's constellation (lib/constellation-shapes.ts), the same shape every member of
+// that cluster is filling. So the region always has a specific, recognizable pattern it's
+// building toward, and it gets more legible as it fills rather than sprawling indefinitely.
+
+const MIN_CLEARANCE = 1.6;
+
+/** New arrivals take the next unfilled slot in their cluster's constellation, without re-running the layout. */
+export function placeArrival(layout: Layout, node: GalaxyNode, _edges: GalaxyEdge[], occupiedExtra: LayoutPoint[] = []): LayoutPoint {
+  const cluster = node.cluster as ClusterId;
+  const clusterPoints = [...layout.points.values(), ...occupiedExtra].filter((p) => p.cluster === node.cluster);
+
+  // The shape's current center in *this* layout (real galaxy or home view — whichever placed it),
+  // and its facing, which stays fixed per cluster so the same shape is always the same way up.
+  const center = clusterPoints.length
+    ? v_scale(clusterPoints.reduce((a, p) => v_add(a, p), { x: 0, y: 0, z: 0 }), 1 / clusterPoints.length)
+    : anchor(cluster);
+  const facing = anchor(cluster);
+  const offset = shapeOffsetFor(cluster, clusterPoints.length, facing);
+
+  const rand = seeded(hash(node.userId));
+  const point = v_add(center, v_add(offset, { x: (rand() - 0.5) * 0.5, y: (rand() - 0.5) * 0.5, z: (rand() - 0.5) * 0.8 }));
+  return { id: node.userId, cluster: node.cluster, x: point.x, y: point.y, z: point.z };
 }
 
 /**
@@ -237,7 +301,9 @@ export function placeSongs(layout: Layout, stars: { id: string; cluster: string;
     y: all.reduce((a, p) => a + p.y, 0) / Math.max(1, all.length),
     z: all.reduce((a, p) => a + p.z, 0) / Math.max(1, all.length),
   };
-  return stars.map((s) => {
+  const occupied: Vec3[] = [...all];
+  const placed: LayoutPoint[] = [];
+  for (const s of stars) {
     const ps = s.listenerIds.map((id) => people.get(id)).filter((p): p is LayoutPoint => !!p);
     const c = ps.length
       ? { x: ps.reduce((a, p) => a + p.x, 0) / ps.length, y: ps.reduce((a, p) => a + p.y, 0) / ps.length, z: ps.reduce((a, p) => a + p.z, 0) / ps.length }
@@ -246,14 +312,20 @@ export function placeSongs(layout: Layout, stars: { id: string; cluster: string;
     const dy = c.y - mean.y;
     const dz = c.z - mean.z;
     const len = Math.hypot(dx, dy, dz) || 1;
+    const dir = { x: dx / len, y: dy / len, z: dz / len };
     const rand = seeded(hash(s.id));
-    const push = 2.2;
-    return {
-      id: `song:${s.id}`,
-      cluster: s.cluster,
-      x: c.x + (dx / len) * push + (rand() - 0.5) * 4,
-      y: c.y + (dy / len) * push + (rand() - 0.5) * 4,
-      z: c.z + (dz / len) * push + (rand() - 0.5) * 4,
-    };
-  });
+    const jitter = { x: (rand() - 0.5) * 4, y: (rand() - 0.5) * 4, z: (rand() - 0.5) * 4 };
+
+    // Extend further out along the same listener-to-mean vector if the spot is crowded — moving a song
+    // sideways (a new random direction) would sever the visual line to why it's placed there at all.
+    let point = { x: 0, y: 0, z: 0 };
+    for (const push of [2.2, 3.2, 4.2, 5.2, 6.2]) {
+      point = { x: c.x + dir.x * push + jitter.x, y: c.y + dir.y * push + jitter.y, z: c.z + dir.z * push + jitter.z };
+      if (!occupied.some((o) => v_dist(point, o) < MIN_CLEARANCE)) break;
+    }
+
+    occupied.push(point);
+    placed.push({ id: `song:${s.id}`, cluster: s.cluster, x: point.x, y: point.y, z: point.z });
+  }
+  return placed;
 }

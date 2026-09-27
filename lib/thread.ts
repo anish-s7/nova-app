@@ -7,6 +7,15 @@ import type { Message, Song } from "./types";
 /** From this many songs traded, the thread to someone glows in the galaxy. */
 export const BOND_AT = 3;
 
+/**
+ * How bold a thread's line should look, 0 (barely there) .. 1 (fully lit) — continuous with
+ * every swap, not a step at `BOND_AT`. Reaches half strength right at `BOND_AT` (so "bonded"
+ * still lands on a meaningful point on the curve) and caps out at twice that many songs.
+ */
+export function threadBoldness(count: number): number {
+  return Math.min(1, count / (BOND_AT * 2));
+}
+
 export type ThreadEntry = { swapId: string; song: Song; reason: string; fromMe: boolean; sentAt: string };
 
 export type Thread = {

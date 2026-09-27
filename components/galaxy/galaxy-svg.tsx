@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { topTwo } from "@/lib/why-mix";
 import { getCluster } from "@/lib/clusters";
 import type { LayoutPoint } from "@/lib/galaxy-layout";
-import { BOND_AT } from "@/lib/thread";
+import { threadBoldness } from "@/lib/thread";
 import { cn } from "@/lib/utils";
 import type { GalaxyViewProps } from "./types";
 
@@ -175,8 +175,21 @@ export function GalaxySvg({
             const a = points.get(meId)!;
             const b = points.get(t.userId);
             if (!b) return null;
-            const bonded = t.count >= BOND_AT;
-            return <line key={`thread-${t.userId}`} x1={a.x} y1={-a.y} x2={b.x} y2={-b.y} stroke={getCluster(clusterOf.get(t.userId) ?? "").color} strokeWidth={bonded ? 0.35 : 0.1} opacity={bonded ? 0.9 : 0.25} strokeLinecap="round" />;
+            // Bolder with every song traded (lib/thread.ts's threadBoldness), not a step at BOND_AT.
+            const boldness = threadBoldness(t.count);
+            return (
+              <line
+                key={`thread-${t.userId}`}
+                x1={a.x}
+                y1={-a.y}
+                x2={b.x}
+                y2={-b.y}
+                stroke={getCluster(clusterOf.get(t.userId) ?? "").color}
+                strokeWidth={0.1 + boldness * 0.25}
+                opacity={0.25 + boldness * 0.65}
+                strokeLinecap="round"
+              />
+            );
           })
         : null}
       {nodes.map((n) => {
