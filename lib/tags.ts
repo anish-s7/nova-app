@@ -24,7 +24,7 @@ export function isValidTag(value: string): value is Tag {
   return (TAGS as readonly string[]).includes(value);
 }
 
-/** A tag written for one specific song (2–4 words), with the listening reason (cluster) it expresses. */
+/** A tag written for one specific song (1–2 words), with the listening reason (cluster) it expresses. */
 export type SongTag = { label: string; why: ClusterId };
 
 /** Most tags a pick can carry. */

@@ -9,11 +9,13 @@ const SYSTEM_INSTRUCTION = `You write the tags people choose from to say what on
 Given a song title and artist, write 6 tags.
 
 Each tag:
-- 2 to 4 words, lowercase, no punctuation, no emoji.
+- 1 or 2 words. Never more than 2. Lowercase, no punctuation, no emoji. People glance
+  at these, they don't read them: think "frozen roads", "feeling small", "parents
+  aging", "taxi spiral", not a phrase or a sentence.
 - Specific to THIS song: its story, images, moment or feeling as people actually live
   it. Someone who knows the song should recognize it; it should not fit most songs.
-- Something a listener could say about themselves ("coming home changed", "driving
-  past her street", "pretending im fine"), not a review ("beautiful vocals", "great beat").
+- About the listener's moment or feeling ("coming home", "her street", "faking fine"),
+  not a review of the sound ("gentle guitar", "great beat", "soft vocals").
 - Never generic moods or situations: not "late night", "sad", "chill", "happy",
   "workout", "study", "vibes", "nostalgia", "heartbreak", "road trip", "love song".
 - Never the song title, the artist, the genre, or the era.
@@ -62,7 +64,7 @@ function sanitize(raw: { tags?: { label?: string; why?: string }[] }, title: str
       .replace(/\s+/g, " ")
       .trim();
     const words = label.split(" ").filter(Boolean).length;
-    if (!label || words < 1 || words > 5 || label.length > 32) continue;
+    if (!label || words < 1 || words > 2 || label.length > 20) continue;
     if (BANNED.has(label) || label === titleLower || label === artistLower || seen.has(label)) continue;
     if (!(CLUSTER_IDS as readonly string[]).includes(t.why ?? "")) continue;
     seen.add(label);
