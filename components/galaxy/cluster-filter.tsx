@@ -2,10 +2,10 @@
 
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import { Check, ChevronDown, Sparkles } from "lucide-react";
-import { getCluster } from "@/lib/clusters";
-import type { GalaxyNode } from "@/lib/types";
+import { getCluster } from "@/lib/galaxy/clusters";
+import type { GalaxyNode } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
-import { ClusterStar } from "@/components/cluster-star";
+import { ClusterStar } from "@/components/common/cluster-star";
 
 const compact = (n: number) => (n >= 10_000 ? `${Math.round(n / 1000)}k` : n.toLocaleString());
 

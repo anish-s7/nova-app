@@ -1,5 +1,5 @@
 import { AuthForm } from "@/components/auth/auth-form";
-import { safeNextPath } from "@/lib/safe-next";
+import { safeNextPath } from "@/lib/auth/safe-next";
 
 export default async function LoginPage({ searchParams }: PageProps<"/login">) {
   const { next, error, notice } = await searchParams;

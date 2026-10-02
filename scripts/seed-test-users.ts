@@ -17,14 +17,14 @@
 import { createServerClient } from "../lib/supabase/server";
 import { resolveSong } from "../lib/musicbrainz/client";
 import { generateSongContext } from "../lib/gemini/generateSongContext";
-import { findCover } from "../lib/cover-art";
+import { findCover } from "../lib/music/cover-art";
 import { buildPickEmbedding } from "../lib/matching/pickEmbedding";
-import { clampEmotionValue } from "../lib/emotion";
+import { clampEmotionValue } from "../lib/music/emotion";
 import { refreshPrimaryCluster } from "../lib/matching/refreshPrimaryCluster";
 import { upsertPortrait } from "../lib/matching/portraits";
 import { parseVector } from "../lib/supabase/vector";
-import { isValidTag } from "../lib/tags";
-import type { ClusterId } from "../lib/clusters";
+import { isValidTag } from "../lib/music/tags";
+import type { ClusterId } from "../lib/galaxy/clusters";
 
 export const TEST_DOMAIN = "test.song-galaxy.local";
 const PASSWORD = process.env.SEED_DEMO_PASSWORD ?? "";

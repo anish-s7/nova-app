@@ -3,11 +3,11 @@
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { animate, splitText, stagger } from "animejs";
-import { LandingStarfield } from "@/components/landing-starfield";
-import { Logo } from "@/components/logo";
+import { LandingStarfield } from "@/components/common/landing-starfield";
+import { Logo } from "@/components/common/logo";
 import { buttonVariants } from "@/components/ui/button";
 import { useAnime } from "@/hooks/use-anime";
-import { useSession } from "@/lib/session";
+import { useSession } from "@/lib/data/session";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 import { cn } from "@/lib/utils";
 

@@ -1,6 +1,6 @@
 /**
  * One-off: moves the demo personas' picks (…@song-galaxy.local) from the original situation tags
- * ("late night", "comfort", …) to the feeling tags (lib/tags.ts). The seed gave every song in a
+ * ("late night", "comfort", …) to the feeling tags (lib/music/tags.ts). The seed gave every song in a
  * group the same tags and dot, so a mechanical swap would give Noor six identical "fearless" songs:
  * feelings are hand-picked per song (HAND_PICKED) to fit how each song actually feels. Anything not
  * listed falls back to: each old tag → the closest feeling (to the pick's dot) in the listening
@@ -12,11 +12,11 @@
  * After --apply it refreshes each persona's cluster and portrait (portraits notice the edit).
  */
 import { createServerClient } from "../lib/supabase/server";
-import { TAG_WEIGHTS } from "../lib/cluster-assign";
+import { TAG_WEIGHTS } from "../lib/galaxy/cluster-assign";
 import { refreshPrimaryCluster } from "../lib/matching/refreshPrimaryCluster";
 import { upsertPortrait } from "../lib/matching/portraits";
-import { FEELINGS, MAX_PICK_TAGS, TAGS, type Tag } from "../lib/tags";
-import type { ClusterId } from "../lib/clusters";
+import { FEELINGS, MAX_PICK_TAGS, TAGS, type Tag } from "../lib/music/tags";
+import type { ClusterId } from "../lib/galaxy/clusters";
 
 const apply = process.argv.includes("--apply");
 

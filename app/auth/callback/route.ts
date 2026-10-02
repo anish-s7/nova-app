@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { createSessionClient } from "@/lib/supabase/serverAuth";
-import { safeNextPath } from "@/lib/safe-next";
+import { safeNextPath } from "@/lib/auth/safe-next";
 
 /**
  * Where Google sign-in (and email confirmation links) land after Supabase finishes

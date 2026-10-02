@@ -4,7 +4,7 @@ import { isMissingTable } from "@/lib/supabase/missing-table";
 
 /**
  * Every topic cluster (label/short/description/color), keyed by every id that ever pointed to it —
- * for `ClusterCacheProvider` (components/cluster-cache-provider.tsx) to prime lib/clusters.ts's
+ * for `ClusterCacheProvider` (components/layout/cluster-cache-provider.tsx) to prime lib/galaxy/clusters.ts's
  * cache with. A retired row (superseded_by set, e.g. after a merge in
  * scripts/recompute-topic-clusters.ts) is resolved here to its live successor's label/short/
  * description/color, still under its own (retired) id — so a stored portrait's
@@ -19,7 +19,7 @@ export async function GET() {
 
   const supabase = await createSessionClient();
   const { data, error } = await supabase.from("topic_clusters").select("id, label, short, description, color, superseded_by");
-  // Migration not applied yet: no rows, so the client keeps lib/clusters.ts's five static clusters.
+  // Migration not applied yet: no rows, so the client keeps lib/galaxy/clusters.ts's five static clusters.
   if (isMissingTable(error)) return NextResponse.json([]);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 

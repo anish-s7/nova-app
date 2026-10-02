@@ -8,7 +8,7 @@ import { GalaxySkeleton } from "@/components/galaxy/galaxy-canvas";
 import { GalaxySvg } from "@/components/galaxy/galaxy-svg";
 import type { GalaxyApi } from "@/components/galaxy/types";
 import { useReducedMotion, useWebGL } from "@/hooks/use-capabilities";
-import { CLUSTER_IDS, CLUSTERS } from "@/lib/clusters";
+import { CLUSTER_IDS, CLUSTERS } from "@/lib/galaxy/clusters";
 import {
   EVENT_LABELS,
   PRESETS,

@@ -8,7 +8,7 @@
  * Sequential: MusicBrainz allows 1 request/second.
  */
 import { createServerClient } from "../lib/supabase/server";
-import { findCover } from "../lib/cover-art";
+import { findCover } from "../lib/music/cover-art";
 
 const MB = "https://musicbrainz.org/ws/2/recording/";
 

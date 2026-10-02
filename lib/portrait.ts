@@ -9,7 +9,7 @@ export type SongRef = { title: string; artist: string };
 export type PortraitMotivation = {
   label: string;
   description: string;
-  /** One of lib/clusters.ts CLUSTER_IDS. */
+  /** One of lib/galaxy/clusters.ts CLUSTER_IDS. */
   cluster: string;
   /** 0..1 */
   confidence: number;

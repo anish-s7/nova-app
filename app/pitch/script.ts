@@ -1,6 +1,6 @@
 import type { GalaxyDestination } from "@/components/galaxy/types";
-import type { ClusterId } from "@/lib/clusters";
-import type { GalaxyEdge, GalaxyNode, Song } from "@/lib/types";
+import type { ClusterId } from "@/lib/galaxy/clusters";
+import type { GalaxyEdge, GalaxyNode, Song } from "@/lib/data/types";
 
 /**
  * Everything /pitch shows, scripted. Fictional people, real song titles as plain metadata.

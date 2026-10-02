@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { primaryClusterFor } from "../cluster-assign";
+import { primaryClusterFor } from "../galaxy/cluster-assign";
 import { assignNearestCluster } from "./assignTopicCluster";
 import { topicVectorFor } from "./topicClusterVector";
 import { isMissingTable } from "../supabase/missing-table";

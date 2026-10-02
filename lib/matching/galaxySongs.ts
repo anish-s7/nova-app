@@ -1,5 +1,5 @@
 import { createServerClient } from "../supabase/server";
-import { pickWhy } from "../cluster-assign";
+import { pickWhy } from "../galaxy/cluster-assign";
 import { getGalaxyWindow } from "./galaxyWindow";
 
 /**

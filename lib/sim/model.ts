@@ -1,8 +1,8 @@
-import { CLUSTER_IDS, type ClusterId } from "@/lib/clusters";
-import { clampEmotionValue } from "@/lib/emotion";
-import { SONG_CATALOG, SONG_CONTEXT } from "@/lib/music-context";
-import { TAGS } from "@/lib/tags";
-import type { Song } from "@/lib/types";
+import { CLUSTER_IDS, type ClusterId } from "@/lib/galaxy/clusters";
+import { clampEmotionValue } from "@/lib/music/emotion";
+import { SONG_CATALOG, SONG_CONTEXT } from "@/lib/music/music-context";
+import { TAGS } from "@/lib/music/tags";
+import type { Song } from "@/lib/data/types";
 import data from "./song-vectors.json";
 
 /**
@@ -129,7 +129,7 @@ export function pairMatch(a: SimUser, b: SimUser): PairMatch {
  * The production formula, tried inside the simulated world. Each pick becomes the vector
  * [song embedding, EMOTION_WEIGHT x (valence, energy)] and two people are as close as their
  * closest pair of picks are by cosine, which is what the pgvector search over picks does
- * (see lib/emotion.ts and db/contract.md). The sim's embeddings are 128-d and centered, the
+ * (see lib/music/emotion.ts and db/contract.md). The sim's embeddings are 128-d and centered, the
  * production ones are 768-d, so the shape of the trade-off carries over and the exact number does not.
  */
 export function realFormulaMatch(a: SimUser, b: SimUser, weight: number): PairMatch {

@@ -3,19 +3,19 @@
 import { useMemo, useState, type CSSProperties } from "react";
 import useSWR from "swr";
 import { Bookmark, Check, ChevronLeft, Network, Plus, X } from "lucide-react";
-import { AlbumArt } from "@/components/album-art";
-import { PreviewButton } from "@/components/preview-button";
+import { AlbumArt } from "@/components/common/album-art";
+import { PreviewButton } from "@/components/common/preview-button";
 import { bridgeOpener, whySummary } from "@/lib/bridge-opener";
-import { getCluster } from "@/lib/clusters";
+import { getCluster } from "@/lib/galaxy/clusters";
 import { getTheme, THEME_THRESHOLD } from "@/lib/themes";
-import type { SongLayer, SongStar } from "@/lib/song-layer";
-import { REASON_LABEL, reasonLine, songConnections, type ReasonKind, type SongConnection } from "@/lib/song-connections";
+import type { SongLayer, SongStar } from "@/lib/galaxy/song-layer";
+import { REASON_LABEL, reasonLine, songConnections, type ReasonKind, type SongConnection } from "@/lib/galaxy/song-connections";
 import { cn } from "@/lib/utils";
 import { ListenerList } from "./cluster-sheet";
-import { ClusterStar } from "@/components/cluster-star";
-import { getDiscovery, REAL_DATA, sendDiscoveryFeedback } from "@/lib/api";
+import { ClusterStar } from "@/components/common/cluster-star";
+import { getDiscovery, REAL_DATA, sendDiscoveryFeedback } from "@/lib/data/api";
 import type { DiscoveryMode, DiscoverySongDto } from "@/lib/discovery/types";
-import { useSession } from "@/lib/session";
+import { useSession } from "@/lib/data/session";
 
 /** One song star, opened: what it means, the moments it belongs to, and everyone who has it. */
 export function SongSheetContent({

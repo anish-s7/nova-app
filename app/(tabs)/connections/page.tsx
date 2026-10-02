@@ -5,13 +5,13 @@ import Link from "next/link";
 import useSWR from "swr";
 import { ChevronRight, Search } from "lucide-react";
 import { animate, stagger } from "animejs";
-import { ScreenHeader } from "@/components/screen-header";
-import { SongStack } from "@/components/song-stack";
+import { ScreenHeader } from "@/components/layout/screen-header";
+import { SongStack } from "@/components/onboarding/song-stack";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserAvatar } from "@/components/profile/user-avatar";
 import { useAnime } from "@/hooks/use-anime";
-import { getConnections } from "@/lib/api";
+import { getConnections } from "@/lib/data/api";
 import { Input } from "@/components/ui/input";
 import {
   filterConnections,
@@ -19,9 +19,9 @@ import {
   SORT_LABELS,
   sortConnections,
   type ConnectionSort,
-} from "@/lib/connection-groups";
-import { useSession } from "@/lib/session";
-import { ClusterStar } from "@/components/cluster-star";
+} from "@/lib/galaxy/connection-groups";
+import { useSession } from "@/lib/data/session";
+import { ClusterStar } from "@/components/common/cluster-star";
 
 const GROUP_PREVIEW = 5;
 

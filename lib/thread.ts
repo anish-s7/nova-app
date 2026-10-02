@@ -1,4 +1,4 @@
-import type { Message, Song } from "./types";
+import type { Message, Song } from "./data/types";
 
 /**
  * A thread is what two people have passed back and forth: every Song Swap between them, in order.

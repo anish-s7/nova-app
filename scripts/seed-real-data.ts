@@ -12,7 +12,7 @@
 import { createServerClient } from "../lib/supabase/server";
 import { resolveSong } from "../lib/musicbrainz/client";
 import { generateSongContext } from "../lib/gemini/generateSongContext";
-import { clampEmotionValue } from "../lib/emotion";
+import { clampEmotionValue } from "../lib/music/emotion";
 import { buildPickEmbedding } from "../lib/matching/pickEmbedding";
 import { parseVector } from "../lib/supabase/vector";
 import { refreshPrimaryCluster } from "../lib/matching/refreshPrimaryCluster";
@@ -21,9 +21,9 @@ import { upsertPortrait } from "../lib/matching/portraits";
 type Cluster = "quiet_company" | "armor_up" | "carrying_loss" | "somewhere_else" | "old_selves";
 
 // Heuristic stand-in for the real tags/valence/energy onboarding UX, which
-// doesn't exist yet (see MERGE_CHECKLIST.md #3). Good enough for demo data,
+// doesn't exist yet (see docs/MERGE_CHECKLIST.md #3). Good enough for demo data,
 // not a resolution of that open product decision.
-// Feeling tags (lib/tags.ts). The existing personas' picks were hand-tuned per song by
+// Feeling tags (lib/music/tags.ts). The existing personas' picks were hand-tuned per song by
 // scripts/retag-demo-personas.ts; these defaults only apply to picks seeded from now on.
 const CLUSTER_PROFILE: Record<Cluster, { tags: string[]; valence: number; energy: number }> = {
   quiet_company: { tags: ["tender", "safe"], valence: -0.2, energy: -0.6 },

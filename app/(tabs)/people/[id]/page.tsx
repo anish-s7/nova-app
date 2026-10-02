@@ -5,15 +5,15 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import useSWR from "swr";
 import { MessageCircle, Sparkles } from "lucide-react";
-import { AlbumArt } from "@/components/album-art";
-import { EvidenceLine } from "@/components/evidence-line";
-import { OverlapBadge } from "@/components/overlap-badge";
-import { ScreenHeader } from "@/components/screen-header";
-import { ThemeTag } from "@/components/theme-tag";
+import { AlbumArt } from "@/components/common/album-art";
+import { EvidenceLine } from "@/components/connections/evidence-line";
+import { OverlapBadge } from "@/components/connections/overlap-badge";
+import { ScreenHeader } from "@/components/layout/screen-header";
+import { ThemeTag } from "@/components/onboarding/theme-tag";
 import { buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserAvatar } from "@/components/user-avatar";
-import { getUser, prefetchConnectionCard } from "@/lib/api";
+import { UserAvatar } from "@/components/profile/user-avatar";
+import { getUser, prefetchConnectionCard } from "@/lib/data/api";
 import { cn } from "@/lib/utils";
 
 export default function PersonPage() {

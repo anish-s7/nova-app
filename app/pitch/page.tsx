@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowUpRight, Lock, RotateCcw, Sparkles } from "lucide-react";
-import { AlbumArt } from "@/components/album-art";
+import { AlbumArt } from "@/components/common/album-art";
 import { GalaxyCanvas } from "@/components/galaxy/galaxy-canvas";
 import type { GalaxyApi, GalaxyBridge } from "@/components/galaxy/types";
 import { WarpOverlay, type WarpHandle } from "@/components/pitch/warp-overlay";
 import { Button } from "@/components/ui/button";
-import { UserAvatar } from "@/components/user-avatar";
-import { getCluster } from "@/lib/clusters";
-import type { GalaxyNode, Song } from "@/lib/types";
+import { UserAvatar } from "@/components/profile/user-avatar";
+import { getCluster } from "@/lib/galaxy/clusters";
+import type { GalaxyNode, Song } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 import { CONNECTED, DESTINATION, DESTINATIONS, GATEWAY, GATEWAY_EVIDENCE, HANDSHAKE, HOME_EDGES, ME, MEMBERS, NEARBY } from "./script";
 

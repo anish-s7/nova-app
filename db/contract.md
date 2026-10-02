@@ -137,7 +137,7 @@ and drops candidates with malformed or revoked evidence.
 | display_name | text | |
 | primary_topic_cluster_id | uuid, FK -> topic_clusters.id, nullable | replaces the old `primary_cluster` text column (migration `20260929000000`, data model only — see `topic_clusters` below). Null until someone has a pick |
 | primary_cluster | text, nullable, one of the five legacy ids | **kept during the transition** (the migration was split on 2026-09-27 to be additive): the galaxy RPCs and several app readers still use it, and `refreshPrimaryCluster` keeps it current with the tag vote. Dropped in a later migration together with the app-wiring phase |
-| avatar | jsonb, nullable | profile icon: illustrated-face settings (`Face` in `lib/avatar.ts`: color/style indexes, glasses, expression). Null = the face generated from `display_name`. Written only by `PATCH /api/avatar` (service role, validated by `sanitizeFace`). Migration `20260930000000` |
+| avatar | jsonb, nullable | profile icon: illustrated-face settings (`Face` in `lib/avatar/avatar.ts`: color/style indexes, glasses, expression). Null = the face generated from `display_name`. Written only by `PATCH /api/avatar` (service role, validated by `sanitizeFace`). Migration `20260930000000` |
 | avatar_url | text, nullable | public URL of an uploaded photo in the `avatars` storage bucket (`<profile id>.jpg`, with a `?v=` version); overrides `avatar` wherever icons show. Written only by `POST/DELETE /api/avatar/photo` (service role). Migration `20260930000000` |
 | created_at | timestamptz | default now() |
 
@@ -162,7 +162,7 @@ everyone's default face and the save routes answer 503.
 | created_at | timestamptz | default now() |
 | superseded_by | uuid, FK -> topic_clusters.id, nullable | lets a cluster be retired into a merged successor instead of deleted; not yet written by anything — the recompute job (below) reuses/renames a drifted cluster in place rather than superseding it, and never auto-merges or auto-retires one |
 
-Seeded with the current 5 clusters (`lib/clusters.ts` CLUSTER_IDS) as literal rows so
+Seeded with the current 5 clusters (`lib/galaxy/clusters.ts` CLUSTER_IDS) as literal rows so
 `profiles.primary_topic_cluster_id` could be backfilled 1:1 from the old
 `profiles.primary_cluster` text values on the same migration. Readable by any
 authenticated user (RLS); only the service role writes it.
@@ -200,7 +200,7 @@ later): a batch job over everyone's picks, not inline in any route handler.
 pick (and lazily for the viewer on galaxy load), it assigns the profile to its nearest *existing*
 `topic_clusters` centroid (same stability rule, no LLM, no re-clustering). It returns `null`
 whenever no `topic_clusters` row has a centroid yet — i.e. always, until the recompute job above
-has run at least once. `lib/cluster-assign.ts`'s tag/slider heuristic (`primaryClusterFor`) is no
+has run at least once. `lib/galaxy/cluster-assign.ts`'s tag/slider heuristic (`primaryClusterFor`) is no
 longer used for this; the file and its other exports (`pickWhy`, used by
 `lib/matching/galaxySongs.ts` for per-pick "why", and `whyMixFor`) are unchanged.
 
@@ -208,19 +208,19 @@ longer used for this; the file and its other exports (`pickWhy`, used by
 exactly five clusters:
 - `GET /api/clusters` (session client, RLS-gated) returns every non-superseded `topic_clusters`
   row as `{id, label, short, description, color}[]`.
-- `lib/clusters.ts`'s `getCluster`/`clusterForLabel` read from an in-memory cache seeded with the
+- `lib/galaxy/clusters.ts`'s `getCluster`/`clusterForLabel` read from an in-memory cache seeded with the
   five static entries (so mock mode, and real mode before the fetch resolves, still work), and
-  `primeClusters()` merges `GET /api/clusters`'s rows in on top. `components/cluster-cache-provider.tsx`
+  `primeClusters()` merges `GET /api/clusters`'s rows in on top. `components/layout/cluster-cache-provider.tsx`
   calls it once per page load, in real-data mode only, from the root layout.
-- `lib/constellation-shapes.ts`'s five hand-drawn asterisms are gone. `shapeSlot(clusterId, index)`
+- `lib/galaxy/constellation-shapes.ts`'s five hand-drawn asterisms are gone. `shapeSlot(clusterId, index)`
   now generates a deterministic point-ring from a hash of the cluster's *id* — works for any id,
   including ones the recompute job discovers later, at the cost of the "real constellation" flavor
   (Lyra, Orion, ...), which was never shown in the UI anyway.
-- `lib/galaxy-layout.ts`'s `anchor()` places however many distinct clusters are actually present
+- `lib/galaxy/galaxy-layout.ts`'s `anchor()` places however many distinct clusters are actually present
   (`countClusters`) evenly around the ring, in a slot chosen by `hash(clusterId) % clusterCount`
   rather than the cluster's index in some array — so a newly-discovered cluster mostly doesn't
   renumber everyone else's anchor the way an index-based scheme would.
-- **Not done here**: the galaxy window itself (`lib/matching/galaxyWindow.ts`) and `lib/real-api.ts`
+- **Not done here**: the galaxy window itself (`lib/matching/galaxyWindow.ts`) and `lib/data/real-api.ts`
   still read the pre-migration `profiles.primary_cluster` text column, so in real mode every node's
   `cluster` is still one of the five static ids until that app-wiring phase (noted above) rewires
   them to `primary_topic_cluster_id`. The visualization layer is ready for arbitrary cluster ids
@@ -250,10 +250,10 @@ present is the uniqueness/dedup key backend checks before inserting.
 | id | uuid, PK | |
 | profile_id | uuid, FK -> profiles.id | |
 | song_id | uuid, FK -> songs.id | |
-| tags | text[] | 1-3 values from the fixed taxonomy in `lib/tags.ts` (not a DB table) |
+| tags | text[] | 1-3 values from the fixed taxonomy in `lib/music/tags.ts` (not a DB table) |
 | valence | float, range -1..1 | this user's circular-slider placement for this song: sad/negative <-> happy/positive |
 | energy | float, range -1..1 | same slider, perpendicular axis: calm <-> intense |
-| embedding | vector(770), not null | computed at insert time by `buildPickEmbedding` (`lib/matching/pickEmbedding.ts`): the song's 768-dim `songs.embedding` **scaled to unit length**, then this pick's `valence`/`energy` × `EMOTION_WEIGHT` (0.7, `lib/emotion.ts`). If the formula or weight changes, recompute every row with `scripts/recompute-pick-embeddings.ts` |
+| embedding | vector(770), not null | computed at insert time by `buildPickEmbedding` (`lib/matching/pickEmbedding.ts`): the song's 768-dim `songs.embedding` **scaled to unit length**, then this pick's `valence`/`energy` × `EMOTION_WEIGHT` (0.7, `lib/music/emotion.ts`). If the formula or weight changes, recompute every row with `scripts/recompute-pick-embeddings.ts` |
 | reason_text | text, nullable | optional bonus free text, never required by the UI |
 | is_public | boolean | default true — privacy control, hide from matching/cards shown to others |
 | created_at | timestamptz | default now() |
@@ -293,7 +293,7 @@ to another user, and cards must not quote them.
 From the dropped AI-tags experiment (migration `20260928010000`, applied to the hosted project):
 `song_tags (song_key pk, title, artist, tags jsonb, model, created_at)` and a
 `song_picks.tag_whys text[]` column. Nothing on `main` reads or writes either; safe to drop.
-Pick tags are the fixed feelings in `lib/tags.ts` (or the original tags on older picks).
+Pick tags are the fixed feelings in `lib/music/tags.ts` (or the original tags on older picks).
 
 ### `messages`
 | column | type | notes |
@@ -357,7 +357,7 @@ The front page draws a **bounded window**, never everyone. `GET /api/galaxy?limi
 (`lib/matching/galaxyWindow.ts`) returns at most `limit` people (default 200) plus
 `hidden: { total, byCluster }`, which the UI draws as dust around each cluster.
 The window is you, your top global matches, up to 2 ambient **far stars**, a newcomer
-set, then a diversity-ranked near set (`lib/galaxy-sample.ts`), seeded per viewer per
+set, then a diversity-ranked near set (`lib/galaxy/galaxy-sample.ts`), seeded per viewer per
 day so reloads don't reshuffle. Edges are only computed among the drawn people.
 
 - `galaxy_pool(target_profile_id uuid, near_size int default 600, fresh_size int default 100, fresh_days int default 14)`
@@ -380,7 +380,7 @@ day so reloads don't reshuffle. Edges are only computed among the drawn people.
 **Clusters:** as of migration `20260929000000` the source-of-truth column is
 `profiles.primary_topic_cluster_id` (FK -> `topic_clusters`, nullable, treated as
 `'unassigned'`) — see `topic_clusters` above. It is a label for grouping, not a matching
-vector. `lib/cluster-assign.ts` scores each pick from its mood tags plus valence/energy
+vector. `lib/galaxy/cluster-assign.ts` scores each pick from its mood tags plus valence/energy
 (tags lead, the slider breaks ties) and the profile takes the cluster with the highest
 total across its picks. No LLM, no embeddings. It is recomputed after every pick and
 lazily for the viewer on galaxy load; profiles with no picks stay null. Someone whose
@@ -404,7 +404,7 @@ project.**
 - `GET /api/galaxy/songs` -> `{ meId, people, songs }`: the song layer for your galaxy window.
   Each song has `albumArtUrl`, `meaning` (`songs.context_summary`) and `listeners`, where
   every listener carries `why`, the cluster that pick's tags/slider lean toward
-  (`pickWhy` in `lib/cluster-assign.ts`). Only public picks of other people are read.
+  (`pickWhy` in `lib/galaxy/cluster-assign.ts`). Only public picks of other people are read.
   No Gemini.
 
 ## Auth model

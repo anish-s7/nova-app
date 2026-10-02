@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useSearchParams } from "next/navigation";
-import { SongSwapComposer } from "@/components/song-swap-composer";
+import { SongSwapComposer } from "@/components/chat/song-swap-composer";
 
 export default function SongSwapPage() {
   const { id } = useParams<{ id: string }>();

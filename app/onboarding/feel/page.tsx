@@ -5,15 +5,15 @@ import useSWR from "swr";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AudioLines, Check } from "lucide-react";
-import { AlbumArt } from "@/components/album-art";
-import { EmptyState } from "@/components/empty-state";
-import { MoodCircle, type Mood } from "@/components/mood-circle";
-import { ScreenHeader } from "@/components/screen-header";
-import { TagPicker } from "@/components/tag-picker";
+import { AlbumArt } from "@/components/common/album-art";
+import { EmptyState } from "@/components/layout/empty-state";
+import { MoodCircle, type Mood } from "@/components/onboarding/mood-circle";
+import { ScreenHeader } from "@/components/layout/screen-header";
+import { TagPicker } from "@/components/onboarding/tag-picker";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { getMySongs, sameSong, saveSongs } from "@/lib/api";
-import { setSession, useHydrated, useSession, type Feeling } from "@/lib/session";
-import type { Song } from "@/lib/types";
+import { getMySongs, sameSong, saveSongs } from "@/lib/data/api";
+import { setSession, useHydrated, useSession, type Feeling } from "@/lib/data/session";
+import type { Song } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 
 /** Spotify imports bring ~24 songs; people describe their top few (README: "top 5"). */

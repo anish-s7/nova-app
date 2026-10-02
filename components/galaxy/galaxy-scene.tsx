@@ -3,12 +3,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
-import { getCluster } from "@/lib/clusters";
-import { isSongNode } from "@/lib/song-layer";
-import { topTwo } from "@/lib/why-mix";
+import { getCluster } from "@/lib/galaxy/clusters";
+import { isSongNode } from "@/lib/galaxy/song-layer";
+import { topTwo } from "@/lib/galaxy/why-mix";
 import { BOND_AT, threadBoldness } from "@/lib/thread";
-import { homeOrbitPoint, type LayoutPoint } from "@/lib/galaxy-layout";
-import type { GalaxyNode } from "@/lib/types";
+import { homeOrbitPoint, type LayoutPoint } from "@/lib/galaxy/galaxy-layout";
+import type { GalaxyNode } from "@/lib/data/types";
 import type { GalaxyApi, GalaxyViewProps } from "./types";
 
 const BG = "#110f22";

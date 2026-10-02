@@ -59,16 +59,16 @@ Keep the current emotional matching, connection cards, manual picks, and mock mo
 
 - `lib/matching/galaxyWindow.ts`: bounded people retrieval through `galaxy_pool`, `wander_picks`, and the diversity sampler; 10-second in-process cache; legacy cluster readers remain. Hop authorization checks membership in the candidate pool, despite the comment describing the visible window. New discovery links must not assume arbitrary people are authorized hop targets.
 - `lib/matching/galaxySongs.ts`: song candidates are limited to public picks within the people window. Uses the service role and explicitly filters private picks. The song endpoint currently has no hop-center parameter.
-- `lib/song-connections.ts`: imports `lib/sim/song-vectors.json` and is called by `components/galaxy/song-sheet.tsx`. Real discovery must get its own server result; do not extend simulation imports into production.
+- `lib/galaxy/song-connections.ts`: imports `lib/sim/song-vectors.json` and is called by `components/galaxy/song-sheet.tsx`. Real discovery must get its own server result; do not extend simulation imports into production.
 - `lib/gemini/generateSongContext.ts`: embeddings are of title/artist text, not audio. Do not label this evidence as acoustic similarity.
 - `lib/matching/topicClusterVector.ts`: one average over mood-stripped pick vectors, specifically for topic placement. It is not an appropriate replacement for a multi-interest listening profile.
 - `app/api/picks/route.ts`: requires feelings/tags and runs catalog enrichment. It is not an ingestion endpoint.
 - `songs.resolution_source` only allows `musicbrainz` or `gemini_fallback`; imported unresolved tracks need a separate identity store, not a misleading new catalog row.
 - `lib/musicbrainz/client.ts`: throttling/cache are process-local; calling it for every event across workers would exceed the intended aggregate request pace. Its search score is not calibrated identity confidence.
 - `lib/matching/findMatches.ts`: persistent connection cards are never regenerated. Keep evolving music recommendations separate from these historical relationship cards.
-- `lib/galaxy-layout.ts`: the full graph affects the layout seed and cluster-count-dependent anchors. Rebuilding for each sync can move many existing stars.
+- `lib/galaxy/galaxy-layout.ts`: the full graph affects the layout seed and cluster-count-dependent anchors. Rebuilding for each sync can move many existing stars.
 - `components/galaxy/galaxy-canvas.tsx`: songs are placed after people, which is useful for additive discovery; currently song placement expects listener/cluster anchors.
-- `lib/real-api.ts`: 30-second song cache; `lib/api.ts` switches real/mock implementations. New data needs explicit real adapters and versioned SWR keys, not a change to session picks.
+- `lib/data/real-api.ts`: 30-second song cache; `lib/data/api.ts` switches real/mock implementations. New data needs explicit real adapters and versioned SWR keys, not a change to session picks.
 - `app/(tabs)/me/page.tsx`: add connection settings outside the `session.analysis` branch so accounts with no portrait can connect.
 
 Read local Next.js guides before implementation: `node_modules/next/dist/docs/01-app/01-getting-started/15-route-handlers.md` and `03-api-reference/04-functions/after.md`. Route params are awaited; personal responses stay dynamic/private. `after()` shares platform duration limits and is not a durable queue.
@@ -204,18 +204,18 @@ Summary response includes snapshot ID, primary source, as-of time, separate sync
 UI changes, in order:
 
 1. Add `components/listening/source-settings.tsx` and `weekly-summary.tsx` to Profile, including no-portrait users. Show both provider statuses, primary choice, consent, sync progress, disconnect/delete outcome, and empty-history guidance.
-2. Add real discovery fetching through `lib/real-api.ts` / `lib/api.ts`; use account identity, snapshot, feedback revision, and exploration mode in SWR keys. Clear on sign-out/account changes. Keep demo behavior separate.
+2. Add real discovery fetching through `lib/data/real-api.ts` / `lib/data/api.ts`; use account identity, snapshot, feedback revision, and exploration mode in SWR keys. Clear on sign-out/account changes. Keep demo behavior separate.
 3. Extend `components/galaxy/song-sheet.tsx` with real related-song results, reason, save/dismiss and existing preview/outbound actions. “Add meaning” invokes the existing pick/tag flow; it is a separate action from saving.
 4. Add discovery song DTOs instead of forcing listener-less suggestions into `SongStar` with invented `myWhy`, listener counts, or cluster IDs. Build an explicit adapter into render nodes.
 5. Extend galaxy canvas, Three.js scene and SVG fallback for personal discovery nodes, anchor-song/interest positions, and accessible selection. No preview availability means an outbound link, not a lower taste score.
 
-Preview instrumentation goes in `lib/preview-player.ts` only after defining event semantics: one preview-start per exposure, actual playback start only, no success on failed autoplay, and no full-listen claim. Do not scrobble previews back to either service.
+Preview instrumentation goes in `lib/music/preview-player.ts` only after defining event semantics: one preview-start per exposure, actual playback start only, no success on failed autoplay, and no full-listen claim. Do not scrobble previews back to either service.
 
 ## Stable galaxy updates
 
 Preserve existing people layout in the first release and add discoveries afterward. Distinguish the existing meaning clusters from personal listening interests. New songs can orbit an anchor song or personal interest without becoming a fake person's pick.
 
-Add a layout reconciliation function in `lib/galaxy-layout.ts`: keep coordinates for retained node IDs; place arrivals near their known anchor with deterministic collision offsets; remove departed nodes on explicit refresh. Clamp motion and honor reduced-motion in both renderers. Freeze the selected/open song and camera during a refresh.
+Add a layout reconciliation function in `lib/galaxy/galaxy-layout.ts`: keep coordinates for retained node IDs; place arrivals near their known anchor with deterministic collision offsets; remove departed nodes on explicit refresh. Clamp motion and honor reduced-motion in both renderers. Freeze the selected/open song and camera during a refresh.
 
 Fetch a versioned discovery batch and pin it during exploration. Poll lightweight status while visible or after manual sync; show "New discoveries ready" and adopt on request/re-entry. Never rerun the full 300-tick people simulation for every imported event.
 
@@ -434,14 +434,14 @@ Candidate retrieval returns bounded pools per interest before ranking. `rank.ts`
 
 ### G. Wire frontend boundaries without changing existing meaning types
 
-- `lib/real-api.ts`: add `getListeningConnections`, `getListeningSummary`, `getDiscovery`, `syncListening`, and `recordDiscoveryFeedback`; normalize HTTP errors without leaking provider detail.
-- `lib/api.ts`: export real methods through the existing data-source boundary. Mock implementations use dedicated synthetic fixtures, never live requests or new production imports from `lib/sim`.
+- `lib/data/real-api.ts`: add `getListeningConnections`, `getListeningSummary`, `getDiscovery`, `syncListening`, and `recordDiscoveryFeedback`; normalize HTTP errors without leaking provider detail.
+- `lib/data/api.ts`: export real methods through the existing data-source boundary. Mock implementations use dedicated synthetic fixtures, never live requests or new production imports from `lib/sim`.
 - New `DiscoverySong` DTO: catalog song details, evidence list, interest key, anchor song ID if available, batch/snapshot IDs, category, save state. It has no fabricated listener or feeling fields.
 - `components/listening/source-settings.tsx`: explicit loading/error/empty/connected states, disabled duplicate sync clicks, job-status polling only while pending, and reconnect/change-source confirmation explaining data replacement.
 - `components/galaxy/song-sheet.tsx`: invoke a discovery hook when a real selected song exists; keep existing mock path separate. Retain previews and selection actions. Do not launch fetches in render or add conditional hooks.
-- `lib/preview-player.ts`: emit actual successful playback-start once per preview exposure; failed autoplay/error produces no positive event. Keep audio state separate from network retries and consent.
-- `lib/galaxy-layout.ts`: implement pure `reconcileDiscoveryLayout(previous, next, anchors)` with stable IDs and deterministic collision handling. The first version never changes people coordinates. Unknown anchors get an explicit personal-interest position, not a guessed meaning cluster.
-- Both `galaxy-scene.tsx` and `galaxy-svg.tsx` must support the new node subtype, focus, labels and selection. Check all switches over node kind when extending `lib/types.ts`; do not use unsafe casts to masquerade as a person node.
+- `lib/music/preview-player.ts`: emit actual successful playback-start once per preview exposure; failed autoplay/error produces no positive event. Keep audio state separate from network retries and consent.
+- `lib/galaxy/galaxy-layout.ts`: implement pure `reconcileDiscoveryLayout(previous, next, anchors)` with stable IDs and deterministic collision handling. The first version never changes people coordinates. Unknown anchors get an explicit personal-interest position, not a guessed meaning cluster.
+- Both `galaxy-scene.tsx` and `galaxy-svg.tsx` must support the new node subtype, focus, labels and selection. Check all switches over node kind when extending `lib/data/types.ts`; do not use unsafe casts to masquerade as a person node.
 - SWR keys include account identity and snapshot/batch context. On sign-out, clear personal caches and pending UI. Preserve the selected song and camera until the user adopts a new batch.
 
 ### H. Add executable tests alongside each layer

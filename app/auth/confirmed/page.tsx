@@ -4,10 +4,10 @@ import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { CircleCheck } from "lucide-react";
-import { Logo } from "@/components/logo";
+import { Logo } from "@/components/common/logo";
 import { buttonVariants } from "@/components/ui/button";
-import { announceConfirmation } from "@/lib/auth-handoff";
-import { safeNextPath } from "@/lib/safe-next";
+import { announceConfirmation } from "@/lib/auth/auth-handoff";
+import { safeNextPath } from "@/lib/auth/safe-next";
 import { cn } from "@/lib/utils";
 
 /**

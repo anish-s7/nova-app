@@ -2,8 +2,8 @@
 
 import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { RevealSequence } from "@/components/reveal-sequence";
-import { useHydrated, useSession } from "@/lib/session";
+import { RevealSequence } from "@/components/onboarding/reveal-sequence";
+import { useHydrated, useSession } from "@/lib/data/session";
 
 function RevealGate() {
   const hydrated = useHydrated();

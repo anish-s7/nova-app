@@ -5,10 +5,10 @@ import dynamic from "next/dynamic";
 import Link from "next/link";
 import { GalaxySkeleton } from "@/components/galaxy/galaxy-canvas";
 import type { GalaxyApi } from "@/components/galaxy/types";
-import { computeLayout, type Layout } from "@/lib/galaxy-layout";
-import { DEFAULT_BUDGET, cosine, knnEdges, sampleGalaxy } from "@/lib/galaxy-sample";
+import { computeLayout, type Layout } from "@/lib/galaxy/galaxy-layout";
+import { DEFAULT_BUDGET, cosine, knnEdges, sampleGalaxy } from "@/lib/galaxy/galaxy-sample";
 import { generatePopulation } from "@/lib/sim/population";
-import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
+import type { GalaxyEdge, GalaxyNode } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 
 const GalaxyScene = dynamic(() => import("@/components/galaxy/galaxy-scene"), { ssr: false, loading: () => <GalaxySkeleton /> });

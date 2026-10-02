@@ -24,10 +24,10 @@
 
 ## 2. Song-specific tags
 - When a song enters the catalog, Gemini writes 5–6 short tags for it, each with the one of the
-  five listening reasons (`lib/clusters.ts`) it belongs to. Stored once on the `songs` row and
+  five listening reasons (`lib/galaxy/clusters.ts`) it belongs to. Stored once on the `songs` row and
   shared by everyone who picks it (one call per new song).
 - The feel step (and the galaxy "+") shows the song's tags instead of the fixed 10; pick 1–3.
-- Clusters: `lib/cluster-assign.ts` counts each tag's reason. Old picks keep their fixed tags
+- Clusters: `lib/galaxy/cluster-assign.ts` counts each tag's reason. Old picks keep their fixed tags
   (still mapped as today). A backfill script tags songs already in the catalog.
 - The connection assessment sees the specific tags ("you both tapped *coming home changed*").
 

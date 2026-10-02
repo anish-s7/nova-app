@@ -1,7 +1,7 @@
 import { forceLink, forceManyBody, forceSimulation, forceX, forceY, forceZ, type SimNode } from "d3-force-3d";
-import { CLUSTER_IDS, CLUSTERS } from "@/lib/clusters";
-import type { Layout } from "@/lib/galaxy-layout";
-import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
+import { CLUSTER_IDS, CLUSTERS } from "@/lib/galaxy/clusters";
+import type { Layout } from "@/lib/galaxy/galaxy-layout";
+import type { GalaxyEdge, GalaxyNode } from "@/lib/data/types";
 import { Learner, type LearningStats } from "./learner";
 import { SONGS, defaultSim, dominant, makePick, pairMatch, randomSong, songLabel, type SimUser } from "./model";
 

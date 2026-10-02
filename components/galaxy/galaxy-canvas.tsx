@@ -4,9 +4,9 @@ import { useMemo } from "react";
 import dynamic from "next/dynamic";
 import { useReducedMotion, useWebGL } from "@/hooks/use-capabilities";
 import type { Arrival } from "@/hooks/use-galaxy-realtime";
-import { computeHomeLayout, computeLayout, placeArrival, placeSongs } from "@/lib/galaxy-layout";
-import { songNodeId, type SongStar } from "@/lib/song-layer";
-import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
+import { computeHomeLayout, computeLayout, placeArrival, placeSongs } from "@/lib/galaxy/galaxy-layout";
+import { songNodeId, type SongStar } from "@/lib/galaxy/song-layer";
+import type { GalaxyEdge, GalaxyNode } from "@/lib/data/types";
 import { GalaxySvg } from "./galaxy-svg";
 import type { GalaxyViewProps } from "./types";
 

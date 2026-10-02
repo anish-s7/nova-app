@@ -1,4 +1,4 @@
-import { EMOTION_WEIGHT, clampEmotionValue } from "../emotion";
+import { EMOTION_WEIGHT, clampEmotionValue } from "../music/emotion";
 
 /**
  * A pick's 770-dim matching vector: the song's 768-dim embedding scaled to unit length, then

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getArrival, REAL_DATA } from "@/lib/api";
-import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
+import { getArrival, REAL_DATA } from "@/lib/data/api";
+import type { GalaxyEdge, GalaxyNode } from "@/lib/data/types";
 
 export type Arrival = { node: GalaxyNode; edges: GalaxyEdge[] };
 

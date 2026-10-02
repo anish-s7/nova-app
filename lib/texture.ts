@@ -1,5 +1,5 @@
-import type { ClusterId } from "./clusters";
-import type { ListeningMoment, Song } from "./types";
+import type { ClusterId } from "./galaxy/clusters";
+import type { ListeningMoment, Song } from "./data/types";
 
 /**
  * Mock-only texture: the specific, slightly untidy details a real profile would carry

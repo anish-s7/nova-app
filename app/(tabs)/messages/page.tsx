@@ -1,7 +1,7 @@
 "use client";
 
 import { MessageCircle } from "lucide-react";
-import { MessagesPane } from "@/components/messages-pane";
+import { MessagesPane } from "@/components/chat/messages-pane";
 
 export default function MessagesPage() {
   return (

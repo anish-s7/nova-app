@@ -3,7 +3,7 @@
  * {label, short, description} (never asked to pick a color — that's a UI concern, not a
  * judgment call), so new clusters get one generated here: golden-angle hue stepping keeps
  * consecutive indexes visually distinct, at roughly the same muted pastel saturation/lightness
- * as the 5 hand-picked seed colors in lib/clusters.ts.
+ * as the 5 hand-picked seed colors in lib/galaxy/clusters.ts.
  */
 export function colorForClusterIndex(index: number): string {
   const hue = (index * 137.508) % 360; // golden angle

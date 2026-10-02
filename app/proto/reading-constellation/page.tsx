@@ -5,14 +5,14 @@
  * reads through them, drawing a glowing line to each as a theme is found. Built only on anime.js
  * (already a dependency): createTimeline, createDrawable, createMotionPath, stagger, splitText, utils.
  *
- * Delete app/proto once approved and lifted into components/reading-sequence.tsx.
+ * Delete app/proto once approved and lifted into components/onboarding/reading-sequence.tsx.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { animate, createDrawable, createMotionPath, createTimeline, splitText, stagger, utils } from "animejs";
 import { RotateCcw } from "lucide-react";
-import { getCluster } from "@/lib/clusters";
-import { contextFor, SONG_CATALOG } from "@/lib/music-context";
+import { getCluster } from "@/lib/galaxy/clusters";
+import { contextFor, SONG_CATALOG } from "@/lib/music/music-context";
 
 const W = 360;
 const H = 520;

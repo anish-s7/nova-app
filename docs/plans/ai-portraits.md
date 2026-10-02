@@ -10,7 +10,7 @@ The user wants the LLM to have a meaningful role rather than being a wrapper. To
 (1) writes a one-line mood summary + embedding per song, and (2) at the end of matching judges **one
 pick pair** (the single closest pair from pgvector) and writes the card. It never sees a person as a
 whole, and the math alone decides who reaches it. Also, in real-data mode the onboarding "Here's what I
-heard" analysis (`analyzeMusic` in `lib/api.ts`) is still **mock inference** — no real branch exists.
+heard" analysis (`analyzeMusic` in `lib/data/api.ts`) is still **mock inference** — no real branch exists.
 
 Outcome: Gemini (a) reads each person's whole profile into a **listening portrait**, shown back to them
 on the why / me screens, and (b) **assesses connections from both portraits + both sets of songs**,
@@ -28,12 +28,12 @@ at the end; merging to `main` is a separate decision after the user reviews it.
 1. Pre-work tasks below (galaxy "+" fix → verify real-data mode → demo prep), on `main`.
 2. Only then: create branch `ai-portraits` and implement the feature; push the branch; merge to `main`
    only on the user's approval.
-3. After: `MERGE_CHECKLIST.md` + CLAUDE.md (on request).
+3. After: `docs/MERGE_CHECKLIST.md` + CLAUDE.md (on request).
 
 ## Docket ordering (decided)
 **Before the feature, on `main`:**
 1. **Galaxy "+" add-a-song gets `TagPicker` + `MoodCircle`** (`components/galaxy/add-song-sheet.tsx`,
-   `addSong` in `lib/api.ts`), replacing `tags: ["comfort"], valence 0, energy 0`. Portraits read
+   `addSong` in `lib/data/api.ts`), replacing `tags: ["comfort"], valence 0, energy 0`. Portraits read
    tags/mood, so placeholder picks would feed false data straight into the AI. Small; message Daniel
    first (his component).
 2. **Verify real-data mode end to end** (signup → feel step → `song_picks` rows; Maya ↔ Theo chat in two
@@ -42,7 +42,7 @@ at the end; merging to `main` is a separate decision after the user reviews it.
 3. **Demo prep**: user deletes the verification test message; confirms the `localhost:3000/**`
    redirect wildcard. **CLAUDE.md**: mark the matching-balance fix done (user asks for CLAUDE.md edits).
 
-**After the feature:** update `MERGE_CHECKLIST.md` (the feature changes the connections/why flows) and
+**After the feature:** update `docs/MERGE_CHECKLIST.md` (the feature changes the connections/why flows) and
 a CLAUDE.md update on request.
 
 ## Feature design
@@ -64,7 +64,7 @@ New table `public.profile_portraits` (not a column on `profiles`: every signed-i
   (enforced JSON instead of the current fence-stripping `JSON.parse`).
 - Output shape maps directly onto the existing `AnalysisResult` so the UI needs no redesign:
   `{ headline, highlights: string[3], motivations: [{ label, description, cluster (one of
-  lib/clusters.ts CLUSTER_IDS), confidence 0..1, evidence: [{ text, songTitles: string[] }] }],
+  lib/galaxy/clusters.ts CLUSTER_IDS), confidence 0..1, evidence: [{ text, songTitles: string[] }] }],
   seeks: string /* what kind of person they'd connect with */, tensions?: string }`.
 - Prompt rules: speak from the person's own picks only, no diagnosis/clinical language, handle grief /
   heartbreak reasons gently, never invent songs. Compliance: plain title/artist strings only (Spotify rule).
@@ -94,13 +94,13 @@ New table `public.profile_portraits` (not a column on `profiles`: every signed-i
   (fallback: similarity for legacy cards without one). Drop `insufficient_evidence` as today.
 
 ### 5. Frontend (real mode only; mock mode unchanged)
-- `analyzeMusic` in `lib/api.ts`: in `REAL_DATA`, wait until `session.saveStatus === "saved"`, then
+- `analyzeMusic` in `lib/data/api.ts`: in `REAL_DATA`, wait until `session.saveStatus === "saved"`, then
   `POST /api/portrait`, map to `AnalysisResult` (song titles → song ids from the session's songs;
-  motivations get `feedback: "unreviewed", isPublic: true`). `components/reading-sequence.tsx` already
+  motivations get `feedback: "unreviewed", isPublic: true`). `components/onboarding/reading-sequence.tsx` already
   waits on save and on analysis, so the flow holds.
 - After onboarding, prefetch `/api/match` once (fire-and-forget) so assessments are cached before the
   user opens Connections.
-- `lib/real-api.ts`: `getConnections` uses `card.score / 100` for `similarity` when present (the ring then
+- `lib/data/real-api.ts`: `getConnections` uses `card.score / 100` for `similarity` when present (the ring then
   shows the AI's judgment); `getConnectionCard` maps `threads` → `sharedMotivations` with real songs
   (resolves `song_a/song_b` titles against each side's picks), falling back to today's single
   `shared_why` for legacy cards. `getMe` / `me` page: if the session has no analysis, load
@@ -116,7 +116,7 @@ New: `supabase/migrations/20260927030000_profile_portraits.sql`, `lib/gemini/gen
 `lib/gemini/assessConnection.ts`, `lib/matching/portraits.ts`, `app/api/portrait/route.ts`,
 `scripts/generate-portraits.ts`.
 Changed: `lib/matching/findMatches.ts`, `app/api/cards/[matchId]/route.ts`,
-`lib/matching/alignCardEvidence.ts`, `lib/api.ts` (`analyzeMusic`, `addSong`), `lib/real-api.ts`,
+`lib/matching/alignCardEvidence.ts`, `lib/data/api.ts` (`analyzeMusic`, `addSong`), `lib/data/real-api.ts`,
 `lib/supabase/types.ts`, `scripts/seed-real-data.ts`, `db/contract.md`.
 Reuse: `createServerClient`, `getCurrentProfileId`, `parseVector`, `getGeminiClient` /
 `GEMINI_TEXT_MODEL`, `alignCardEvidence`, `CLUSTER_IDS`, the existing `connection_cards` cache.

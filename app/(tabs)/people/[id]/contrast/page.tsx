@@ -2,12 +2,12 @@
 
 import { useParams } from "next/navigation";
 import useSWR from "swr";
-import { ConnectionCardSkeleton } from "@/components/connection-card-skeleton";
-import { ContrastCardView } from "@/components/contrast-card-view";
-import { ScreenHeader } from "@/components/screen-header";
+import { ConnectionCardSkeleton } from "@/components/connections/connection-card-skeleton";
+import { ContrastCardView } from "@/components/connections/contrast-card-view";
+import { ScreenHeader } from "@/components/layout/screen-header";
 import { Button } from "@/components/ui/button";
-import { getContrastCard, getMe, getUser } from "@/lib/api";
-import { useSession } from "@/lib/session";
+import { getContrastCard, getMe, getUser } from "@/lib/data/api";
+import { useSession } from "@/lib/data/session";
 
 export default function ContrastCardPage() {
   const { id } = useParams<{ id: string }>();

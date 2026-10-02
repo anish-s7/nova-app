@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import type { Metadata, Viewport } from "next";
 import { Newsreader, Source_Sans_3 } from "next/font/google";
-import { PhoneFrame } from "@/components/phone-frame";
-import { SessionSync } from "@/components/session-sync";
-import { ClusterCacheProvider } from "@/components/cluster-cache-provider";
+import { PhoneFrame } from "@/components/layout/phone-frame";
+import { SessionSync } from "@/components/layout/session-sync";
+import { ClusterCacheProvider } from "@/components/layout/cluster-cache-provider";
 import "./globals.css";
 
 const sourceSans = Source_Sans_3({ variable: "--font-source-sans", subsets: ["latin"] });

@@ -1,4 +1,4 @@
-import { getCluster, type ClusterId } from "./clusters";
+import { getCluster, type ClusterId } from "./galaxy/clusters";
 
 /**
  * Hand-written phrasing for the five original mock clusters, so their openers read naturally

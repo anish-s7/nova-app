@@ -13,9 +13,9 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { animate, createMotionPath, stagger, utils } from "animejs";
 import { Check, Plus, RotateCcw } from "lucide-react";
-import { getCluster } from "@/lib/clusters";
-import { contextFor, SONG_CATALOG } from "@/lib/music-context";
-import type { Song } from "@/lib/types";
+import { getCluster } from "@/lib/galaxy/clusters";
+import { contextFor, SONG_CATALOG } from "@/lib/music/music-context";
+import type { Song } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
 
 const MIN = 5;

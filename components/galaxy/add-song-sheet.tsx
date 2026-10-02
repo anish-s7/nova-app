@@ -3,17 +3,17 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Loader2, Search } from "lucide-react";
 import { mutate } from "swr";
-import { AlbumArt } from "@/components/album-art";
-import { MoodCircle, type Mood } from "@/components/mood-circle";
-import { TagPicker } from "@/components/tag-picker";
-import { addSong, REAL_DATA, getSongLayer } from "@/lib/api";
-import { getCluster } from "@/lib/clusters";
-import { SONG_CATALOG } from "@/lib/music-context";
-import { addPick, effectiveSongs, getSession, useSession } from "@/lib/session";
-import { describePick, type SongLayer, type SongPick } from "@/lib/song-layer";
+import { AlbumArt } from "@/components/common/album-art";
+import { MoodCircle, type Mood } from "@/components/onboarding/mood-circle";
+import { TagPicker } from "@/components/onboarding/tag-picker";
+import { addSong, REAL_DATA, getSongLayer } from "@/lib/data/api";
+import { getCluster } from "@/lib/galaxy/clusters";
+import { SONG_CATALOG } from "@/lib/music/music-context";
+import { addPick, effectiveSongs, getSession, useSession } from "@/lib/data/session";
+import { describePick, type SongLayer, type SongPick } from "@/lib/galaxy/song-layer";
 import { THEME_THRESHOLD, THEMES, type ThemeId } from "@/lib/themes";
 import { cn } from "@/lib/utils";
-import { ClusterStar } from "@/components/cluster-star";
+import { ClusterStar } from "@/components/common/cluster-star";
 
 export type AddedInfo = ReturnType<typeof describePick>;
 

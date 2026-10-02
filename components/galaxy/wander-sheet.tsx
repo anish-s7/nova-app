@@ -3,12 +3,12 @@
 import Link from "next/link";
 import useSWR from "swr";
 import { ChevronRight } from "lucide-react";
-import { AlbumArt } from "@/components/album-art";
+import { AlbumArt } from "@/components/common/album-art";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserAvatar } from "@/components/user-avatar";
-import { getWander } from "@/lib/api";
-import { useSession } from "@/lib/session";
+import { UserAvatar } from "@/components/profile/user-avatar";
+import { getWander } from "@/lib/data/api";
+import { useSession } from "@/lib/data/session";
 
 /**
  * Wander: people who picked a song you did but feel it differently. Only mounts when the sheet

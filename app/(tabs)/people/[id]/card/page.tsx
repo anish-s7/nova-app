@@ -2,12 +2,12 @@
 
 import { useParams } from "next/navigation";
 import useSWR from "swr";
-import { ConnectionCardSkeleton } from "@/components/connection-card-skeleton";
-import { ConnectionCardView } from "@/components/connection-card-view";
-import { ScreenHeader } from "@/components/screen-header";
+import { ConnectionCardSkeleton } from "@/components/connections/connection-card-skeleton";
+import { ConnectionCardView } from "@/components/connections/connection-card-view";
+import { ScreenHeader } from "@/components/layout/screen-header";
 import { Button } from "@/components/ui/button";
-import { getConnectionCard, getMe, getUser } from "@/lib/api";
-import { useSession } from "@/lib/session";
+import { getConnectionCard, getMe, getUser } from "@/lib/data/api";
+import { useSession } from "@/lib/data/session";
 
 export default function ConnectionCardPage() {
   const { id } = useParams<{ id: string }>();

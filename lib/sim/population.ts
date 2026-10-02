@@ -1,6 +1,6 @@
-import { CLUSTER_IDS } from "@/lib/clusters";
+import { CLUSTER_IDS } from "@/lib/galaxy/clusters";
 import { mulberry32 } from "./engine";
-import type { SampleCandidate } from "@/lib/galaxy-sample";
+import type { SampleCandidate } from "@/lib/galaxy/galaxy-sample";
 
 /** A synthetic population for the scale test. Not the live sim: no matching, no churn, just N people in tribes. */
 export type Person = SampleCandidate & { name: string };

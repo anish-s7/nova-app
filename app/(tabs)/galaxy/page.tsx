@@ -4,8 +4,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import useSWR from "swr";
 import { Compass, LocateFixed, Plus, X } from "lucide-react";
-import { AlbumArt } from "@/components/album-art";
-import { BottomSheet } from "@/components/bottom-sheet";
+import { AlbumArt } from "@/components/common/album-art";
+import { BottomSheet } from "@/components/layout/bottom-sheet";
 import { GalaxyCanvas, GalaxySkeleton } from "@/components/galaxy/galaxy-canvas";
 import type { GalaxyApi } from "@/components/galaxy/types";
 import { ClusterFilter } from "@/components/galaxy/cluster-filter";
@@ -14,26 +14,26 @@ import { ClusterSheetContent } from "@/components/galaxy/cluster-sheet";
 import { SongSheetContent } from "@/components/galaxy/song-sheet";
 import { WanderSheetContent } from "@/components/galaxy/wander-sheet";
 import { ModeToggle, ThemeFilter } from "@/components/galaxy/theme-filter";
-import { Logo } from "@/components/logo";
-import { OverlapBadge } from "@/components/overlap-badge";
-import { SimilarityRing } from "@/components/similarity-ring";
-import { ThemeTag } from "@/components/theme-tag";
+import { Logo } from "@/components/common/logo";
+import { OverlapBadge } from "@/components/connections/overlap-badge";
+import { SimilarityRing } from "@/components/connections/similarity-ring";
+import { ThemeTag } from "@/components/onboarding/theme-tag";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { UserAvatar } from "@/components/user-avatar";
+import { UserAvatar } from "@/components/profile/user-avatar";
 import { useGalaxyRealtime, type Arrival } from "@/hooks/use-galaxy-realtime";
-import { PreviewButton } from "@/components/preview-button";
-import { SongTile } from "@/components/song-tile";
-import { getConversations, getGalaxy, getGalaxyMore, getSongLayer, getUser, ME_ID, prefetchConnectionCard, REAL_DATA } from "@/lib/api";
-import { getCluster } from "@/lib/clusters";
-import { useSession } from "@/lib/session";
-import { songConnections } from "@/lib/song-connections";
-import { isSongNode, songNodeId } from "@/lib/song-layer";
+import { PreviewButton } from "@/components/common/preview-button";
+import { SongTile } from "@/components/onboarding/song-tile";
+import { getConversations, getGalaxy, getGalaxyMore, getSongLayer, getUser, ME_ID, prefetchConnectionCard, REAL_DATA } from "@/lib/data/api";
+import { getCluster } from "@/lib/galaxy/clusters";
+import { useSession } from "@/lib/data/session";
+import { songConnections } from "@/lib/galaxy/song-connections";
+import { isSongNode, songNodeId } from "@/lib/galaxy/song-layer";
 import { THEME_THRESHOLD } from "@/lib/themes";
 import { BOND_AT } from "@/lib/thread";
-import type { GalaxyEdge, GalaxyNode, Song } from "@/lib/types";
+import type { GalaxyEdge, GalaxyNode, Song } from "@/lib/data/types";
 import { cn } from "@/lib/utils";
-import { markGalaxyIntroSeen, shouldPlayGalaxyIntro } from "@/lib/galaxy-intro";
+import { markGalaxyIntroSeen, shouldPlayGalaxyIntro } from "@/lib/galaxy/galaxy-intro";
 
 const MAX_HOPS = 4;
 
@@ -65,7 +65,7 @@ export default function GalaxyPage() {
   const [clusterOpen, setClusterOpen] = useState(false);
   const [wandering, setWandering] = useState(false);
   const [mode, setMode] = useState<"people" | "songs">("people");
-  // Build the galaxy out from you on the first view after signing in or opening a tab (lib/galaxy-intro.ts).
+  // Build the galaxy out from you on the first view after signing in or opening a tab (lib/galaxy/galaxy-intro.ts).
   // Read once on mount; marked seen afterwards so later visits open straight to the galaxy.
   const [buildOut] = useState(shouldPlayGalaxyIntro);
   useEffect(() => markGalaxyIntroSeen(), []);

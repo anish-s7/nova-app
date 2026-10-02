@@ -1,7 +1,7 @@
 "use client";
 
-import { ReadingSequence } from "@/components/reading-sequence";
-import { useHydrated } from "@/lib/session";
+import { ReadingSequence } from "@/components/onboarding/reading-sequence";
+import { useHydrated } from "@/lib/data/session";
 
 export default function ReadingPage() {
   const hydrated = useHydrated();

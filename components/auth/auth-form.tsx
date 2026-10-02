@@ -5,13 +5,13 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { GoogleIcon } from "@/components/auth/brand-icons";
-import { Logo } from "@/components/logo";
+import { Logo } from "@/components/common/logo";
 import { Button } from "@/components/ui/button";
-import { resetWorld } from "@/lib/api";
-import { listenForConfirmation } from "@/lib/auth-handoff";
-import { safeNextPath } from "@/lib/safe-next";
-import { resetSession } from "@/lib/session";
-import { replayGalaxyIntro } from "@/lib/galaxy-intro";
+import { resetWorld } from "@/lib/data/api";
+import { listenForConfirmation } from "@/lib/auth/auth-handoff";
+import { safeNextPath } from "@/lib/auth/safe-next";
+import { resetSession } from "@/lib/data/session";
+import { replayGalaxyIntro } from "@/lib/galaxy/galaxy-intro";
 import { createClient } from "@/lib/supabase/browser";
 import { isSupabaseConfigured } from "@/lib/supabase/config";
 
@@ -40,9 +40,9 @@ const fieldClass =
 /** Supabase's messages are written for developers; these are for people. */
 function friendly(error: { message: string; code?: string }) {
   // Project-wide cap on emails from Supabase's built-in sender (2/hour on hosted projects),
-  // shared by every signup. Not something this user did. See AUTH_SETUP.md to lift it.
+  // shared by every signup. Not something this user did. See docs/AUTH_SETUP.md to lift it.
   if (error.code === "over_email_send_rate_limit") {
-    console.warn("Supabase email rate limit hit. Turn off Confirm email or add custom SMTP (AUTH_SETUP.md, step 1).");
+    console.warn("Supabase email rate limit hit. Turn off Confirm email or add custom SMTP (docs/AUTH_SETUP.md, step 1).");
     return "We can't send confirmation emails right now. Please try again later.";
   }
   // Same email or IP retried within a few seconds.
@@ -196,7 +196,7 @@ export function AuthForm({ mode, next, initialError, initialNotice }: { mode: Mo
         {!configured ? (
           <div role="status" className="mt-6 rounded-2xl border border-white/10 bg-white/[0.03] p-4 text-sm">
             <p className="font-medium">Sign-in isn&apos;t set up in this environment</p>
-            <p className="mt-1 text-muted-foreground">Add the Supabase keys to .env.local (see AUTH_SETUP.md). Until then the app runs on demo data.</p>
+            <p className="mt-1 text-muted-foreground">Add the Supabase keys to .env.local (see docs/AUTH_SETUP.md). Until then the app runs on demo data.</p>
             <Link href="/onboarding/pick" className="mt-3 inline-block font-medium text-primary hover:underline">
               Continue with demo data
             </Link>

@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, LogOut } from "lucide-react";
 import { useAccount } from "@/components/auth/use-account";
-import { resetWorld } from "@/lib/api";
-import { replayGalaxyIntro } from "@/lib/galaxy-intro";
-import { resetSession } from "@/lib/session";
+import { resetWorld } from "@/lib/data/api";
+import { replayGalaxyIntro } from "@/lib/galaxy/galaxy-intro";
+import { resetSession } from "@/lib/data/session";
 import { createClient } from "@/lib/supabase/browser";
 
 /** Who's signed in, and the way out, as a settings-list row. Hidden when auth isn't configured. */

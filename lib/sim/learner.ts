@@ -1,4 +1,4 @@
-import { EMOTION_WEIGHT } from "@/lib/emotion";
+import { EMOTION_WEIGHT } from "@/lib/music/emotion";
 import { FEATURES, pairMatch, realFormulaMatch, type PairMatch, type SimUser } from "./model";
 
 /**

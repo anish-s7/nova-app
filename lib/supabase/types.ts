@@ -4,7 +4,7 @@
  * schema is applied — keep the shape in sync with db/contract.md until then.
  */
 import type { CardThread, Portrait } from "../portrait";
-import type { SongSwapPayloadV1 } from "../types";
+import type { SongSwapPayloadV1 } from "../data/types";
 
 export interface ConnectionCardJson {
   shared_why: string;
@@ -38,13 +38,13 @@ export interface Database {
           display_name: string;
           /**
            * Pre-migration column (still what the hosted project actually has). One of
-           * lib/clusters.ts CLUSTER_IDS. Superseded by primary_topic_cluster_id below once
+           * lib/galaxy/clusters.ts CLUSTER_IDS. Superseded by primary_topic_cluster_id below once
            * migration 20260929000000 is applied — see db/contract.md's topic_clusters notes.
            */
           primary_cluster: string | null;
           /** Post-migration replacement for primary_cluster (not live on the hosted project yet). FK -> topic_clusters.id. Written by lib/matching/refreshPrimaryCluster.ts and scripts/recompute-topic-clusters.ts (service role). */
           primary_topic_cluster_id: string | null;
-          /** Illustrated-face settings (lib/avatar.ts Face), null = generated from the name. Migration 20260930000000 (may not be applied yet). */
+          /** Illustrated-face settings (lib/avatar/avatar.ts Face), null = generated from the name. Migration 20260930000000 (may not be applied yet). */
           avatar: unknown;
           /** Public URL of an uploaded photo in the `avatars` bucket, overriding the face. Migration 20260930000000. */
           avatar_url: string | null;

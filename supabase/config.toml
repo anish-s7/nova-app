@@ -319,7 +319,7 @@ max_frequency = "5s"
 # `discord`, `facebook`, `github`, `gitlab`, `google`, `keycloak`, `linkedin_oidc`, `notion`, `twitch`,
 # `twitter`, `x`, `slack`, `spotify`, `workos`, `zoom`.
 [auth.external.apple]
-# Set to true once the env vars below are filled in (see AUTH_SETUP.md).
+# Set to true once the env vars below are filled in (see docs/AUTH_SETUP.md).
 enabled = false
 # Your Apple Services ID (e.g. com.songgalaxy.web).
 client_id = "env(SUPABASE_AUTH_EXTERNAL_APPLE_CLIENT_ID)"
@@ -336,7 +336,7 @@ skip_nonce_check = false
 email_optional = false
 
 [auth.external.google]
-# Set to true once the env vars below are filled in (see AUTH_SETUP.md).
+# Set to true once the env vars below are filled in (see docs/AUTH_SETUP.md).
 enabled = false
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
 secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"

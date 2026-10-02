@@ -11,7 +11,7 @@
  */
 import { writeFileSync } from "node:fs";
 import { getGeminiClient, GEMINI_EMBEDDING_MODEL } from "../lib/gemini/client";
-import { SONG_CATALOG } from "../lib/music-context";
+import { SONG_CATALOG } from "../lib/music/music-context";
 
 const DIMS = 128;
 

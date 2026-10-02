@@ -2,8 +2,8 @@
 
 import { forwardRef, useImperativeHandle, useRef } from "react";
 import { animate, utils } from "animejs";
-import { getCluster } from "@/lib/clusters";
-import { CLUSTER_IDS } from "@/lib/clusters";
+import { getCluster } from "@/lib/galaxy/clusters";
+import { CLUSTER_IDS } from "@/lib/galaxy/clusters";
 
 export type WarpHandle = { play: (duration: number) => Promise<void> };
 

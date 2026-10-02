@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { topTwo } from "@/lib/why-mix";
-import { getCluster } from "@/lib/clusters";
-import type { LayoutPoint } from "@/lib/galaxy-layout";
+import { topTwo } from "@/lib/galaxy/why-mix";
+import { getCluster } from "@/lib/galaxy/clusters";
+import type { LayoutPoint } from "@/lib/galaxy/galaxy-layout";
 import { threadBoldness } from "@/lib/thread";
 import { cn } from "@/lib/utils";
 import type { GalaxyViewProps } from "./types";

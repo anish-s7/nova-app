@@ -146,7 +146,7 @@ function sanitize(raw: Portrait, picks: PortraitPick[], clusters: PortraitCluste
  * it — this module has no DB access), not a baked-in enum: the set changes as
  * scripts/recompute-topic-clusters.ts runs, so a motivation's `cluster` id is only ever one that
  * was live the moment this portrait was written. A cluster retired after that (superseded_by set)
- * is resolved to its successor lazily wherever the portrait is read (lib/clusters.ts), not by
+ * is resolved to its successor lazily wherever the portrait is read (lib/galaxy/clusters.ts), not by
  * regenerating the portrait — cheaper, and consistent with portraits regenerating on pick changes,
  * not cluster changes.
  */

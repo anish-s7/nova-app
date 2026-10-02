@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
-import type { Layout, LayoutPoint } from "@/lib/galaxy-layout";
-import type { GalaxyEdge, GalaxyNode } from "@/lib/types";
+import type { Layout, LayoutPoint } from "@/lib/galaxy/galaxy-layout";
+import type { GalaxyEdge, GalaxyNode } from "@/lib/data/types";
 
 /** Camera choreography shared by the explore view and the reveal sequence. */
 export type GalaxyApi = {

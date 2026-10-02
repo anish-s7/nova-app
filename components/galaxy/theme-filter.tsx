@@ -3,10 +3,10 @@
 import type { CSSProperties, RefObject } from "react";
 import { useSlidingIndicator } from "@/hooks/use-sliding-indicator";
 import { THEME_THRESHOLD } from "@/lib/themes";
-import type { ThemeState } from "@/lib/song-layer";
+import type { ThemeState } from "@/lib/galaxy/song-layer";
 import { cn } from "@/lib/utils";
-import { ClusterStar } from "@/components/cluster-star";
-import { DuoRing } from "@/components/duo-ring";
+import { ClusterStar } from "@/components/common/cluster-star";
+import { DuoRing } from "@/components/common/duo-ring";
 
 /** Song-layer chips. Themes that haven't reached three songs are still forming: dashed, with how far they are. */
 export function ThemeFilter({ themes, value, onChange, className }: { themes: ThemeState[]; value: string | null; onChange: (id: string | null) => void; className?: string }) {

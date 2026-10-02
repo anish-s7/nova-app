@@ -2,12 +2,12 @@
 
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
-import { EmptyState } from "@/components/empty-state";
-import { Logo } from "@/components/logo";
-import { MotivationCard } from "@/components/motivation-card";
-import { ReachQuestion } from "@/components/reach-question";
+import { EmptyState } from "@/components/layout/empty-state";
+import { Logo } from "@/components/common/logo";
+import { MotivationCard } from "@/components/onboarding/motivation-card";
+import { ReachQuestion } from "@/components/onboarding/reach-question";
 import { buttonVariants } from "@/components/ui/button";
-import { effectiveSongs, useHydrated, useSession } from "@/lib/session";
+import { effectiveSongs, useHydrated, useSession } from "@/lib/data/session";
 import { cn } from "@/lib/utils";
 
 export default function YourWhyPage() {

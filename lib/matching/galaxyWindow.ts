@@ -1,6 +1,6 @@
 import { createServerClient } from "../supabase/server";
-import { ALL_TAGS } from "../tags";
-import { DEFAULT_BUDGET, expandOrder, knnEdges, sampleGalaxy, type SampleCandidate } from "../galaxy-sample";
+import { ALL_TAGS } from "../music/tags";
+import { DEFAULT_BUDGET, expandOrder, knnEdges, sampleGalaxy, type SampleCandidate } from "../galaxy/galaxy-sample";
 import { MIN_EMOTION_GAP } from "./findWander";
 import { refreshPrimaryCluster } from "./refreshPrimaryCluster";
 
