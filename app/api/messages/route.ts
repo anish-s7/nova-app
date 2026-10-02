@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { createSessionClient, getCurrentProfileId } from "@/lib/supabase/serverAuth";
 import type { SongSwapPayloadV1 } from "@/lib/data/types";
+import { rateLimited } from "@/lib/rate-limit";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const PROVIDER_ID = /^\d+$/;
@@ -101,6 +102,9 @@ export async function POST(req: NextRequest) {
   if (!senderId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
+
+  const limited = rateLimited("message", senderId, { ai: false });
+  if (limited) return limited;
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null;
   const otherProfileId = cleanString(body?.otherProfileId, 36);

@@ -6,6 +6,7 @@ import { getPortraits, loadPublicPicks } from "@/lib/matching/portraits";
 import { cosineSimilarity } from "@/lib/matching/cosineSimilarity";
 import { alignCardEvidence } from "@/lib/matching/alignCardEvidence";
 import { parseVector } from "@/lib/supabase/vector";
+import { rateLimited } from "@/lib/rate-limit";
 import { rejectionKey, rememberRejection, wasRejected } from "@/lib/matching/rejectedPairs";
 
 // matchId is the other user's profile id; the current user comes from the
@@ -61,6 +62,8 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ ma
   if (!currentProfileId) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
+  const limited = rateLimited("card", currentProfileId);
+  if (limited) return limited;
 
   const supabase = createServerClient();
   const ids = [currentProfileId, otherProfileId];

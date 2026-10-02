@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   const limit = Number(req.nextUrl.searchParams.get("limit"));
   const center = req.nextUrl.searchParams.get("center") ?? undefined;
   try {
-    return NextResponse.json(await getGalaxyWindow(profileId, Number.isFinite(limit) && limit > 1 ? limit : undefined, center));
+    return NextResponse.json(await getGalaxyWindow(profileId, Number.isFinite(limit) && limit > 1 ? Math.min(limit, 500) : undefined, center));
   } catch (err) {
     if (err instanceof HopNotAllowedError) return NextResponse.json({ error: err.message }, { status: 403 });
     return NextResponse.json({ error: err instanceof Error ? err.message : "Galaxy failed" }, { status: 500 });

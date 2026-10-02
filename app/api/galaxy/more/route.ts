@@ -10,11 +10,11 @@ export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams;
   const cluster = q.get("cluster");
   if (!cluster) return NextResponse.json({ error: "cluster query param is required" }, { status: 400 });
-  const have = Math.max(0, Number(q.get("have")) || 0);
+  const have = Math.min(5000, Math.max(0, Number(q.get("have")) || 0));
   const limit = Number(q.get("limit"));
 
   try {
-    return NextResponse.json(await getGalaxyMoreWindow(profileId, cluster, have, undefined, Number.isFinite(limit) && limit > 1 ? limit : undefined, q.get("center") ?? undefined));
+    return NextResponse.json(await getGalaxyMoreWindow(profileId, cluster, have, undefined, Number.isFinite(limit) && limit > 1 ? Math.min(limit, 500) : undefined, q.get("center") ?? undefined));
   } catch (err) {
     if (err instanceof HopNotAllowedError) return NextResponse.json({ error: err.message }, { status: 403 });
     return NextResponse.json({ error: err instanceof Error ? err.message : "Galaxy failed" }, { status: 500 });

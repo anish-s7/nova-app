@@ -10,6 +10,7 @@ import { isValidTag } from "@/lib/music/tags";
 import { refreshPrimaryCluster } from "@/lib/matching/refreshPrimaryCluster";
 import { forgetGalaxyCandidates } from "@/lib/matching/galaxyWindow";
 import { parseVector } from "@/lib/supabase/vector";
+import { cleanText, rateLimited } from "@/lib/rate-limit";
 
 function fallbackKey(title: string, artist: string) {
   return `${title.trim().toLowerCase()}::${artist.trim().toLowerCase()}`;
@@ -40,16 +41,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const body = await req.json();
+  const limited = rateLimited("pick", profileId);
+  if (limited) return limited;
+
+  const body = await req.json().catch(() => null);
+  if (!body || typeof body !== "object") return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   const {
-    title,
-    artist,
-    spotifyTrackId,
-    albumArtUrl,
+    spotifyTrackId: rawSpotifyTrackId,
+    albumArtUrl: rawAlbumArtUrl,
     tags,
     valence,
     energy,
-    reasonText,
+    reasonText: rawReasonText,
     isPublic,
   } = body as {
     title?: string;
@@ -62,10 +65,16 @@ export async function POST(req: NextRequest) {
     reasonText?: string;
     isPublic?: boolean;
   };
+  // Length caps: these strings go into the shared catalog and into other people's Gemini prompts.
+  const title = cleanText((body as { title?: unknown }).title, 200);
+  const artist = cleanText((body as { artist?: unknown }).artist, 200);
+  const spotifyTrackId = cleanText(rawSpotifyTrackId, 64) || null;
+  const albumArtUrl = cleanText(rawAlbumArtUrl, 500) || null;
+  const reasonText = cleanText(rawReasonText, 280) || undefined;
 
-  if (!title || !artist || !Array.isArray(tags) || tags.length === 0) {
+  if (!title || !artist || !Array.isArray(tags) || tags.length === 0 || tags.length > 6) {
     return NextResponse.json(
-      { error: "title, artist, and at least one tag are required" },
+      { error: "title, artist, and 1-6 tags are required" },
       { status: 400 }
     );
   }

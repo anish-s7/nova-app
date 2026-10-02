@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { getCurrentProfileId } from "@/lib/supabase/serverAuth";
+import { cleanText } from "@/lib/rate-limit";
 
 export async function POST(req: NextRequest) {
   const profileId = await getCurrentProfileId();
@@ -8,8 +9,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
 
-  const body = await req.json();
-  const { displayName } = body as { displayName?: string };
+  const body = (await req.json().catch(() => null)) as { displayName?: unknown } | null;
+  const displayName = cleanText(body?.displayName, 80);
 
   if (!displayName) {
     return NextResponse.json({ error: "displayName is required" }, { status: 400 });

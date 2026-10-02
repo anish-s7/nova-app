@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createServerClient } from "@/lib/supabase/server";
 import { createSessionClient, getCurrentProfileId } from "@/lib/supabase/serverAuth";
 import { upsertPortrait } from "@/lib/matching/portraits";
+import { rateLimited } from "@/lib/rate-limit";
 
 /** The signed-in user's stored listening portrait. Session client, so RLS keeps it owner-only. */
 export async function GET() {
@@ -22,6 +23,8 @@ export async function GET() {
 export async function POST() {
   const profileId = await getCurrentProfileId();
   if (!profileId) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  const limited = rateLimited("portrait", profileId);
+  if (limited) return limited;
 
   try {
     const portrait = await upsertPortrait(createServerClient(), profileId);

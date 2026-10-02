@@ -204,6 +204,8 @@ hooks/use-debounced-value.ts Debounce for typeahead (song search waits 350ms aft
 lib/supabase/                server.ts (service role), serverAuth.ts (session), browser.ts (client),
                              proxy.ts (session refresh), config.ts (keys present?), vector.ts (parseVector)
 lib/musicbrainz/             Song identity resolution (title/artist → canonical mbid)
+lib/rate-limit.ts           In-memory per-user limits on the Gemini/MusicBrainz/messages routes (429) + `cleanText` length caps;
+                             per server instance, so Google Cloud's Gemini quota cap is the real backstop
 lib/portrait.ts              Portrait + CardThread types (the portrait JSON and match-card threads)
 lib/gemini/                  Song context + embedding, contrast cards, and the AI judgment calls:
                              json.ts (generateJson: enforced-JSON schema, thinking cap, Flash → Flash-Lite fallback,
